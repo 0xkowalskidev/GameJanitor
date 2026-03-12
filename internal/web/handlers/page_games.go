@@ -2,14 +2,18 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"strconv"
 
 	"github.com/0xkowalskidev/gamejanitor/internal/models"
 	"github.com/0xkowalskidev/gamejanitor/internal/service"
 	"github.com/go-chi/chi/v5"
 )
+
+var validGameID = regexp.MustCompile(`^[a-z0-9\-]+$`)
 
 type PageGameHandlers struct {
 	gameSvc       *service.GameService
@@ -81,8 +85,16 @@ func (h *PageGameHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "ID, name, and image are required", http.StatusBadRequest)
 		return
 	}
+	if !validGameID.MatchString(id) {
+		http.Error(w, "Game ID must contain only lowercase letters, numbers, and hyphens", http.StatusBadRequest)
+		return
+	}
 
-	game := h.parseGameForm(r, id)
+	game, err := h.parseGameForm(r, id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
 	if err := h.gameSvc.CreateGame(game); err != nil {
 		h.log.Error("creating game from web form", "id", id, "error", err)
@@ -146,7 +158,11 @@ func (h *PageGameHandlers) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	game := h.parseGameForm(r, id)
+	game, err := h.parseGameForm(r, id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	game.CreatedAt = existing.CreatedAt
 
 	if err := h.gameSvc.UpdateGame(game); err != nil {
@@ -171,30 +187,19 @@ func (h *PageGameHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/games", http.StatusSeeOther)
 }
 
-func (h *PageGameHandlers) parseGameForm(r *http.Request, id string) *models.Game {
-	minMemoryMB, _ := strconv.Atoi(r.FormValue("min_memory_mb"))
-	minCPU, _ := strconv.ParseFloat(r.FormValue("min_cpu"), 64)
-
-	var defaultPorts json.RawMessage
-	if v := r.FormValue("default_ports_json"); v != "" {
-		defaultPorts = json.RawMessage(v)
-	} else {
-		defaultPorts = json.RawMessage("[]")
+func (h *PageGameHandlers) parseGameForm(r *http.Request, id string) (*models.Game, error) {
+	minMemoryMB, err := strconv.Atoi(r.FormValue("min_memory_mb"))
+	if err != nil && r.FormValue("min_memory_mb") != "" {
+		return nil, fmt.Errorf("invalid min_memory_mb: %w", err)
+	}
+	minCPU, err := strconv.ParseFloat(r.FormValue("min_cpu"), 64)
+	if err != nil && r.FormValue("min_cpu") != "" {
+		return nil, fmt.Errorf("invalid min_cpu: %w", err)
 	}
 
-	var defaultEnv json.RawMessage
-	if v := r.FormValue("default_env_json"); v != "" {
-		defaultEnv = json.RawMessage(v)
-	} else {
-		defaultEnv = json.RawMessage("[]")
-	}
-
-	var disabledCaps json.RawMessage
-	if v := r.FormValue("disabled_capabilities_json"); v != "" {
-		disabledCaps = json.RawMessage(v)
-	} else {
-		disabledCaps = json.RawMessage("[]")
-	}
+	defaultPorts := validateJSONOrDefault(r.FormValue("default_ports_json"), "[]")
+	defaultEnv := validateJSONOrDefault(r.FormValue("default_env_json"), "[]")
+	disabledCaps := validateJSONOrDefault(r.FormValue("disabled_capabilities_json"), "[]")
 
 	var gsqSlug *string
 	if v := r.FormValue("gsq_game_slug"); v != "" {
@@ -214,5 +219,15 @@ func (h *PageGameHandlers) parseGameForm(r *http.Request, id string) *models.Gam
 		MinCPU:               minCPU,
 		GSQGameSlug:          gsqSlug,
 		DisabledCapabilities: disabledCaps,
+	}, nil
+}
+
+func validateJSONOrDefault(raw string, fallback string) json.RawMessage {
+	if raw == "" {
+		return json.RawMessage(fallback)
 	}
+	if !json.Valid([]byte(raw)) {
+		return json.RawMessage(fallback)
+	}
+	return json.RawMessage(raw)
 }

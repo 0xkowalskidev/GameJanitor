@@ -76,24 +76,20 @@ func (h *PageGameserverHandlers) Create(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	memoryLimitMB, _ := strconv.Atoi(r.FormValue("memory_limit_mb"))
-	cpuLimit, _ := strconv.ParseFloat(r.FormValue("cpu_limit"), 64)
+	memoryLimitMB, err := strconv.Atoi(r.FormValue("memory_limit_mb"))
+	if err != nil && r.FormValue("memory_limit_mb") != "" {
+		http.Error(w, "Invalid memory value", http.StatusBadRequest)
+		return
+	}
+	cpuLimit, err := strconv.ParseFloat(r.FormValue("cpu_limit"), 64)
+	if err != nil && r.FormValue("cpu_limit") != "" {
+		http.Error(w, "Invalid CPU value", http.StatusBadRequest)
+		return
+	}
 	autoStart := r.FormValue("auto_start") == "true"
 
-	// Parse ports and env from hidden JSON fields
-	var ports json.RawMessage
-	if portsJSON := r.FormValue("ports_json"); portsJSON != "" {
-		ports = json.RawMessage(portsJSON)
-	} else {
-		ports = json.RawMessage("[]")
-	}
-
-	var env json.RawMessage
-	if envJSON := r.FormValue("env_json"); envJSON != "" {
-		env = json.RawMessage(envJSON)
-	} else {
-		env = json.RawMessage("{}")
-	}
+	ports := validateJSONOrDefault(r.FormValue("ports_json"), "[]")
+	env := validateJSONOrDefault(r.FormValue("env_json"), "{}")
 
 	gs := &models.Gameserver{
 		Name:          name,
@@ -211,23 +207,20 @@ func (h *PageGameserverHandlers) Update(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	memoryLimitMB, _ := strconv.Atoi(r.FormValue("memory_limit_mb"))
-	cpuLimit, _ := strconv.ParseFloat(r.FormValue("cpu_limit"), 64)
+	memoryLimitMB, err := strconv.Atoi(r.FormValue("memory_limit_mb"))
+	if err != nil && r.FormValue("memory_limit_mb") != "" {
+		http.Error(w, "Invalid memory value", http.StatusBadRequest)
+		return
+	}
+	cpuLimit, err := strconv.ParseFloat(r.FormValue("cpu_limit"), 64)
+	if err != nil && r.FormValue("cpu_limit") != "" {
+		http.Error(w, "Invalid CPU value", http.StatusBadRequest)
+		return
+	}
 	autoStart := r.FormValue("auto_start") == "true"
 
-	var ports json.RawMessage
-	if portsJSON := r.FormValue("ports_json"); portsJSON != "" {
-		ports = json.RawMessage(portsJSON)
-	} else {
-		ports = json.RawMessage("[]")
-	}
-
-	var env json.RawMessage
-	if envJSON := r.FormValue("env_json"); envJSON != "" {
-		env = json.RawMessage(envJSON)
-	} else {
-		env = json.RawMessage("{}")
-	}
+	ports := validateJSONOrDefault(r.FormValue("ports_json"), "[]")
+	env := validateJSONOrDefault(r.FormValue("env_json"), "{}")
 
 	// Preserve immutable fields from existing record
 	gs := &models.Gameserver{
