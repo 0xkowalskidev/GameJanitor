@@ -83,6 +83,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	gameSvc := service.NewGameService(database, logger)
 	gameserverSvc := service.NewGameserverService(database, dockerClient, broadcaster, logger)
 	consoleSvc := service.NewConsoleService(database, dockerClient, logger)
+	fileSvc := service.NewFileService(database, dockerClient, logger)
 	statusMgr := service.NewStatusManager(database, dockerClient, broadcaster, logger)
 
 	// Crash recovery
@@ -104,7 +105,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	router, err := web.NewRouter(gameSvc, gameserverSvc, consoleSvc, dockerClient, broadcaster, logger)
+	router, err := web.NewRouter(gameSvc, gameserverSvc, consoleSvc, fileSvc, dockerClient, broadcaster, logger)
 	if err != nil {
 		return fmt.Errorf("failed to initialize router: %w", err)
 	}

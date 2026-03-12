@@ -18,6 +18,7 @@ func NewRouter(
 	gameSvc *service.GameService,
 	gameserverSvc *service.GameserverService,
 	consoleSvc *service.ConsoleService,
+	fileSvc *service.FileService,
 	dockerClient *docker.Client,
 	broadcaster *service.EventBroadcaster,
 	log *slog.Logger,
@@ -84,6 +85,7 @@ func NewRouter(
 	pageGameservers := handlers.NewPageGameserverHandlers(gameSvc, gameserverSvc, renderer, log)
 	pageActions := handlers.NewPageActionHandlers(gameSvc, gameserverSvc, renderer, log)
 	pageConsole := handlers.NewPageConsoleHandlers(consoleSvc, gameSvc, gameserverSvc, renderer, log)
+	pageFiles := handlers.NewPageFileHandlers(fileSvc, gameSvc, gameserverSvc, renderer, log)
 
 	r.Get("/", pageDashboard.Dashboard)
 
@@ -116,6 +118,12 @@ func NewRouter(
 			r.Get("/console", pageConsole.Console)
 			r.Get("/console/stream", pageConsole.LogStream)
 			r.Post("/console/command", pageConsole.SendCommand)
+			r.Get("/files", pageFiles.List)
+			r.Get("/files/list", pageFiles.ListJSON)
+			r.Get("/files/content", pageFiles.ReadFile)
+			r.Put("/files/content", pageFiles.WriteFile)
+			r.Delete("/files/entry", pageFiles.DeletePath)
+			r.Post("/files/mkdir", pageFiles.CreateDirectory)
 		})
 	})
 

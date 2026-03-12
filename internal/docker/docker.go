@@ -1,12 +1,15 @@
 package docker
 
 import (
+	"archive/tar"
+	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -33,6 +36,7 @@ type ContainerOptions struct {
 	VolumeName    string
 	MemoryLimitMB int
 	CPULimit      float64
+	Entrypoint    []string // Override image entrypoint (e.g., ["sleep", "infinity"] for temp containers)
 }
 
 type PortBinding struct {
@@ -162,12 +166,17 @@ func (c *Client) CreateContainer(ctx context.Context, opts ContainerOptions) (st
 		resources.NanoCPUs = int64(opts.CPULimit * 1e9)
 	}
 
+	cfg := &container.Config{
+		Image:        opts.Image,
+		Env:          opts.Env,
+		ExposedPorts: exposedPorts,
+	}
+	if len(opts.Entrypoint) > 0 {
+		cfg.Entrypoint = opts.Entrypoint
+	}
+
 	resp, err := c.cli.ContainerCreate(ctx,
-		&container.Config{
-			Image:        opts.Image,
-			Env:          opts.Env,
-			ExposedPorts: exposedPorts,
-		},
+		cfg,
 		&container.HostConfig{
 			PortBindings:  portBindings,
 			Resources:     resources,
@@ -345,6 +354,61 @@ func (c *Client) ContainerStats(ctx context.Context, containerID string) (*Conta
 		MemoryLimitMB: memLimitMB,
 		CPUPercent:    cpuPercent,
 	}, nil
+}
+
+// CopyFromContainer reads a single file from the container and returns its contents.
+func (c *Client) CopyFromContainer(ctx context.Context, containerID string, path string) ([]byte, error) {
+	c.log.Debug("copying from container", "container_id", containerID[:12], "path", path)
+
+	reader, _, err := c.cli.CopyFromContainer(ctx, containerID, path)
+	if err != nil {
+		return nil, fmt.Errorf("copying from %s:%s: %w", containerID[:12], path, err)
+	}
+	defer reader.Close()
+
+	tr := tar.NewReader(reader)
+	hdr, err := tr.Next()
+	if err != nil {
+		return nil, fmt.Errorf("reading tar header from %s:%s: %w", containerID[:12], path, err)
+	}
+	if hdr.Typeflag == tar.TypeDir {
+		return nil, fmt.Errorf("%s is a directory", path)
+	}
+
+	content, err := io.ReadAll(tr)
+	if err != nil {
+		return nil, fmt.Errorf("reading file content from %s:%s: %w", containerID[:12], path, err)
+	}
+	return content, nil
+}
+
+// CopyToContainer writes a single file into the container at the given path.
+func (c *Client) CopyToContainer(ctx context.Context, containerID string, path string, content []byte) error {
+	c.log.Debug("copying to container", "container_id", containerID[:12], "path", path)
+
+	dir := filepath.Dir(path)
+	filename := filepath.Base(path)
+
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	if err := tw.WriteHeader(&tar.Header{
+		Name: filename,
+		Mode: 0644,
+		Size: int64(len(content)),
+	}); err != nil {
+		return fmt.Errorf("writing tar header for %s: %w", path, err)
+	}
+	if _, err := tw.Write(content); err != nil {
+		return fmt.Errorf("writing tar content for %s: %w", path, err)
+	}
+	if err := tw.Close(); err != nil {
+		return fmt.Errorf("closing tar writer for %s: %w", path, err)
+	}
+
+	if err := c.cli.CopyToContainer(ctx, containerID, dir, &buf, container.CopyToContainerOptions{}); err != nil {
+		return fmt.Errorf("copying to %s:%s: %w", containerID[:12], path, err)
+	}
+	return nil
 }
 
 // WatchEvents subscribes to Docker events for gamejanitor containers.
