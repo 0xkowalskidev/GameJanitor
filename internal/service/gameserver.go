@@ -94,6 +94,14 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 		s.log.Warn("failed to remove volume during delete", "id", id, "volume", gs.VolumeName, "error", err)
 	}
 
+	// Cascade delete schedules and backups
+	if err := models.DeleteSchedulesByGameserver(s.db, id); err != nil {
+		s.log.Warn("failed to delete schedules during gameserver delete", "id", id, "error", err)
+	}
+	if err := models.DeleteBackupsByGameserver(s.db, id); err != nil {
+		s.log.Warn("failed to delete backups during gameserver delete", "id", id, "error", err)
+	}
+
 	return models.DeleteGameserver(s.db, id)
 }
 

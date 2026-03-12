@@ -59,6 +59,14 @@ func CreateBackup(db *sql.DB, b *Backup) error {
 	return nil
 }
 
+func DeleteBackupsByGameserver(db *sql.DB, gameserverID string) error {
+	_, err := db.Exec("DELETE FROM backups WHERE gameserver_id = ?", gameserverID)
+	if err != nil {
+		return fmt.Errorf("deleting backups for gameserver %s: %w", gameserverID, err)
+	}
+	return nil
+}
+
 func DeleteBackup(db *sql.DB, id string) error {
 	result, err := db.Exec("DELETE FROM backups WHERE id = ?", id)
 	if err != nil {

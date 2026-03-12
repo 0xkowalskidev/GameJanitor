@@ -84,6 +84,9 @@ func runServe(cmd *cobra.Command, args []string) error {
 	gameserverSvc := service.NewGameserverService(database, dockerClient, broadcaster, logger)
 	consoleSvc := service.NewConsoleService(database, dockerClient, logger)
 	fileSvc := service.NewFileService(database, dockerClient, logger)
+	backupSvc := service.NewBackupService(database, dockerClient, gameserverSvc, cfg.DataDir, logger)
+	scheduler := service.NewScheduler(database, backupSvc, gameserverSvc, consoleSvc, logger)
+	scheduleSvc := service.NewScheduleService(database, scheduler, logger)
 	statusMgr := service.NewStatusManager(database, dockerClient, broadcaster, logger)
 
 	// Crash recovery
@@ -97,6 +100,12 @@ func runServe(cmd *cobra.Command, args []string) error {
 	statusMgr.Start(ctx)
 	defer statusMgr.Stop()
 
+	// Start scheduler
+	if err := scheduler.Start(ctx); err != nil {
+		return fmt.Errorf("failed to start scheduler: %w", err)
+	}
+	defer scheduler.Stop()
+
 	// Auto-start gameservers
 	for _, id := range autoStartIDs {
 		logger.Info("auto-starting gameserver", "id", id)
@@ -105,7 +114,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	router, err := web.NewRouter(gameSvc, gameserverSvc, consoleSvc, fileSvc, dockerClient, broadcaster, logger)
+	router, err := web.NewRouter(gameSvc, gameserverSvc, consoleSvc, fileSvc, scheduleSvc, backupSvc, dockerClient, broadcaster, logger)
 	if err != nil {
 		return fmt.Errorf("failed to initialize router: %w", err)
 	}

@@ -1,0 +1,3 @@
+#!/bin/bash
+echo "[save-server] no save-server script provided"
+exit 0

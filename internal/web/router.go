@@ -19,6 +19,8 @@ func NewRouter(
 	gameserverSvc *service.GameserverService,
 	consoleSvc *service.ConsoleService,
 	fileSvc *service.FileService,
+	scheduleSvc *service.ScheduleService,
+	backupSvc *service.BackupService,
 	dockerClient *docker.Client,
 	broadcaster *service.EventBroadcaster,
 	log *slog.Logger,
@@ -46,6 +48,8 @@ func NewRouter(
 	gameHandlers := handlers.NewGameHandlers(gameSvc, log)
 	gameserverHandlers := handlers.NewGameserverHandlers(gameserverSvc, dockerClient, log)
 	eventHandlers := handlers.NewEventHandlers(broadcaster, log)
+	scheduleHandlers := handlers.NewScheduleHandlers(scheduleSvc, log)
+	backupHandlers := handlers.NewBackupHandlers(backupSvc, log)
 
 	r.Route("/api", func(r chi.Router) {
 		r.Use(jsonContentType)
@@ -73,6 +77,25 @@ func NewRouter(
 				r.Post("/update-game", gameserverHandlers.UpdateServerGame)
 				r.Post("/reinstall", gameserverHandlers.Reinstall)
 				r.Get("/status", gameserverHandlers.Status)
+
+				r.Route("/schedules", func(r chi.Router) {
+					r.Get("/", scheduleHandlers.List)
+					r.Post("/", scheduleHandlers.Create)
+					r.Route("/{scheduleId}", func(r chi.Router) {
+						r.Get("/", scheduleHandlers.Get)
+						r.Put("/", scheduleHandlers.Update)
+						r.Delete("/", scheduleHandlers.Delete)
+					})
+				})
+
+				r.Route("/backups", func(r chi.Router) {
+					r.Get("/", backupHandlers.List)
+					r.Post("/", backupHandlers.Create)
+					r.Route("/{backupId}", func(r chi.Router) {
+						r.Post("/restore", backupHandlers.Restore)
+						r.Delete("/", backupHandlers.Delete)
+					})
+				})
 			})
 		})
 
@@ -86,6 +109,8 @@ func NewRouter(
 	pageActions := handlers.NewPageActionHandlers(gameSvc, gameserverSvc, renderer, log)
 	pageConsole := handlers.NewPageConsoleHandlers(consoleSvc, gameSvc, gameserverSvc, renderer, log)
 	pageFiles := handlers.NewPageFileHandlers(fileSvc, gameSvc, gameserverSvc, renderer, log)
+	pageSchedules := handlers.NewPageScheduleHandlers(scheduleSvc, gameSvc, gameserverSvc, renderer, log)
+	pageBackups := handlers.NewPageBackupHandlers(backupSvc, gameSvc, gameserverSvc, renderer, log)
 
 	r.Get("/", pageDashboard.Dashboard)
 
@@ -124,6 +149,15 @@ func NewRouter(
 			r.Put("/files/content", pageFiles.WriteFile)
 			r.Delete("/files/entry", pageFiles.DeletePath)
 			r.Post("/files/mkdir", pageFiles.CreateDirectory)
+			r.Get("/schedules", pageSchedules.List)
+			r.Post("/schedules", pageSchedules.Create)
+			r.Put("/schedules/{scheduleId}", pageSchedules.Update)
+			r.Delete("/schedules/{scheduleId}", pageSchedules.Delete)
+			r.Post("/schedules/{scheduleId}/toggle", pageSchedules.Toggle)
+			r.Get("/backups", pageBackups.List)
+			r.Post("/backups", pageBackups.Create)
+			r.Post("/backups/{backupId}/restore", pageBackups.Restore)
+			r.Delete("/backups/{backupId}", pageBackups.Delete)
 		})
 	})
 
