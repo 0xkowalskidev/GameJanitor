@@ -118,8 +118,6 @@ func (s *FileService) CreateDirectory(ctx context.Context, gameserverID string, 
 	})
 }
 
-// withContainer runs fn against either the gameserver's running container
-// or a temporary container for stopped gameservers.
 func (s *FileService) withContainer(ctx context.Context, gameserverID string, fn func(containerID string) error) error {
 	gs, err := models.GetGameserver(s.db, gameserverID)
 	if err != nil {
@@ -129,51 +127,12 @@ func (s *FileService) withContainer(ctx context.Context, gameserverID string, fn
 		return fmt.Errorf("gameserver %s not found", gameserverID)
 	}
 
-	if isRunningStatus(gs.Status) && gs.ContainerID != nil {
-		s.log.Debug("file operation on running container", "gameserver_id", gameserverID)
-		return fn(*gs.ContainerID)
+	if !isRunningStatus(gs.Status) || gs.ContainerID == nil {
+		return fmt.Errorf("gameserver must be running to access files (current status: %s)", gs.Status)
 	}
 
-	if gs.Status != StatusStopped {
-		return fmt.Errorf("cannot access files while gameserver is %s", gs.Status)
-	}
-
-	// Stopped gameserver — spin up a temp container
-	game, err := models.GetGame(s.db, gs.GameID)
-	if err != nil {
-		return fmt.Errorf("getting game for gameserver %s: %w", gameserverID, err)
-	}
-	if game == nil {
-		return fmt.Errorf("game %s not found for gameserver %s", gs.GameID, gameserverID)
-	}
-
-	tempName := "gamejanitor-files-" + gameserverID
-	s.log.Info("creating temp container for file operation", "gameserver_id", gameserverID, "container_name", tempName)
-
-	tempID, err := s.docker.CreateContainer(ctx, docker.ContainerOptions{
-		Name:       tempName,
-		Image:      game.Image,
-		Env:        []string{},
-		VolumeName: gs.VolumeName,
-		Entrypoint: []string{"sleep", "infinity"},
-	})
-	if err != nil {
-		return fmt.Errorf("creating temp container for file operation: %w", err)
-	}
-	defer func() {
-		if stopErr := s.docker.StopContainer(ctx, tempID, 5); stopErr != nil {
-			s.log.Warn("failed to stop temp file container", "error", stopErr)
-		}
-		if rmErr := s.docker.RemoveContainer(ctx, tempID); rmErr != nil {
-			s.log.Warn("failed to remove temp file container", "error", rmErr)
-		}
-	}()
-
-	if err := s.docker.StartContainer(ctx, tempID); err != nil {
-		return fmt.Errorf("starting temp container for file operation: %w", err)
-	}
-
-	return fn(tempID)
+	s.log.Debug("file operation on running container", "gameserver_id", gameserverID)
+	return fn(*gs.ContainerID)
 }
 
 // validatePath ensures the path is within /data and contains no traversal.
