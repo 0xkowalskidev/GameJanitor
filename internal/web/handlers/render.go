@@ -25,6 +25,8 @@ func NewRenderer() (*Renderer, error) {
 		"lower":       strings.ToLower,
 		"join":        strings.Join,
 		"deref":       func(s *string) string { if s != nil { return *s }; return "" },
+		"derefTime":   func(t *time.Time) time.Time { if t != nil { return *t }; return time.Time{} },
+		"formatBytes": formatBytes,
 	}
 
 	// Parse partials and layout as the base template set
@@ -47,6 +49,8 @@ func NewRenderer() (*Renderer, error) {
 		"gameservers/detail.html",
 		"gameservers/console.html",
 		"gameservers/files.html",
+		"gameservers/schedules.html",
+		"gameservers/backups.html",
 	}
 
 	for _, page := range pages {
@@ -131,6 +135,19 @@ func formatTime(t time.Time) string {
 		return "-"
 	}
 	return t.Format("2006-01-02 15:04:05")
+}
+
+func formatBytes(b int64) string {
+	const unit = 1024
+	if b < unit {
+		return fmt.Sprintf("%d B", b)
+	}
+	div, exp := int64(unit), 0
+	for n := b / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
 }
 
 func jsonPretty(raw json.RawMessage) string {

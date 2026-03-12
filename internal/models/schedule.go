@@ -93,6 +93,14 @@ func UpdateSchedule(db *sql.DB, s *Schedule) error {
 	return nil
 }
 
+func DeleteSchedulesByGameserver(db *sql.DB, gameserverID string) error {
+	_, err := db.Exec("DELETE FROM schedules WHERE gameserver_id = ?", gameserverID)
+	if err != nil {
+		return fmt.Errorf("deleting schedules for gameserver %s: %w", gameserverID, err)
+	}
+	return nil
+}
+
 func DeleteSchedule(db *sql.DB, id string) error {
 	result, err := db.Exec("DELETE FROM schedules WHERE id = ?", id)
 	if err != nil {

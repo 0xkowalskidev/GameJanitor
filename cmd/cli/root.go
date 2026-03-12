@@ -21,6 +21,8 @@ func init() {
 	rootCmd.AddCommand(serveCmd)
 	rootCmd.AddCommand(gamesCmd)
 	rootCmd.AddCommand(gameserversCmd)
+	rootCmd.AddCommand(schedulesCmd)
+	rootCmd.AddCommand(backupsCmd)
 }
 
 func Execute() error {

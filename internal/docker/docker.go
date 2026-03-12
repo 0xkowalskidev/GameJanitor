@@ -411,6 +411,28 @@ func (c *Client) CopyToContainer(ctx context.Context, containerID string, path s
 	return nil
 }
 
+// CopyDirFromContainer returns a tar stream of a directory from the container.
+// The caller is responsible for closing the returned ReadCloser.
+func (c *Client) CopyDirFromContainer(ctx context.Context, containerID string, path string) (io.ReadCloser, error) {
+	c.log.Debug("copying directory from container", "container_id", containerID[:12], "path", path)
+
+	reader, _, err := c.cli.CopyFromContainer(ctx, containerID, path)
+	if err != nil {
+		return nil, fmt.Errorf("copying dir from %s:%s: %w", containerID[:12], path, err)
+	}
+	return reader, nil
+}
+
+// CopyTarToContainer extracts a tar stream into a directory in the container.
+func (c *Client) CopyTarToContainer(ctx context.Context, containerID string, destPath string, content io.Reader) error {
+	c.log.Debug("copying tar to container", "container_id", containerID[:12], "path", destPath)
+
+	if err := c.cli.CopyToContainer(ctx, containerID, destPath, content, container.CopyToContainerOptions{}); err != nil {
+		return fmt.Errorf("copying tar to %s:%s: %w", containerID[:12], destPath, err)
+	}
+	return nil
+}
+
 // WatchEvents subscribes to Docker events for gamejanitor containers.
 func (c *Client) WatchEvents(ctx context.Context) (<-chan ContainerEvent, <-chan error) {
 	c.log.Info("starting docker event watcher")
