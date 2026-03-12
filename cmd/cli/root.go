@@ -19,6 +19,8 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&apiURL, "api-url", "http://localhost:8080", "API base URL")
 
 	rootCmd.AddCommand(serveCmd)
+	rootCmd.AddCommand(gamesCmd)
+	rootCmd.AddCommand(gameserversCmd)
 }
 
 func Execute() error {
