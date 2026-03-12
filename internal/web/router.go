@@ -2,12 +2,14 @@ package web
 
 import (
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"net/http"
 
 	"github.com/0xkowalskidev/gamejanitor/internal/docker"
 	"github.com/0xkowalskidev/gamejanitor/internal/service"
 	"github.com/0xkowalskidev/gamejanitor/internal/web/handlers"
+	"github.com/0xkowalskidev/gamejanitor/internal/web/static"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
@@ -18,7 +20,12 @@ func NewRouter(
 	dockerClient *docker.Client,
 	broadcaster *service.EventBroadcaster,
 	log *slog.Logger,
-) http.Handler {
+) (http.Handler, error) {
+	renderer, err := handlers.NewRenderer()
+	if err != nil {
+		return nil, fmt.Errorf("initializing template renderer: %w", err)
+	}
+
 	r := chi.NewRouter()
 
 	r.Use(middleware.Recoverer)
@@ -29,6 +36,11 @@ func NewRouter(
 		fmt.Fprint(w, "ok")
 	})
 
+	// Static files
+	staticFS, _ := fs.Sub(static.Files, ".")
+	r.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
+
+	// API handlers (JSON)
 	gameHandlers := handlers.NewGameHandlers(gameSvc, log)
 	gameserverHandlers := handlers.NewGameserverHandlers(gameserverSvc, dockerClient, log)
 	eventHandlers := handlers.NewEventHandlers(broadcaster, log)
@@ -65,7 +77,44 @@ func NewRouter(
 		r.Get("/events", eventHandlers.SSE)
 	})
 
-	return r
+	// Page handlers (HTML)
+	pageDashboard := handlers.NewPageDashboardHandlers(gameSvc, gameserverSvc, renderer, log)
+	pageGames := handlers.NewPageGameHandlers(gameSvc, gameserverSvc, renderer, log)
+	pageGameservers := handlers.NewPageGameserverHandlers(gameSvc, gameserverSvc, renderer, log)
+	pageActions := handlers.NewPageActionHandlers(gameSvc, gameserverSvc, renderer, log)
+
+	r.Get("/", pageDashboard.Dashboard)
+
+	r.Route("/games", func(r chi.Router) {
+		r.Get("/", pageGames.List)
+		r.Get("/new", pageGames.New)
+		r.Post("/", pageGames.Create)
+		r.Route("/{id}", func(r chi.Router) {
+			r.Get("/", pageGames.Detail)
+			r.Get("/edit", pageGames.Edit)
+			r.Put("/", pageGames.Update)
+			r.Delete("/", pageGames.Delete)
+		})
+	})
+
+	r.Route("/gameservers", func(r chi.Router) {
+		r.Get("/new", pageGameservers.New)
+		r.Post("/", pageGameservers.Create)
+		r.Route("/{id}", func(r chi.Router) {
+			r.Get("/", pageGameservers.Detail)
+			r.Get("/edit", pageGameservers.Edit)
+			r.Put("/", pageGameservers.Update)
+			r.Delete("/", pageGameservers.Delete)
+			r.Get("/card", pageGameservers.Card)
+			r.Post("/start", pageActions.Start)
+			r.Post("/stop", pageActions.Stop)
+			r.Post("/restart", pageActions.Restart)
+			r.Post("/update-game", pageActions.UpdateGame)
+			r.Post("/reinstall", pageActions.Reinstall)
+		})
+	})
+
+	return r, nil
 }
 
 func jsonContentType(next http.Handler) http.Handler {

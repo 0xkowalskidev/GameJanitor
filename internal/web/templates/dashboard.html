@@ -1,0 +1,82 @@
+{{define "title"}}Gamejanitor{{end}}
+
+{{define "content"}}
+<div x-data="dashboard()" x-init="connectSSE()" class="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+
+  {{if .Gameservers}}
+  <!-- Header -->
+  <div class="flex items-center justify-between mb-6">
+    <h1 class="font-display font-bold text-2xl text-white">Your Gameservers</h1>
+    <a href="/gameservers/new" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-accent-600 hover:bg-accent-500 text-white text-sm font-semibold transition-colors shadow-lg shadow-accent-600/20">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+      New Gameserver
+    </a>
+  </div>
+
+  <!-- Gameserver Grid -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+    {{range .Gameservers}}
+    {{template "gameserver_card" .}}
+    {{end}}
+  </div>
+
+  {{else}}
+  <!-- Empty State -->
+  <div class="flex flex-col items-center justify-center min-h-[60vh] text-center">
+    <div class="mb-8">
+      <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-accent-500/20 to-accent-700/20 border border-accent-500/20 flex items-center justify-center">
+        <svg class="w-8 h-8 text-accent-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5.25 14.25h13.5m-13.5 0a3 3 0 01-3-3m3 3a3 3 0 100 6h13.5a3 3 0 100-6m-16.5-3a3 3 0 013-3h13.5a3 3 0 013 3m-19.5 0a4.5 4.5 0 01.9-2.7L5.737 5.1a3.375 3.375 0 012.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 01.9 2.7m0 0a3 3 0 01-3 3m0 3h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008zm-3 6h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008z"/></svg>
+      </div>
+      <h1 class="font-display font-bold text-3xl text-white mb-2">No gameservers yet</h1>
+      <p class="text-surface-400 max-w-md">Pick a game below and launch your first gameserver in seconds.</p>
+    </div>
+
+    {{if .Games}}
+    <div class="w-full max-w-3xl">
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        {{range .Games}}
+        <a href="/gameservers/new?game={{.ID}}" class="group relative aspect-[2/3] rounded-xl overflow-hidden border border-surface-800/60 card-glow">
+          {{if .GridPath}}
+          <img src="{{.GridPath}}" alt="{{.Name}}" class="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105">
+          {{else}}
+          <div class="absolute inset-0 bg-gradient-to-br from-surface-700 to-surface-800"></div>
+          {{end}}
+          <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
+          <div class="absolute bottom-0 left-0 right-0 p-3">
+            <span class="font-display font-semibold text-sm text-white">{{.Name}}</span>
+          </div>
+        </a>
+        {{end}}
+      </div>
+    </div>
+    {{else}}
+    <a href="/gameservers/new" class="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-accent-600 hover:bg-accent-500 text-white font-semibold transition-colors shadow-lg shadow-accent-600/25">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+      Create your first gameserver
+    </a>
+    {{end}}
+  </div>
+  {{end}}
+</div>
+
+<script>
+function dashboard() {
+  return {
+    eventSource: null,
+    connectSSE() {
+      this.eventSource = new EventSource('/api/events');
+      this.eventSource.addEventListener('status', (e) => {
+        const data = JSON.parse(e.data);
+        const card = document.getElementById('gs-' + data.gameserver_id);
+        if (card) {
+          htmx.ajax('GET', '/gameservers/' + data.gameserver_id + '/card', {target: card, swap: 'outerHTML'});
+        }
+      });
+    },
+    destroy() {
+      if (this.eventSource) this.eventSource.close();
+    }
+  };
+}
+</script>
+{{end}}

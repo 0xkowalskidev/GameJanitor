@@ -18,7 +18,10 @@
         vendorHash = null; # Updated after go mod vendor
         CGO_ENABLED = 1;
         buildInputs = [ pkgs.sqlite ];
-        nativeBuildInputs = [ pkgs.pkg-config ];
+        nativeBuildInputs = [ pkgs.pkg-config pkgs.tailwindcss ];
+        preBuild = ''
+          tailwindcss -c ./tailwind.config.js --content "./internal/web/templates/**/*.html" -i internal/web/static/input.css -o internal/web/static/style.css --minify
+        '';
         subPackages = [ "cmd/gamejanitor" ];
       };
 
@@ -31,6 +34,7 @@
           pkgs.docker-client
           pkgs.pkg-config
           pkgs.gcc
+          pkgs.tailwindcss
         ];
 
         shellHook = ''
@@ -60,6 +64,13 @@
               exit 1
             fi
             docker push "registry.0xkowalski.dev/gamejanitor/$game"
+          '');
+        };
+
+        build-css = {
+          type = "app";
+          program = toString (pkgs.writeShellScript "build-css" ''
+            ${pkgs.tailwindcss}/bin/tailwindcss -c ./tailwind.config.js --content "./internal/web/templates/**/*.html" -i internal/web/static/input.css -o internal/web/static/style.css --minify
           '');
         };
 

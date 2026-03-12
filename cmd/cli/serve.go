@@ -103,7 +103,10 @@ func runServe(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	router := web.NewRouter(gameSvc, gameserverSvc, dockerClient, broadcaster, logger)
+	router, err := web.NewRouter(gameSvc, gameserverSvc, dockerClient, broadcaster, logger)
+	if err != nil {
+		return fmt.Errorf("failed to initialize router: %w", err)
+	}
 
 	addr := fmt.Sprintf(":%d", cfg.Port)
 	logger.Info("starting gamejanitor", "port", cfg.Port, "data_dir", cfg.DataDir, "db_path", cfg.DBPath)
