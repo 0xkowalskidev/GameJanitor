@@ -34,7 +34,7 @@ func (s *GameserverService) GetGameserver(id string) (*models.Gameserver, error)
 func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gameserver) error {
 	gs.ID = uuid.New().String()
 	gs.VolumeName = "gamejanitor-" + gs.ID
-	gs.Status = "stopped"
+	gs.Status = StatusStopped
 
 	s.log.Info("creating gameserver", "id", gs.ID, "name", gs.Name, "game_id", gs.GameID)
 
@@ -58,7 +58,7 @@ func (s *GameserverService) UpdateGameserver(gs *models.Gameserver) error {
 	if existing == nil {
 		return fmt.Errorf("gameserver %s not found", gs.ID)
 	}
-	if existing.Status != "stopped" {
+	if existing.Status != StatusStopped {
 		return fmt.Errorf("gameserver %s must be stopped before updating (current status: %s)", gs.ID, existing.Status)
 	}
 
@@ -77,7 +77,7 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 
 	s.log.Info("deleting gameserver", "id", id, "name", gs.Name)
 
-	if gs.Status != "stopped" {
+	if gs.Status != StatusStopped {
 		if err := s.Stop(ctx, id); err != nil {
 			return fmt.Errorf("stopping gameserver before delete: %w", err)
 		}
@@ -104,7 +104,7 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 	}
 
 	switch gs.Status {
-	case "pulling", "starting", "started", "running":
+	case StatusPulling, StatusStarting, StatusStarted, StatusRunning:
 		s.log.Info("gameserver already active, skipping start", "id", id, "status", gs.Status)
 		return nil
 	}
@@ -118,25 +118,25 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 	}
 
 	// Pull image
-	if err := s.setStatus(id, "pulling"); err != nil {
+	if err := setGameserverStatus(s.db, s.log, id, StatusPulling); err != nil {
 		return err
 	}
 	if err := s.docker.PullImage(ctx, game.Image); err != nil {
-		s.setStatus(id, "error")
+		setGameserverStatus(s.db, s.log, id, StatusError)
 		return fmt.Errorf("pulling image for gameserver %s: %w", id, err)
 	}
 
 	// Merge env vars
 	env, err := mergeEnv(game, gs)
 	if err != nil {
-		s.setStatus(id, "error")
+		setGameserverStatus(s.db, s.log, id, StatusError)
 		return fmt.Errorf("merging env for gameserver %s: %w", id, err)
 	}
 
 	// Parse port bindings
 	ports, err := parseGameserverPorts(gs)
 	if err != nil {
-		s.setStatus(id, "error")
+		setGameserverStatus(s.db, s.log, id, StatusError)
 		return fmt.Errorf("parsing ports for gameserver %s: %w", id, err)
 	}
 
@@ -157,13 +157,13 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 		CPULimit:      gs.CPULimit,
 	})
 	if err != nil {
-		s.setStatus(id, "error")
+		setGameserverStatus(s.db, s.log, id, StatusError)
 		return fmt.Errorf("creating container for gameserver %s: %w", id, err)
 	}
 
 	// Save container ID
 	gs.ContainerID = &containerID
-	gs.Status = "starting"
+	gs.Status = StatusStarting
 	if err := models.UpdateGameserver(s.db, gs); err != nil {
 		s.docker.RemoveContainer(ctx, containerID)
 		return err
@@ -171,16 +171,16 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 
 	// Start container
 	if err := s.docker.StartContainer(ctx, containerID); err != nil {
-		s.setStatus(id, "error")
+		setGameserverStatus(s.db, s.log, id, StatusError)
 		return fmt.Errorf("starting container for gameserver %s: %w", id, err)
 	}
 
-	if err := s.setStatus(id, "started"); err != nil {
+	if err := setGameserverStatus(s.db, s.log, id, StatusStarted); err != nil {
 		return err
 	}
 
 	// GSQ stub: promote to running immediately (real GSQ polling in Phase 11)
-	if err := s.setStatus(id, "running"); err != nil {
+	if err := setGameserverStatus(s.db, s.log, id, StatusRunning); err != nil {
 		return err
 	}
 
@@ -197,12 +197,12 @@ func (s *GameserverService) Stop(ctx context.Context, id string) error {
 		return fmt.Errorf("gameserver %s not found", id)
 	}
 
-	if gs.Status == "stopped" {
+	if gs.Status == StatusStopped {
 		s.log.Info("gameserver already stopped, skipping", "id", id)
 		return nil
 	}
 
-	if err := s.setStatus(id, "stopping"); err != nil {
+	if err := setGameserverStatus(s.db, s.log, id, StatusStopping); err != nil {
 		return err
 	}
 
@@ -217,7 +217,7 @@ func (s *GameserverService) Stop(ctx context.Context, id string) error {
 
 	// Clear container ID
 	gs.ContainerID = nil
-	gs.Status = "stopped"
+	gs.Status = StatusStopped
 	if err := models.UpdateGameserver(s.db, gs); err != nil {
 		return err
 	}
@@ -235,7 +235,7 @@ func (s *GameserverService) Restart(ctx context.Context, id string) error {
 		return fmt.Errorf("gameserver %s not found", id)
 	}
 
-	if gs.Status != "stopped" {
+	if gs.Status != StatusStopped {
 		if err := s.Stop(ctx, id); err != nil {
 			return fmt.Errorf("stopping gameserver for restart: %w", err)
 		}
@@ -263,7 +263,7 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) err
 
 	s.log.Info("updating game for gameserver", "id", id, "game", game.ID)
 
-	if gs.Status != "stopped" {
+	if gs.Status != StatusStopped {
 		if err := s.Stop(ctx, id); err != nil {
 			return fmt.Errorf("stopping gameserver for update: %w", err)
 		}
@@ -300,7 +300,9 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) err
 		return fmt.Errorf("update-server exited with code %d", exitCode)
 	}
 
-	s.docker.StopContainer(ctx, tempID, 10)
+	if err := s.docker.StopContainer(ctx, tempID, 10); err != nil {
+		s.log.Warn("failed to stop temp update container", "id", id, "error", err)
+	}
 
 	s.log.Info("game updated, restarting gameserver", "id", id)
 	return s.Start(ctx, id)
@@ -325,7 +327,7 @@ func (s *GameserverService) Reinstall(ctx context.Context, id string) error {
 
 	s.log.Info("reinstalling gameserver", "id", id)
 
-	if gs.Status != "stopped" {
+	if gs.Status != StatusStopped {
 		if err := s.Stop(ctx, id); err != nil {
 			return fmt.Errorf("stopping gameserver for reinstall: %w", err)
 		}
@@ -348,31 +350,22 @@ func (s *GameserverService) Reinstall(ctx context.Context, id string) error {
 		return fmt.Errorf("starting temp container for reinstall: %w", err)
 	}
 
-	s.docker.Exec(ctx, tempID, []string{"rm", "-f", "/data/.installed"})
-	s.docker.StopContainer(ctx, tempID, 10)
+	exitCode, _, stderr, err := s.docker.Exec(ctx, tempID, []string{"rm", "-f", "/data/.installed"})
+	if err != nil {
+		return fmt.Errorf("removing install marker: %w", err)
+	}
+	if exitCode != 0 {
+		return fmt.Errorf("removing install marker failed (exit %d): %s", exitCode, stderr)
+	}
+
+	if err := s.docker.StopContainer(ctx, tempID, 10); err != nil {
+		s.log.Warn("failed to stop temp reinstall container", "id", id, "error", err)
+	}
 
 	s.log.Info("install marker removed, restarting gameserver", "id", id)
 	return s.Start(ctx, id)
 }
 
-func (s *GameserverService) setStatus(id string, status string) error {
-	gs, err := models.GetGameserver(s.db, id)
-	if err != nil {
-		return err
-	}
-	if gs == nil {
-		return fmt.Errorf("gameserver %s not found", id)
-	}
-
-	oldStatus := gs.Status
-	gs.Status = status
-	if err := models.UpdateGameserver(s.db, gs); err != nil {
-		return err
-	}
-
-	s.log.Info("gameserver status changed", "id", id, "from", oldStatus, "to", status)
-	return nil
-}
 
 // Env var definition from game's default_env JSON
 type envVarDef struct {

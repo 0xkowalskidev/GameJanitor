@@ -224,7 +224,10 @@ func (c *Client) InspectContainer(ctx context.Context, containerID string) (*Con
 		return nil, fmt.Errorf("inspecting container %s: %w", containerID[:12], err)
 	}
 
-	startedAt, _ := time.Parse(time.RFC3339Nano, resp.State.StartedAt)
+	startedAt, err := time.Parse(time.RFC3339Nano, resp.State.StartedAt)
+	if err != nil {
+		c.log.Warn("failed to parse container started_at", "container_id", containerID[:12], "raw", resp.State.StartedAt, "error", err)
+	}
 
 	return &ContainerInfo{
 		ID:        resp.ID,
