@@ -220,7 +220,15 @@ func (s *GameserverService) Stop(ctx context.Context, id string) error {
 		}
 	}
 
-	// Clear container ID
+	// Re-read from DB to avoid overwriting changes made by status manager during stop
+	gs, err = models.GetGameserver(s.db, id)
+	if err != nil {
+		return fmt.Errorf("re-reading gameserver %s after stop: %w", id, err)
+	}
+	if gs == nil {
+		return fmt.Errorf("gameserver %s not found after stop", id)
+	}
+
 	gs.ContainerID = nil
 	gs.Status = StatusStopped
 	if err := models.UpdateGameserver(s.db, gs); err != nil {
