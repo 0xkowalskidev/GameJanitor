@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/0xkowalskidev/gamejanitor/internal/models"
 )
@@ -23,7 +24,7 @@ const (
 
 // setGameserverStatus updates a gameserver's status in the DB and logs the transition.
 // Fetches the current gameserver from DB to get the old status for logging.
-func setGameserverStatus(db *sql.DB, log *slog.Logger, id string, newStatus string) error {
+func setGameserverStatus(db *sql.DB, log *slog.Logger, broadcaster *EventBroadcaster, id string, newStatus string) error {
 	gs, err := models.GetGameserver(db, id)
 	if err != nil {
 		return err
@@ -39,6 +40,16 @@ func setGameserverStatus(db *sql.DB, log *slog.Logger, id string, newStatus stri
 	}
 
 	log.Info("gameserver status changed", "id", id, "from", oldStatus, "to", newStatus)
+
+	if broadcaster != nil {
+		broadcaster.Publish(StatusEvent{
+			GameserverID: id,
+			OldStatus:    oldStatus,
+			NewStatus:    newStatus,
+			Timestamp:    time.Now(),
+		})
+	}
+
 	return nil
 }
 

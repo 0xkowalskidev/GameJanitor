@@ -5,20 +5,22 @@ import (
 	"database/sql"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/0xkowalskidev/gamejanitor/internal/docker"
 	"github.com/0xkowalskidev/gamejanitor/internal/models"
 )
 
 type StatusManager struct {
-	db     *sql.DB
-	docker *docker.Client
-	log    *slog.Logger
-	cancel context.CancelFunc
+	db          *sql.DB
+	docker      *docker.Client
+	log         *slog.Logger
+	broadcaster *EventBroadcaster
+	cancel      context.CancelFunc
 }
 
-func NewStatusManager(db *sql.DB, dockerClient *docker.Client, log *slog.Logger) *StatusManager {
-	return &StatusManager{db: db, docker: dockerClient, log: log}
+func NewStatusManager(db *sql.DB, dockerClient *docker.Client, broadcaster *EventBroadcaster, log *slog.Logger) *StatusManager {
+	return &StatusManager{db: db, docker: dockerClient, broadcaster: broadcaster, log: log}
 }
 
 // Start begins watching Docker events and updating gameserver status.
@@ -91,7 +93,7 @@ func (m *StatusManager) RecoverOnStartup(ctx context.Context) ([]string, error) 
 func (m *StatusManager) recoverGameserver(ctx context.Context, gs *models.Gameserver) {
 	if gs.ContainerID == nil {
 		m.log.Info("gameserver has no container, setting stopped", "id", gs.ID, "was_status", gs.Status)
-		setGameserverStatus(m.db, m.log, gs.ID, StatusStopped)
+		setGameserverStatus(m.db, m.log, m.broadcaster, gs.ID, StatusStopped)
 		return
 	}
 
@@ -105,13 +107,13 @@ func (m *StatusManager) recoverGameserver(ctx context.Context, gs *models.Gamese
 	switch info.State {
 	case "running":
 		m.log.Info("container is running, setting running", "id", gs.ID)
-		setGameserverStatus(m.db, m.log, gs.ID, StatusRunning)
+		setGameserverStatus(m.db, m.log, m.broadcaster, gs.ID, StatusRunning)
 	case "exited", "dead", "created":
 		m.log.Info("container is not running, setting stopped", "id", gs.ID, "state", info.State)
 		m.clearContainerAndSetStatus(gs, StatusStopped)
 	default:
 		m.log.Warn("container in unexpected state, setting error", "id", gs.ID, "state", info.State)
-		setGameserverStatus(m.db, m.log, gs.ID, StatusError)
+		setGameserverStatus(m.db, m.log, m.broadcaster, gs.ID, StatusError)
 	}
 }
 
@@ -126,6 +128,15 @@ func (m *StatusManager) clearContainerAndSetStatus(gs *models.Gameserver, newSta
 		return
 	}
 	m.log.Info("gameserver status changed", "id", gs.ID, "from", oldStatus, "to", newStatus)
+
+	if m.broadcaster != nil {
+		m.broadcaster.Publish(StatusEvent{
+			GameserverID: gs.ID,
+			OldStatus:    oldStatus,
+			NewStatus:    newStatus,
+			Timestamp:    time.Now(),
+		})
+	}
 }
 
 func (m *StatusManager) handleEvent(event docker.ContainerEvent) {
@@ -158,7 +169,7 @@ func (m *StatusManager) handleEvent(event docker.ContainerEvent) {
 		} else if gs.Status == StatusRunning || gs.Status == StatusStarted {
 			// Unexpected death
 			m.log.Warn("docker event: unexpected container death", "id", gsID, "status", gs.Status, "action", event.Action)
-			setGameserverStatus(m.db, m.log, gs.ID, StatusError)
+			setGameserverStatus(m.db, m.log, m.broadcaster, gs.ID, StatusError)
 		}
 
 	case "kill":
