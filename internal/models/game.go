@@ -11,6 +11,9 @@ type Game struct {
 	ID                   string          `json:"id"`
 	Name                 string          `json:"name"`
 	Image                string          `json:"image"`
+	IconPath             string          `json:"icon_path"`
+	GridPath             string          `json:"grid_path"`
+	HeroPath             string          `json:"hero_path"`
 	DefaultPorts         json.RawMessage `json:"default_ports"`
 	DefaultEnv           json.RawMessage `json:"default_env"`
 	MinMemoryMB          int             `json:"min_memory_mb"`
@@ -22,7 +25,7 @@ type Game struct {
 }
 
 func ListGames(db *sql.DB) ([]Game, error) {
-	rows, err := db.Query("SELECT id, name, image, default_ports, default_env, min_memory_mb, min_cpu, gsq_game_slug, disabled_capabilities, created_at, updated_at FROM games ORDER BY name")
+	rows, err := db.Query("SELECT id, name, image, icon_path, grid_path, hero_path, default_ports, default_env, min_memory_mb, min_cpu, gsq_game_slug, disabled_capabilities, created_at, updated_at FROM games ORDER BY name")
 	if err != nil {
 		return nil, fmt.Errorf("listing games: %w", err)
 	}
@@ -40,7 +43,7 @@ func ListGames(db *sql.DB) ([]Game, error) {
 }
 
 func GetGame(db *sql.DB, id string) (*Game, error) {
-	row := db.QueryRow("SELECT id, name, image, default_ports, default_env, min_memory_mb, min_cpu, gsq_game_slug, disabled_capabilities, created_at, updated_at FROM games WHERE id = ?", id)
+	row := db.QueryRow("SELECT id, name, image, icon_path, grid_path, hero_path, default_ports, default_env, min_memory_mb, min_cpu, gsq_game_slug, disabled_capabilities, created_at, updated_at FROM games WHERE id = ?", id)
 	g, err := scanGame(row.Scan)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -56,7 +59,7 @@ func GetGame(db *sql.DB, id string) (*Game, error) {
 func scanGame(scan func(dest ...any) error) (Game, error) {
 	var g Game
 	var defaultPortsStr, defaultEnvStr, disabledCapsStr string
-	err := scan(&g.ID, &g.Name, &g.Image, &defaultPortsStr, &defaultEnvStr, &g.MinMemoryMB, &g.MinCPU, &g.GSQGameSlug, &disabledCapsStr, &g.CreatedAt, &g.UpdatedAt)
+	err := scan(&g.ID, &g.Name, &g.Image, &g.IconPath, &g.GridPath, &g.HeroPath, &defaultPortsStr, &defaultEnvStr, &g.MinMemoryMB, &g.MinCPU, &g.GSQGameSlug, &disabledCapsStr, &g.CreatedAt, &g.UpdatedAt)
 	if err != nil {
 		return g, err
 	}
@@ -72,8 +75,8 @@ func CreateGame(db *sql.DB, g *Game) error {
 	g.UpdatedAt = now
 
 	_, err := db.Exec(
-		"INSERT INTO games (id, name, image, default_ports, default_env, min_memory_mb, min_cpu, gsq_game_slug, disabled_capabilities, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		g.ID, g.Name, g.Image, g.DefaultPorts, g.DefaultEnv, g.MinMemoryMB, g.MinCPU, g.GSQGameSlug, g.DisabledCapabilities, g.CreatedAt, g.UpdatedAt,
+		"INSERT INTO games (id, name, image, icon_path, grid_path, hero_path, default_ports, default_env, min_memory_mb, min_cpu, gsq_game_slug, disabled_capabilities, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		g.ID, g.Name, g.Image, g.IconPath, g.GridPath, g.HeroPath, g.DefaultPorts, g.DefaultEnv, g.MinMemoryMB, g.MinCPU, g.GSQGameSlug, g.DisabledCapabilities, g.CreatedAt, g.UpdatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("creating game %s: %w", g.ID, err)
@@ -85,8 +88,8 @@ func UpdateGame(db *sql.DB, g *Game) error {
 	g.UpdatedAt = time.Now()
 
 	result, err := db.Exec(
-		"UPDATE games SET name = ?, image = ?, default_ports = ?, default_env = ?, min_memory_mb = ?, min_cpu = ?, gsq_game_slug = ?, disabled_capabilities = ?, updated_at = ? WHERE id = ?",
-		g.Name, g.Image, g.DefaultPorts, g.DefaultEnv, g.MinMemoryMB, g.MinCPU, g.GSQGameSlug, g.DisabledCapabilities, g.UpdatedAt, g.ID,
+		"UPDATE games SET name = ?, image = ?, icon_path = ?, grid_path = ?, hero_path = ?, default_ports = ?, default_env = ?, min_memory_mb = ?, min_cpu = ?, gsq_game_slug = ?, disabled_capabilities = ?, updated_at = ? WHERE id = ?",
+		g.Name, g.Image, g.IconPath, g.GridPath, g.HeroPath, g.DefaultPorts, g.DefaultEnv, g.MinMemoryMB, g.MinCPU, g.GSQGameSlug, g.DisabledCapabilities, g.UpdatedAt, g.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("updating game %s: %w", g.ID, err)

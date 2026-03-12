@@ -11,6 +11,9 @@ func SeedGames(db *sql.DB) error {
 		id                   string
 		name                 string
 		image                string
+		iconPath             string
+		gridPath             string
+		heroPath             string
 		defaultPorts         string
 		defaultEnv           string
 		minMemoryMB          int
@@ -19,9 +22,12 @@ func SeedGames(db *sql.DB) error {
 		disabledCapabilities string
 	}{
 		{
-			id:    "minecraft-java",
-			name:  "Minecraft: Java Edition",
-			image: "registry.0xkowalski.dev/gamejanitor/minecraft-java",
+			id:       "minecraft-java",
+			name:     "Minecraft: Java Edition",
+			image:    "registry.0xkowalski.dev/gamejanitor/minecraft-java",
+			iconPath: "/static/games/minecraft/minecraft-icon.ico",
+			gridPath: "/static/games/minecraft/minecraft-grid.png",
+			heroPath: "/static/games/minecraft/minecraft-hero.png",
 			defaultPorts: `[{"name":"game","port":25565,"protocol":"tcp"}]`,
 			defaultEnv: `[
 				{"key":"EULA","default":"false","label":"Accept Minecraft EULA","type":"boolean"},
@@ -38,9 +44,12 @@ func SeedGames(db *sql.DB) error {
 			disabledCapabilities: `[]`,
 		},
 		{
-			id:    "rust",
-			name:  "Rust",
-			image: "registry.0xkowalski.dev/gamejanitor/rust",
+			id:       "rust",
+			name:     "Rust",
+			image:    "registry.0xkowalski.dev/gamejanitor/rust",
+			iconPath: "/static/games/rust/rust-icon.ico",
+			gridPath: "/static/games/rust/rust-grid.png",
+			heroPath: "/static/games/rust/rust-hero.png",
 			defaultPorts: `[{"name":"game","port":28015,"protocol":"udp"},{"name":"rcon","port":28016,"protocol":"tcp"}]`,
 			defaultEnv: `[
 				{"key":"SERVER_MAXPLAYERS","default":"50","label":"Max Players","type":"number"},
@@ -59,8 +68,8 @@ func SeedGames(db *sql.DB) error {
 
 	for _, g := range games {
 		result, err := db.Exec(
-			`INSERT OR IGNORE INTO games (id, name, image, default_ports, default_env, min_memory_mb, min_cpu, gsq_game_slug, disabled_capabilities) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			g.id, g.name, g.image, g.defaultPorts, g.defaultEnv, g.minMemoryMB, g.minCPU, g.gsqGameSlug, g.disabledCapabilities,
+			`INSERT OR IGNORE INTO games (id, name, image, icon_path, grid_path, hero_path, default_ports, default_env, min_memory_mb, min_cpu, gsq_game_slug, disabled_capabilities) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			g.id, g.name, g.image, g.iconPath, g.gridPath, g.heroPath, g.defaultPorts, g.defaultEnv, g.minMemoryMB, g.minCPU, g.gsqGameSlug, g.disabledCapabilities,
 		)
 		if err != nil {
 			return fmt.Errorf("seeding game %s: %w", g.id, err)
