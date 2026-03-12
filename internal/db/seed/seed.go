@@ -66,7 +66,10 @@ func SeedGames(db *sql.DB) error {
 			return fmt.Errorf("seeding game %s: %w", g.id, err)
 		}
 
-		rows, _ := result.RowsAffected()
+		rows, err := result.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("checking rows affected for game %s: %w", g.id, err)
+		}
 		if rows > 0 {
 			slog.Info("seeded game", "id", g.id, "name", g.name)
 		} else {

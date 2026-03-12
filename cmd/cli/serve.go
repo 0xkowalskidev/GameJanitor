@@ -28,8 +28,14 @@ func init() {
 }
 
 func runServe(cmd *cobra.Command, args []string) error {
-	port, _ := cmd.Flags().GetInt("port")
-	dataDir, _ := cmd.Flags().GetString("data-dir")
+	port, err := cmd.Flags().GetInt("port")
+	if err != nil {
+		return fmt.Errorf("invalid port flag: %w", err)
+	}
+	dataDir, err := cmd.Flags().GetString("data-dir")
+	if err != nil {
+		return fmt.Errorf("invalid data-dir flag: %w", err)
+	}
 
 	cfg := config.Config{
 		Port:    port,
