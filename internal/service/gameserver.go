@@ -14,13 +14,14 @@ import (
 )
 
 type GameserverService struct {
-	db     *sql.DB
-	docker *docker.Client
-	log    *slog.Logger
+	db          *sql.DB
+	docker      *docker.Client
+	log         *slog.Logger
+	broadcaster *EventBroadcaster
 }
 
-func NewGameserverService(db *sql.DB, dockerClient *docker.Client, log *slog.Logger) *GameserverService {
-	return &GameserverService{db: db, docker: dockerClient, log: log}
+func NewGameserverService(db *sql.DB, dockerClient *docker.Client, broadcaster *EventBroadcaster, log *slog.Logger) *GameserverService {
+	return &GameserverService{db: db, docker: dockerClient, broadcaster: broadcaster, log: log}
 }
 
 func (s *GameserverService) ListGameservers(filter models.GameserverFilter) ([]models.Gameserver, error) {
@@ -118,25 +119,25 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 	}
 
 	// Pull image
-	if err := setGameserverStatus(s.db, s.log, id, StatusPulling); err != nil {
+	if err := setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusPulling); err != nil {
 		return err
 	}
 	if err := s.docker.PullImage(ctx, game.Image); err != nil {
-		setGameserverStatus(s.db, s.log, id, StatusError)
+		setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusError)
 		return fmt.Errorf("pulling image for gameserver %s: %w", id, err)
 	}
 
 	// Merge env vars
 	env, err := mergeEnv(game, gs)
 	if err != nil {
-		setGameserverStatus(s.db, s.log, id, StatusError)
+		setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusError)
 		return fmt.Errorf("merging env for gameserver %s: %w", id, err)
 	}
 
 	// Parse port bindings
 	ports, err := parseGameserverPorts(gs)
 	if err != nil {
-		setGameserverStatus(s.db, s.log, id, StatusError)
+		setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusError)
 		return fmt.Errorf("parsing ports for gameserver %s: %w", id, err)
 	}
 
@@ -157,7 +158,7 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 		CPULimit:      gs.CPULimit,
 	})
 	if err != nil {
-		setGameserverStatus(s.db, s.log, id, StatusError)
+		setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusError)
 		return fmt.Errorf("creating container for gameserver %s: %w", id, err)
 	}
 
@@ -171,16 +172,16 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 
 	// Start container
 	if err := s.docker.StartContainer(ctx, containerID); err != nil {
-		setGameserverStatus(s.db, s.log, id, StatusError)
+		setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusError)
 		return fmt.Errorf("starting container for gameserver %s: %w", id, err)
 	}
 
-	if err := setGameserverStatus(s.db, s.log, id, StatusStarted); err != nil {
+	if err := setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusStarted); err != nil {
 		return err
 	}
 
 	// GSQ stub: promote to running immediately (real GSQ polling in Phase 11)
-	if err := setGameserverStatus(s.db, s.log, id, StatusRunning); err != nil {
+	if err := setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusRunning); err != nil {
 		return err
 	}
 
@@ -202,7 +203,7 @@ func (s *GameserverService) Stop(ctx context.Context, id string) error {
 		return nil
 	}
 
-	if err := setGameserverStatus(s.db, s.log, id, StatusStopping); err != nil {
+	if err := setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusStopping); err != nil {
 		return err
 	}
 

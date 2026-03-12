@@ -13,6 +13,7 @@ import (
 	"github.com/0xkowalskidev/gamejanitor/internal/db/seed"
 	"github.com/0xkowalskidev/gamejanitor/internal/docker"
 	"github.com/0xkowalskidev/gamejanitor/internal/service"
+	"github.com/0xkowalskidev/gamejanitor/internal/web"
 	"github.com/spf13/cobra"
 )
 
@@ -78,10 +79,10 @@ func runServe(cmd *cobra.Command, args []string) error {
 	defer dockerClient.Close()
 
 	// Initialize services
+	broadcaster := service.NewEventBroadcaster()
 	gameSvc := service.NewGameService(database, logger)
-	gameserverSvc := service.NewGameserverService(database, dockerClient, logger)
-	statusMgr := service.NewStatusManager(database, dockerClient, logger)
-	_ = gameSvc // used in Phase 5
+	gameserverSvc := service.NewGameserverService(database, dockerClient, broadcaster, logger)
+	statusMgr := service.NewStatusManager(database, dockerClient, broadcaster, logger)
 
 	// Crash recovery
 	ctx := context.Background()
@@ -102,14 +103,10 @@ func runServe(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, "ok")
-	})
+	router := web.NewRouter(gameSvc, gameserverSvc, dockerClient, broadcaster, logger)
 
 	addr := fmt.Sprintf(":%d", cfg.Port)
 	logger.Info("starting gamejanitor", "port", cfg.Port, "data_dir", cfg.DataDir, "db_path", cfg.DBPath)
 
-	return http.ListenAndServe(addr, mux)
+	return http.ListenAndServe(addr, router)
 }

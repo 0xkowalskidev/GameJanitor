@@ -1,0 +1,202 @@
+package handlers
+
+import (
+	"encoding/json"
+	"log/slog"
+	"net/http"
+	"time"
+
+	"github.com/0xkowalskidev/gamejanitor/internal/docker"
+	"github.com/0xkowalskidev/gamejanitor/internal/models"
+	"github.com/0xkowalskidev/gamejanitor/internal/service"
+	"github.com/go-chi/chi/v5"
+)
+
+type GameserverHandlers struct {
+	svc    *service.GameserverService
+	docker *docker.Client
+	log    *slog.Logger
+}
+
+func NewGameserverHandlers(svc *service.GameserverService, dockerClient *docker.Client, log *slog.Logger) *GameserverHandlers {
+	return &GameserverHandlers{svc: svc, docker: dockerClient, log: log}
+}
+
+func (h *GameserverHandlers) List(w http.ResponseWriter, r *http.Request) {
+	filter := models.GameserverFilter{}
+	if game := r.URL.Query().Get("game"); game != "" {
+		filter.GameID = &game
+	}
+	if status := r.URL.Query().Get("status"); status != "" {
+		filter.Status = &status
+	}
+
+	gameservers, err := h.svc.ListGameservers(filter)
+	if err != nil {
+		h.log.Error("listing gameservers", "error", err)
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if gameservers == nil {
+		gameservers = []models.Gameserver{}
+	}
+	respondOK(w, gameservers)
+}
+
+func (h *GameserverHandlers) Get(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	gs, err := h.svc.GetGameserver(id)
+	if err != nil {
+		h.log.Error("getting gameserver", "id", id, "error", err)
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if gs == nil {
+		respondError(w, http.StatusNotFound, "gameserver "+id+" not found")
+		return
+	}
+	respondOK(w, gs)
+}
+
+func (h *GameserverHandlers) Create(w http.ResponseWriter, r *http.Request) {
+	var gs models.Gameserver
+	if err := json.NewDecoder(r.Body).Decode(&gs); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+
+	if gs.Name == "" || gs.GameID == "" {
+		respondError(w, http.StatusBadRequest, "name and game_id are required")
+		return
+	}
+
+	if err := h.svc.CreateGameserver(r.Context(), &gs); err != nil {
+		h.log.Error("creating gameserver", "error", err)
+		respondError(w, serviceErrorStatus(err), err.Error())
+		return
+	}
+	respondCreated(w, gs)
+}
+
+func (h *GameserverHandlers) Update(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var gs models.Gameserver
+	if err := json.NewDecoder(r.Body).Decode(&gs); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+	gs.ID = id
+
+	if err := h.svc.UpdateGameserver(&gs); err != nil {
+		h.log.Error("updating gameserver", "id", id, "error", err)
+		respondError(w, serviceErrorStatus(err), err.Error())
+		return
+	}
+	respondOK(w, gs)
+}
+
+func (h *GameserverHandlers) Delete(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if err := h.svc.DeleteGameserver(r.Context(), id); err != nil {
+		h.log.Error("deleting gameserver", "id", id, "error", err)
+		respondError(w, serviceErrorStatus(err), err.Error())
+		return
+	}
+	respondNoContent(w)
+}
+
+func (h *GameserverHandlers) Start(w http.ResponseWriter, r *http.Request) {
+	h.doAction(w, r, func(id string) error { return h.svc.Start(r.Context(), id) })
+}
+
+func (h *GameserverHandlers) Stop(w http.ResponseWriter, r *http.Request) {
+	h.doAction(w, r, func(id string) error { return h.svc.Stop(r.Context(), id) })
+}
+
+func (h *GameserverHandlers) Restart(w http.ResponseWriter, r *http.Request) {
+	h.doAction(w, r, func(id string) error { return h.svc.Restart(r.Context(), id) })
+}
+
+func (h *GameserverHandlers) UpdateServerGame(w http.ResponseWriter, r *http.Request) {
+	h.doAction(w, r, func(id string) error { return h.svc.UpdateServerGame(r.Context(), id) })
+}
+
+func (h *GameserverHandlers) Reinstall(w http.ResponseWriter, r *http.Request) {
+	h.doAction(w, r, func(id string) error { return h.svc.Reinstall(r.Context(), id) })
+}
+
+// doAction runs a lifecycle action, then fetches and returns the updated gameserver.
+func (h *GameserverHandlers) doAction(w http.ResponseWriter, r *http.Request, action func(string) error) {
+	id := chi.URLParam(r, "id")
+	if err := action(id); err != nil {
+		h.log.Error("gameserver action failed", "id", id, "error", err)
+		respondError(w, serviceErrorStatus(err), err.Error())
+		return
+	}
+
+	gs, err := h.svc.GetGameserver(id)
+	if err != nil {
+		h.log.Error("getting gameserver after action", "id", id, "error", err)
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	respondOK(w, gs)
+}
+
+type statusResponse struct {
+	Status    string         `json:"status"`
+	Container *containerInfo `json:"container"`
+	Query     any            `json:"query"`
+}
+
+type containerInfo struct {
+	State         string    `json:"state"`
+	StartedAt     time.Time `json:"started_at"`
+	MemoryUsageMB int       `json:"memory_usage_mb"`
+	MemoryLimitMB int       `json:"memory_limit_mb"`
+	CPUPercent    float64   `json:"cpu_percent"`
+}
+
+func (h *GameserverHandlers) Status(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	gs, err := h.svc.GetGameserver(id)
+	if err != nil {
+		h.log.Error("getting gameserver for status", "id", id, "error", err)
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if gs == nil {
+		respondError(w, http.StatusNotFound, "gameserver "+id+" not found")
+		return
+	}
+
+	resp := statusResponse{
+		Status: gs.Status,
+		Query:  nil,
+	}
+
+	if gs.ContainerID != nil {
+		info, err := h.docker.InspectContainer(r.Context(), *gs.ContainerID)
+		if err != nil {
+			h.log.Warn("failed to inspect container for status", "id", id, "error", err)
+		} else {
+			ci := &containerInfo{
+				State:     info.State,
+				StartedAt: info.StartedAt,
+			}
+
+			stats, err := h.docker.ContainerStats(r.Context(), *gs.ContainerID)
+			if err != nil {
+				h.log.Warn("failed to get container stats", "id", id, "error", err)
+			} else {
+				ci.MemoryUsageMB = stats.MemoryUsageMB
+				ci.MemoryLimitMB = stats.MemoryLimitMB
+				ci.CPUPercent = stats.CPUPercent
+			}
+
+			resp.Container = ci
+		}
+	}
+
+	respondOK(w, resp)
+}
