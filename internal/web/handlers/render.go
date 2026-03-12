@@ -46,6 +46,7 @@ func NewRenderer() (*Renderer, error) {
 		"gameservers/edit.html",
 		"gameservers/detail.html",
 		"gameservers/console.html",
+		"gameservers/files.html",
 	}
 
 	for _, page := range pages {
