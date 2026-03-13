@@ -21,6 +21,7 @@ const tempContainerIdleTimeout = 5 * time.Minute
 type tempFileContainer struct {
 	containerID string
 	timer       *time.Timer
+	activeCount int // number of in-flight requests using this container
 }
 
 type FileService struct {
@@ -149,10 +150,11 @@ func (s *FileService) withContainer(ctx context.Context, gameserverID string, fn
 	}
 
 	if gs.Status == StatusStopped || gs.Status == StatusError {
-		containerID, err := s.getTempContainer(ctx, gs)
+		containerID, err := s.acquireTempContainer(ctx, gs)
 		if err != nil {
 			return fmt.Errorf("getting temp container for file access: %w", err)
 		}
+		defer s.releaseTempContainer(gs.ID)
 		s.log.Debug("file operation on temp container", "gameserver_id", gameserverID)
 		return fn(containerID)
 	}
@@ -160,12 +162,14 @@ func (s *FileService) withContainer(ctx context.Context, gameserverID string, fn
 	return fmt.Errorf("cannot access files while gameserver is %s", gs.Status)
 }
 
-func (s *FileService) getTempContainer(ctx context.Context, gs *models.Gameserver) (string, error) {
+// acquireTempContainer gets or creates a temp container and marks it as in-use.
+func (s *FileService) acquireTempContainer(ctx context.Context, gs *models.Gameserver) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if tc, ok := s.tempContainers[gs.ID]; ok {
-		tc.timer.Reset(tempContainerIdleTimeout)
+		tc.timer.Stop()
+		tc.activeCount++
 		s.log.Debug("reusing temp file container", "gameserver_id", gs.ID)
 		return tc.containerID, nil
 	}
@@ -202,10 +206,27 @@ func (s *FileService) getTempContainer(ctx context.Context, gs *models.Gameserve
 	s.tempContainers[gs.ID] = &tempFileContainer{
 		containerID: containerID,
 		timer:       timer,
+		activeCount: 1,
 	}
 
 	s.log.Info("created temp file container", "gameserver_id", gs.ID, "container_id", containerID[:12])
 	return containerID, nil
+}
+
+// releaseTempContainer marks a temp container as no longer in-use by this request.
+// Restarts the idle timer when no requests are active.
+func (s *FileService) releaseTempContainer(gameserverID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	tc, ok := s.tempContainers[gameserverID]
+	if !ok {
+		return
+	}
+	tc.activeCount--
+	if tc.activeCount <= 0 {
+		tc.timer.Reset(tempContainerIdleTimeout)
+	}
 }
 
 // CleanupTempContainer removes a temp file container for the given gameserver.
@@ -218,6 +239,11 @@ func (s *FileService) cleanupTempContainer(gameserverID string) {
 	s.mu.Lock()
 	tc, ok := s.tempContainers[gameserverID]
 	if !ok {
+		s.mu.Unlock()
+		return
+	}
+	// Don't remove container while requests are actively using it
+	if tc.activeCount > 0 {
 		s.mu.Unlock()
 		return
 	}
