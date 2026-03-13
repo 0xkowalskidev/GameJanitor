@@ -13,7 +13,7 @@
   <script src="/static/alpine.min.js" defer></script>
   <style>
     [x-cloak] { display: none !important; }
-    body { background: linear-gradient(145deg, #12121f 0%, #1a1a2e 50%, #151525 100%); }
+    body { background: linear-gradient(145deg, #12121f 0%, #1a1a2e 50%, #151525 100%); background-attachment: fixed; }
     .noise-overlay {
       position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: 0.03;
       background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
@@ -22,14 +22,9 @@
     .card-glow:hover { box-shadow: 0 0 20px rgba(255,122,17,0.15); border-color: rgba(255,122,17,0.3); }
     .glass { background: rgba(42,42,61,0.6); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
     .stopped-card > * { filter: grayscale(40%); opacity: 0.7; }
-    .scroll-row { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.1) transparent; }
-    .scroll-row::-webkit-scrollbar { height: 6px; }
-    .scroll-row::-webkit-scrollbar-track { background: transparent; }
-    .scroll-row::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
-    .scroll-row::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
   </style>
 </head>
-<body class="h-full font-body text-surface-200 antialiased" hx-boost="true" hx-target="#content" hx-swap="innerHTML" hx-push-url="true" hx-headers='{"X-CSRF-Token": "{{.CSRFToken}}"}'>
+<body class="min-h-full font-body text-surface-200 antialiased" hx-boost="true" hx-target="#content" hx-swap="innerHTML" hx-push-url="true" hx-headers='{"X-CSRF-Token": "{{.CSRFToken}}"}'>
   <div class="noise-overlay"></div>
 
   <div class="relative z-10 flex flex-col min-h-full">
