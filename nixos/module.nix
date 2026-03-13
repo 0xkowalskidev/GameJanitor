@@ -1,3 +1,5 @@
+self:
+
 { config, lib, pkgs, ... }:
 
 let
@@ -5,6 +7,12 @@ let
 in {
   options.services.gamejanitor = {
     enable = lib.mkEnableOption "Gamejanitor game server manager";
+
+    package = lib.mkOption {
+      type = lib.types.package;
+      default = self.packages.${pkgs.stdenv.hostPlatform.system}.default;
+      description = "The gamejanitor package to use";
+    };
 
     port = lib.mkOption {
       type = lib.types.port;
@@ -29,7 +37,7 @@ in {
       wantedBy = [ "multi-user.target" ];
 
       serviceConfig = {
-        ExecStart = "${pkgs.gamejanitor}/bin/gamejanitor serve --port ${toString cfg.port} --data-dir ${cfg.dataDir}";
+        ExecStart = "${cfg.package}/bin/gamejanitor serve --port ${toString cfg.port} --data-dir ${cfg.dataDir}";
         Restart = "always";
         RestartSec = 5;
         SupplementaryGroups = [ "docker" ];
