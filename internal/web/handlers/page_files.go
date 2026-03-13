@@ -50,7 +50,7 @@ func (h *PageFileHandlers) List(w http.ResponseWriter, r *http.Request) {
 	entries, err := h.fileSvc.ListDirectory(r.Context(), id, dirPath)
 	if err != nil {
 		h.log.Error("listing directory", "gameserver_id", id, "path", dirPath, "error", err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, "Failed to list directory", http.StatusInternalServerError)
 		return
 	}
 
@@ -80,7 +80,7 @@ func (h *PageFileHandlers) ListJSON(w http.ResponseWriter, r *http.Request) {
 	entries, err := h.fileSvc.ListDirectory(r.Context(), id, dirPath)
 	if err != nil {
 		h.log.Error("listing directory", "gameserver_id", id, "path", dirPath, "error", err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, "Failed to list directory", http.StatusInternalServerError)
 		return
 	}
 
@@ -99,7 +99,7 @@ func (h *PageFileHandlers) ReadFile(w http.ResponseWriter, r *http.Request) {
 	content, err := h.fileSvc.ReadFile(r.Context(), id, filePath)
 	if err != nil {
 		h.log.Error("reading file", "gameserver_id", id, "path", filePath, "error", err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, "Failed to read file", http.StatusInternalServerError)
 		return
 	}
 
@@ -123,7 +123,7 @@ func (h *PageFileHandlers) WriteFile(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.fileSvc.WriteFile(r.Context(), id, filePath, content); err != nil {
 		h.log.Error("writing file", "gameserver_id", id, "path", filePath, "error", err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, "Failed to write file", http.StatusInternalServerError)
 		return
 	}
 
@@ -140,7 +140,7 @@ func (h *PageFileHandlers) DeletePath(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.fileSvc.DeletePath(r.Context(), id, targetPath); err != nil {
 		h.log.Error("deleting path", "gameserver_id", id, "path", targetPath, "error", err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, "Failed to delete path", http.StatusInternalServerError)
 		return
 	}
 
@@ -157,7 +157,7 @@ func (h *PageFileHandlers) CreateDirectory(w http.ResponseWriter, r *http.Reques
 
 	if err := h.fileSvc.CreateDirectory(r.Context(), id, dirPath); err != nil {
 		h.log.Error("creating directory", "gameserver_id", id, "path", dirPath, "error", err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, "Failed to create directory", http.StatusInternalServerError)
 		return
 	}
 
