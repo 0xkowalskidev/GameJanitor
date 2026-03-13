@@ -1,0 +1,38 @@
+#!/bin/bash
+set -e
+
+SESSION_NAME="${SESSION_NAME:-Gamejanitor ARK Server}"
+MAX_PLAYERS="${MAX_PLAYERS:-70}"
+ADMIN_PASSWORD="${ADMIN_PASSWORD:-changeme}"
+SERVER_PASSWORD="${SERVER_PASSWORD:-}"
+MAP="${MAP:-TheIsland}"
+GAME_PORT="${GAME_PORT:-7777}"
+QUERY_PORT="${QUERY_PORT:-27015}"
+RCON_PORT="${RCON_PORT:-27020}"
+
+echo "[start-server] config: session=${SESSION_NAME} map=${MAP} maxplayers=${MAX_PLAYERS}"
+echo "[start-server] config: game_port=${GAME_PORT} query_port=${QUERY_PORT} rcon_port=${RCON_PORT}"
+
+# ARK saves and config live under ShooterGame/Saved/
+# Symlink to /data/saves so everything persists on the Docker volume
+SAVE_DIR="/data/server/ShooterGame/Saved"
+mkdir -p /data/saves
+mkdir -p "$(dirname "$SAVE_DIR")"
+# Remove real directory if it exists from install, then symlink
+if [ -d "$SAVE_DIR" ] && [ ! -L "$SAVE_DIR" ]; then
+    rm -rf "$SAVE_DIR"
+fi
+ln -sfn /data/saves "$SAVE_DIR"
+
+PASSWORD_PARAM=""
+if [ -n "$SERVER_PASSWORD" ]; then
+    PASSWORD_PARAM="?ServerPassword=${SERVER_PASSWORD}"
+fi
+
+echo "[start-server] starting ARK dedicated server"
+cd /data/server
+exec ./ShooterGame/Binaries/Linux/ShooterGameServer \
+    "${MAP}?listen?SessionName=${SESSION_NAME}?ServerAdminPassword=${ADMIN_PASSWORD}${PASSWORD_PARAM}?Port=${GAME_PORT}?QueryPort=${QUERY_PORT}?RCONPort=${RCON_PORT}?RCONEnabled=True?MaxPlayers=${MAX_PLAYERS}" \
+    -server \
+    -log \
+    -NoBattlEye
