@@ -1,13 +1,11 @@
 #!/bin/bash
 
-FIFO=/tmp/cmd-input
-
 echo "[stop-server] sending save-all"
-echo "save-all" > "$FIFO" 2>/dev/null || true
+/scripts/send-command "save-all"
 sleep 3
 
 echo "[stop-server] sending stop"
-echo "stop" > "$FIFO" 2>/dev/null || true
+/scripts/send-command "stop"
 
 # Wait for java process to exit (up to 30s)
 for i in $(seq 1 30); do
