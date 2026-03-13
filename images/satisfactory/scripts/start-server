@@ -1,0 +1,27 @@
+#!/bin/bash
+set -e
+
+GAME_PORT="${GAME_PORT:-7777}"
+RELIABLE_PORT="${RELIABLE_PORT:-8888}"
+MAX_PLAYERS="${MAX_PLAYERS:-4}"
+
+echo "[start-server] config: game_port=${GAME_PORT} reliable_port=${RELIABLE_PORT} max_players=${MAX_PLAYERS}"
+
+# Satisfactory stores saves/config in ~/.config/Epic/FactoryGame/Saved/
+# Symlink to /data/saves so everything persists on the Docker volume
+SAVE_DIR="/home/gameserver/.config/Epic/FactoryGame/Saved"
+mkdir -p /data/saves
+mkdir -p "$(dirname "$SAVE_DIR")"
+if [ -d "$SAVE_DIR" ] && [ ! -L "$SAVE_DIR" ]; then
+    rm -rf "$SAVE_DIR"
+fi
+ln -sfn /data/saves "$SAVE_DIR"
+
+echo "[start-server] starting Satisfactory dedicated server"
+cd /data/server
+exec ./FactoryServer.sh \
+    -Port="$GAME_PORT" \
+    -ReliablePort="$RELIABLE_PORT" \
+    "-ini:Game:[/Script/Engine.GameSession]:MaxPlayers=${MAX_PLAYERS}" \
+    -log \
+    -unattended
