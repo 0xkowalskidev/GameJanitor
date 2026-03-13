@@ -48,12 +48,12 @@ func (h *EventHandlers) SSE(w http.ResponseWriter, r *http.Request) {
 			if !ok {
 				return
 			}
-			data, err := json.Marshal(event.Data)
+			data, err := json.Marshal(event)
 			if err != nil {
 				h.log.Error("marshaling SSE event", "error", err)
 				continue
 			}
-			fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event.Type, data)
+			fmt.Fprintf(w, "event: status\ndata: %s\n\n", data)
 			flusher.Flush()
 		case <-heartbeat.C:
 			fmt.Fprint(w, ": heartbeat\n\n")

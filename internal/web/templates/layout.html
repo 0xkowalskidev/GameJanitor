@@ -18,6 +18,8 @@
         path: window.location.pathname,
         query: null,
         container: null,
+        stats: null,
+        _statsInterval: null,
         connectSSE() {
           this.eventSource = new EventSource('/api/events');
           this.eventSource.addEventListener('status', (e) => {
@@ -26,13 +28,25 @@
               this.refreshStatus();
             }
           });
-          this.eventSource.addEventListener('stats', (e) => {
-            const data = JSON.parse(e.data);
-            if (data.gameserver_id === id) {
-              this.container = data;
-            }
-          });
           this.refreshStatus();
+          this._startStatsPolling();
+        },
+        _startStatsPolling() {
+          this._fetchStats();
+          this._statsInterval = setInterval(() => this._fetchStats(), 10000);
+        },
+        async _fetchStats() {
+          if (this.status !== 'running' && this.status !== 'started') {
+            this.stats = null;
+            return;
+          }
+          try {
+            const resp = await fetch('/api/gameservers/' + id + '/stats');
+            const json = await resp.json();
+            if (json.data) {
+              this.stats = json.data;
+            }
+          } catch (_) {}
         },
         async refreshStatus() {
           try {
@@ -44,9 +58,11 @@
               this.container = json.data.container || null;
             }
           } catch (_) {}
+          this._fetchStats();
         },
         destroy() {
           if (this.eventSource) this.eventSource.close();
+          if (this._statsInterval) clearInterval(this._statsInterval);
         }
       };
     }
