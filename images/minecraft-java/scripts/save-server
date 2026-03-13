@@ -1,7 +1,8 @@
 #!/bin/bash
 FIFO=/tmp/cmd-input
+TIMEOUT=${SAVE_TIMEOUT_SECONDS:-5}
 
-echo "[save-server] sending save-all"
+echo "[save-server] sending save-all (timeout: ${TIMEOUT}s)"
 echo "save-all" > "$FIFO" 2>/dev/null || true
-sleep 3
+sleep "$TIMEOUT"
 echo "[save-server] save complete"
