@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{block "title" .}}Gamejanitor{{end}}</title>
+  <meta name="csrf-token" content="{{.CSRFToken}}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=DM+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
@@ -22,7 +23,7 @@
     .glass { background: rgba(42,42,61,0.6); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
   </style>
 </head>
-<body class="h-full font-body text-surface-200 antialiased" hx-boost="true" hx-target="#content" hx-swap="innerHTML" hx-push-url="true">
+<body class="h-full font-body text-surface-200 antialiased" hx-boost="true" hx-target="#content" hx-swap="innerHTML" hx-push-url="true" hx-headers='{"X-CSRF-Token": "{{.CSRFToken}}"}'>
   <div class="noise-overlay"></div>
 
   <div class="relative z-10 flex flex-col min-h-full">

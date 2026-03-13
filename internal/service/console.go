@@ -29,7 +29,7 @@ func (s *ConsoleService) StreamLogs(ctx context.Context, gameserverID string, ta
 		return nil, fmt.Errorf("getting gameserver %s: %w", gameserverID, err)
 	}
 	if gs == nil {
-		return nil, fmt.Errorf("gameserver %s not found", gameserverID)
+		return nil, ErrNotFoundf("gameserver %s not found", gameserverID)
 	}
 	if gs.ContainerID == nil {
 		return nil, fmt.Errorf("gameserver %s has no container", gameserverID)
@@ -43,7 +43,7 @@ func (s *ConsoleService) StreamLogs(ctx context.Context, gameserverID string, ta
 		return nil, fmt.Errorf("getting game for gameserver %s: %w", gameserverID, err)
 	}
 	if game == nil {
-		return nil, fmt.Errorf("game %s not found for gameserver %s", gs.GameID, gameserverID)
+		return nil, ErrNotFoundf("game %s not found for gameserver %s", gs.GameID, gameserverID)
 	}
 	if !HasCapability(game,"console_read") {
 		return nil, fmt.Errorf("console_read capability is disabled for game %s", game.Name)
@@ -62,7 +62,7 @@ func (s *ConsoleService) SendCommand(ctx context.Context, gameserverID string, c
 		return "", fmt.Errorf("getting gameserver %s: %w", gameserverID, err)
 	}
 	if gs == nil {
-		return "", fmt.Errorf("gameserver %s not found", gameserverID)
+		return "", ErrNotFoundf("gameserver %s not found", gameserverID)
 	}
 	if gs.ContainerID == nil {
 		return "", fmt.Errorf("gameserver %s has no container", gameserverID)
@@ -76,7 +76,7 @@ func (s *ConsoleService) SendCommand(ctx context.Context, gameserverID string, c
 		return "", fmt.Errorf("getting game for gameserver %s: %w", gameserverID, err)
 	}
 	if game == nil {
-		return "", fmt.Errorf("game %s not found for gameserver %s", gs.GameID, gameserverID)
+		return "", ErrNotFoundf("game %s not found for gameserver %s", gs.GameID, gameserverID)
 	}
 	if !HasCapability(game, "console_send") {
 		return "", fmt.Errorf("console_send capability is disabled for game %s", game.Name)
@@ -93,10 +93,6 @@ func (s *ConsoleService) SendCommand(ctx context.Context, gameserverID string, c
 	}
 
 	return stdout, nil
-}
-
-func isRunningStatus(status string) bool {
-	return status == StatusStarted || status == StatusRunning
 }
 
 // HasCapability returns true if the capability is NOT in the game's DisabledCapabilities list.

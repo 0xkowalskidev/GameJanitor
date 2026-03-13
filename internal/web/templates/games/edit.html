@@ -158,9 +158,9 @@
 
 <script>
 function editGame() {
-  const portsRaw = {{safeJS .DefaultPortsJSON}};
-  const envRaw = {{safeJS .DefaultEnvJSON}};
-  const capsRaw = {{safeJS .DisabledCapsJSON}};
+  const portsRaw = {{rawJS .DefaultPortsJSON}};
+  const envRaw = {{rawJS .DefaultEnvJSON}};
+  const capsRaw = {{rawJS .DisabledCapsJSON}};
 
   let defaultPorts = [];
   try {

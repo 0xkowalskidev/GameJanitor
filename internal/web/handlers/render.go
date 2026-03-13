@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/0xkowalskidev/gamejanitor/internal/web/templates"
+	"github.com/gorilla/csrf"
 )
 
 type Renderer struct {
@@ -21,7 +22,7 @@ func NewRenderer() (*Renderer, error) {
 		"statusColor": statusColor,
 		"formatTime":  formatTime,
 		"jsonPretty":  jsonPretty,
-		"safeJS":      func(s string) template.JS { return template.JS(s) },
+		"rawJS":       func(s string) template.JS { return template.JS(s) },
 		"lower":       strings.ToLower,
 		"join":        strings.Join,
 		"deref":       func(s *string) string { if s != nil { return *s }; return "" },
@@ -86,8 +87,14 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string,
 		return
 	}
 
+	// Inject CSRF token into template data
+	if m, ok := data.(map[string]any); ok {
+		m["CSRFToken"] = csrf.Token(req)
+	}
+
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Vary", "HX-Request")
+	w.Header().Set("Cache-Control", "no-store")
 
 	templateName := "layout.html"
 	if req.Header.Get("HX-Request") == "true" {
@@ -108,6 +115,7 @@ func (r *Renderer) RenderPartial(w http.ResponseWriter, name string, block strin
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
 
 	if err := t.ExecuteTemplate(w, block, data); err != nil {
 		http.Error(w, "rendering partial: "+err.Error(), http.StatusInternalServerError)

@@ -58,6 +58,10 @@ func (h *GameHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "id, name, and image are required")
 		return
 	}
+	if !validGameID.MatchString(game.ID) {
+		respondError(w, http.StatusBadRequest, "game ID must contain only lowercase letters, numbers, and hyphens")
+		return
+	}
 
 	if err := h.svc.CreateGame(&game); err != nil {
 		h.log.Error("creating game", "id", game.ID, "error", err)

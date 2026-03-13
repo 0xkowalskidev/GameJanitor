@@ -150,7 +150,7 @@
 
 <script>
 function newGameserver() {
-  const games = {{safeJS .GamesJSON}};
+  const games = {{rawJS .GamesJSON}};
   const params = new URLSearchParams(window.location.search);
   const preselect = params.get('game') || '';
   return {

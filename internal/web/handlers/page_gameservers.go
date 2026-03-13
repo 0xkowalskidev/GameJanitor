@@ -56,7 +56,12 @@ func (h *PageGameserverHandlers) New(w http.ResponseWriter, r *http.Request) {
 			MinCPU:       g.MinCPU,
 		}
 	}
-	gamesJSONBytes, _ := json.Marshal(gamesForJS)
+	gamesJSONBytes, err := json.Marshal(gamesForJS)
+	if err != nil {
+		h.log.Error("marshaling games JSON", "error", err)
+		http.Error(w, "Failed to prepare form data", http.StatusInternalServerError)
+		return
+	}
 
 	h.renderer.Render(w, r, "gameservers/new", map[string]any{
 		"Games":     games,

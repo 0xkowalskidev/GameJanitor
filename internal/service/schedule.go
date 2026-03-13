@@ -46,7 +46,10 @@ func (s *ScheduleService) CreateSchedule(schedule *models.Schedule) error {
 
 	if schedule.Enabled {
 		if err := s.scheduler.AddSchedule(*schedule); err != nil {
-			s.log.Error("failed to register schedule with cron", "id", schedule.ID, "error", err)
+			if delErr := models.DeleteSchedule(s.db, schedule.ID); delErr != nil {
+				s.log.Error("failed to clean up schedule after cron registration failure", "id", schedule.ID, "error", delErr)
+			}
+			return fmt.Errorf("registering schedule with cron: %w", err)
 		}
 	}
 
@@ -68,7 +71,7 @@ func (s *ScheduleService) UpdateSchedule(schedule *models.Schedule) error {
 	}
 
 	if err := s.scheduler.UpdateSchedule(*schedule); err != nil {
-		s.log.Error("failed to update schedule in cron", "id", schedule.ID, "error", err)
+		return fmt.Errorf("updating schedule in cron: %w", err)
 	}
 
 	return nil
@@ -87,7 +90,7 @@ func (s *ScheduleService) ToggleSchedule(id string) error {
 		return fmt.Errorf("getting schedule %s: %w", id, err)
 	}
 	if schedule == nil {
-		return fmt.Errorf("schedule %s not found", id)
+		return ErrNotFoundf("schedule %s not found", id)
 	}
 
 	schedule.Enabled = !schedule.Enabled
@@ -99,7 +102,7 @@ func (s *ScheduleService) ToggleSchedule(id string) error {
 	}
 
 	if err := s.scheduler.UpdateSchedule(*schedule); err != nil {
-		s.log.Error("failed to update schedule in cron after toggle", "id", id, "error", err)
+		return fmt.Errorf("updating schedule in cron after toggle: %w", err)
 	}
 
 	return nil

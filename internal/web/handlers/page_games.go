@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// validGameID is shared with API handlers for consistent validation.
 var validGameID = regexp.MustCompile(`^[a-z0-9\-]+$`)
 
 type PageGameHandlers struct {

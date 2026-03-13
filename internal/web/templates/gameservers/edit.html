@@ -124,8 +124,8 @@
 
 <script>
 function editGameserver() {
-  const portsRaw = {{safeJS .PortsJSON}};
-  const envRaw = {{safeJS .EnvJSON}};
+  const portsRaw = {{rawJS .PortsJSON}};
+  const envRaw = {{rawJS .EnvJSON}};
 
   // Parse ports array
   let ports = [];
