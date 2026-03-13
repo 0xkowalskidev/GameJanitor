@@ -16,7 +16,7 @@
         version = "0.1.0";
         src = ./.;
         vendorHash = null; # Updated after go mod vendor
-        CGO_ENABLED = 1;
+        env.CGO_ENABLED = "1";
         buildInputs = [ pkgs.sqlite ];
         nativeBuildInputs = [ pkgs.pkg-config pkgs.tailwindcss ];
         preBuild = ''
