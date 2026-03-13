@@ -116,12 +116,12 @@ func SeedGames(db *sql.DB) error {
 			disabledCapabilities: `[]`,
 		},
 		{
-			id:       "garrysmod",
+			id:       "garrys-mod",
 			name:     "Garry's Mod",
-			image:    "registry.0xkowalski.dev/gamejanitor/garrysmod",
-			iconPath: "/static/games/garrysmod/garrysmod-icon.ico",
-			gridPath: "/static/games/garrysmod/garrysmod-grid.png",
-			heroPath: "/static/games/garrysmod/garrysmod-hero.png",
+			image:    "registry.0xkowalski.dev/gamejanitor/garrys-mod",
+			iconPath: "/static/games/garrys-mod/garrys-mod-icon.ico",
+			gridPath: "/static/games/garrys-mod/garrys-mod-grid.png",
+			heroPath: "/static/games/garrys-mod/garrys-mod-hero.png",
 			defaultPorts: `[{"name":"game","port":27015,"protocol":"udp"},{"name":"rcon","port":27015,"protocol":"tcp"}]`,
 			defaultEnv: `[
 				{"key":"HOSTNAME","default":"Gamejanitor GMod Server","label":"Server Name"},
