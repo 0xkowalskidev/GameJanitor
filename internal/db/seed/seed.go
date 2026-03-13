@@ -56,7 +56,7 @@ func SeedGames(db *sql.DB) error {
 				{"key":"SERVER_MAXPLAYERS","default":"50","label":"Max Players","type":"number"},
 				{"key":"SERVER_HOSTNAME","default":"Gamejanitor Rust Server","label":"Server Name"},
 				{"key":"SERVER_WORLDSIZE","default":"3000","label":"World Size","type":"number"},
-				{"key":"RCON_PASSWORD","default":"changeme","label":"RCON Password"},
+				{"key":"RCON_PASSWORD","default":"","label":"RCON Password","autogenerate":"password"},
 				{"key":"SERVER_PORT","default":"28015","system":true},
 				{"key":"QUERY_PORT","default":"28017","system":true},
 				{"key":"RCON_PORT","default":"28016","system":true},
@@ -78,7 +78,7 @@ func SeedGames(db *sql.DB) error {
 			defaultEnv: `[
 				{"key":"SESSION_NAME","default":"Gamejanitor ARK Server","label":"Session Name"},
 				{"key":"MAX_PLAYERS","default":"70","label":"Max Players","type":"number"},
-				{"key":"ADMIN_PASSWORD","default":"changeme","label":"Admin Password"},
+				{"key":"ADMIN_PASSWORD","default":"","label":"Admin Password","autogenerate":"password"},
 				{"key":"SERVER_PASSWORD","default":"","label":"Server Password"},
 				{"key":"MAP","default":"TheIsland","label":"Map","type":"select","options":["TheIsland","TheCenter","ScorchedEarth_P","Ragnarok","Aberration_P","Extinction","Valguero_P","Genesis","CrystalIsles","LostIsland","Fjordur"]},
 				{"key":"GAME_PORT","default":"7777","system":true},
@@ -102,10 +102,11 @@ func SeedGames(db *sql.DB) error {
 			defaultEnv: `[
 				{"key":"HOSTNAME","default":"Gamejanitor CS2 Server","label":"Server Name"},
 				{"key":"MAXPLAYERS","default":"16","label":"Max Players","type":"number"},
-				{"key":"RCON_PASSWORD","default":"changeme","label":"RCON Password"},
+				{"key":"RCON_PASSWORD","default":"","label":"RCON Password","autogenerate":"password"},
 				{"key":"GAME_TYPE","default":"0","label":"Game Type","type":"select","options":["0","1","2","3"]},
 				{"key":"GAME_MODE","default":"1","label":"Game Mode","type":"select","options":["0","1","2"]},
 				{"key":"MAP","default":"de_dust2","label":"Starting Map"},
+				{"key":"GSLT","default":"","label":"Game Server Login Token (GSLT)"},
 				{"key":"GAME_PORT","default":"27015","system":true},
 				{"key":"SAVE_TIMEOUT_SECONDS","default":"5","system":true}
 			]`,
@@ -125,7 +126,7 @@ func SeedGames(db *sql.DB) error {
 			defaultEnv: `[
 				{"key":"HOSTNAME","default":"Gamejanitor GMod Server","label":"Server Name"},
 				{"key":"MAXPLAYERS","default":"16","label":"Max Players","type":"number"},
-				{"key":"RCON_PASSWORD","default":"changeme","label":"RCON Password"},
+				{"key":"RCON_PASSWORD","default":"","label":"RCON Password","autogenerate":"password"},
 				{"key":"GAMEMODE","default":"sandbox","label":"Game Mode","type":"select","options":["sandbox","terrortown","prop_hunt","murder","deathrun"]},
 				{"key":"MAP","default":"gm_flatgrass","label":"Starting Map"},
 				{"key":"GAME_PORT","default":"27015","system":true},
@@ -148,7 +149,7 @@ func SeedGames(db *sql.DB) error {
 			defaultEnv: `[
 				{"key":"SERVER_NAME","default":"Gamejanitor Palworld Server","label":"Server Name"},
 				{"key":"MAX_PLAYERS","default":"32","label":"Max Players","type":"number"},
-				{"key":"ADMIN_PASSWORD","default":"changeme","label":"Admin Password"},
+				{"key":"ADMIN_PASSWORD","default":"","label":"Admin Password","autogenerate":"password"},
 				{"key":"SERVER_PASSWORD","default":"","label":"Server Password"},
 				{"key":"DIFFICULTY","default":"Normal","label":"Difficulty","type":"select","options":["Casual","Normal","Hard"]},
 				{"key":"GAME_PORT","default":"8211","system":true},
@@ -193,7 +194,7 @@ func SeedGames(db *sql.DB) error {
 			defaultEnv: `[
 				{"key":"SERVER_NAME","default":"Gamejanitor Valheim Server","label":"Server Name"},
 				{"key":"WORLD_NAME","default":"Gamejanitor","label":"World Name"},
-				{"key":"SERVER_PASSWORD","default":"changeme","label":"Server Password"},
+				{"key":"SERVER_PASSWORD","default":"","label":"Server Password"},
 				{"key":"GAME_PORT","default":"2456","system":true},
 				{"key":"QUERY_PORT","default":"2457","system":true},
 				{"key":"SAVE_TIMEOUT_SECONDS","default":"15","system":true}

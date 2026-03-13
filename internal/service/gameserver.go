@@ -128,15 +128,7 @@ func applyGameDefaults(gs *models.Gameserver, game *models.Game) error {
 		if d.System {
 			continue
 		}
-		val := d.Default
-		if val == "changeme" {
-			generated, err := generatePassword(16)
-			if err != nil {
-				return fmt.Errorf("generating password for %s: %w", d.Key, err)
-			}
-			val = generated
-		}
-		env[d.Key] = val
+		env[d.Key] = d.Default
 	}
 
 	// User-provided env overrides defaults
@@ -147,6 +139,26 @@ func applyGameDefaults(gs *models.Gameserver, game *models.Game) error {
 		}
 		for k, v := range userEnv {
 			env[k] = v
+		}
+	}
+
+	// Autogenerate values for fields where the final value is empty
+	for _, d := range defs {
+		if d.Autogenerate == "" || d.System {
+			continue
+		}
+		if env[d.Key] != "" {
+			continue
+		}
+		switch d.Autogenerate {
+		case "password":
+			generated, err := generatePassword(16)
+			if err != nil {
+				return fmt.Errorf("generating password for %s: %w", d.Key, err)
+			}
+			env[d.Key] = generated
+		default:
+			return fmt.Errorf("unknown autogenerate type %q for %s", d.Autogenerate, d.Key)
 		}
 	}
 
@@ -515,12 +527,13 @@ func (s *GameserverService) Reinstall(ctx context.Context, id string) error {
 
 // Env var definition from game's default_env JSON
 type envVarDef struct {
-	Key     string   `json:"key"`
-	Default string   `json:"default"`
-	Label   string   `json:"label,omitempty"`
-	Type    string   `json:"type,omitempty"`
-	Options []string `json:"options,omitempty"`
-	System  bool     `json:"system,omitempty"`
+	Key          string   `json:"key"`
+	Default      string   `json:"default"`
+	Label        string   `json:"label,omitempty"`
+	Type         string   `json:"type,omitempty"`
+	Options      []string `json:"options,omitempty"`
+	System       bool     `json:"system,omitempty"`
+	Autogenerate string   `json:"autogenerate,omitempty"`
 }
 
 // Port mapping from gameserver's ports JSON
