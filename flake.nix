@@ -25,7 +25,7 @@
         subPackages = [ "cmd/gamejanitor" ];
       };
 
-      nixosModules.default = ./nixos/module.nix;
+      nixosModules.default = import ./nixos/module.nix self;
 
       devShells.${system}.default = let
         dev = pkgs.writeShellScriptBin "dev" ''
