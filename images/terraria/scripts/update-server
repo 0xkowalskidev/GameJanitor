@@ -1,0 +1,3 @@
+#!/bin/bash
+echo "[update-server] not implemented for Terraria"
+exit 0

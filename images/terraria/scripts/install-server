@@ -1,0 +1,19 @@
+#!/bin/bash
+set -e
+
+TERRARIA_VERSION="1456"
+DOWNLOAD_URL="https://terraria.org/api/download/pc-dedicated-server/terraria-server-${TERRARIA_VERSION}.zip"
+
+echo "[install-server] downloading Terraria dedicated server v${TERRARIA_VERSION}"
+curl -fsSL -o /tmp/terraria-server.zip "$DOWNLOAD_URL"
+
+echo "[install-server] extracting server files"
+unzip -qo /tmp/terraria-server.zip -d /tmp/terraria-server
+
+# The zip contains a version-numbered directory with Linux/Windows/Mac subdirs
+cp -r /tmp/terraria-server/${TERRARIA_VERSION}/Linux/* /data/
+chmod +x /data/TerrariaServer.bin.x86_64 /data/TerrariaServer
+
+rm -rf /tmp/terraria-server.zip /tmp/terraria-server
+
+echo "[install-server] Terraria server v${TERRARIA_VERSION} installed"

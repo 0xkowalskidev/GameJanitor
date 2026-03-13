@@ -178,7 +178,7 @@ func SeedGames(db *sql.DB) error {
 			minMemoryMB:          1024,
 			minCPU:               1.0,
 			gsqGameSlug:          "terraria",
-			disabledCapabilities: `[]`,
+			disabledCapabilities: `["query"]`,
 		},
 		{
 			id:       "valheim",

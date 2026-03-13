@@ -1,0 +1,38 @@
+#!/bin/bash
+set -e
+
+WORLD_NAME="${WORLD_NAME:-Gamejanitor}"
+MAX_PLAYERS="${MAX_PLAYERS:-8}"
+PASSWORD="${PASSWORD:-}"
+DIFFICULTY="${DIFFICULTY:-1}"
+WORLD_SIZE="${WORLD_SIZE:-2}"
+GAME_PORT="${GAME_PORT:-7777}"
+
+WORLD_DIR="/data/worlds"
+mkdir -p "$WORLD_DIR"
+WORLD_FILE="${WORLD_DIR}/${WORLD_NAME}.wld"
+
+echo "[start-server] config: world=${WORLD_NAME} size=${WORLD_SIZE} difficulty=${DIFFICULTY}"
+echo "[start-server] config: maxplayers=${MAX_PLAYERS} port=${GAME_PORT}"
+
+# FIFO pipe for command input
+FIFO=/tmp/cmd-input
+mkfifo "$FIFO" 2>/dev/null || true
+
+# -config flag is broken in v1.4.4.9, use CLI args instead
+ARGS=(
+    -world "$WORLD_FILE"
+    -autocreate "$WORLD_SIZE"
+    -difficulty "$DIFFICULTY"
+    -maxplayers "$MAX_PLAYERS"
+    -port "$GAME_PORT"
+    -secure
+    -lang "en-US"
+)
+
+if [ -n "$PASSWORD" ]; then
+    ARGS+=(-password "$PASSWORD")
+fi
+
+echo "[start-server] starting Terraria server"
+tail -f "$FIFO" | exec /data/TerrariaServer.bin.x86_64 "${ARGS[@]}"
