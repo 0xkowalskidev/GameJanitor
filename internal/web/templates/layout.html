@@ -11,6 +11,38 @@
   <link rel="stylesheet" href="/static/style.css">
   <script src="/static/htmx.min.js" defer></script>
   <script>
+    function gsHero(id, initialStatus) {
+      return {
+        eventSource: null,
+        status: initialStatus,
+        path: window.location.pathname,
+        query: null,
+        connectSSE() {
+          this.eventSource = new EventSource('/api/events');
+          this.eventSource.addEventListener('status', (e) => {
+            const data = JSON.parse(e.data);
+            if (data.gameserver_id === id) {
+              this.refreshStatus();
+            }
+          });
+          this.refreshStatus();
+        },
+        async refreshStatus() {
+          try {
+            const resp = await fetch('/api/gameservers/' + id + '/status');
+            const json = await resp.json();
+            if (json.data) {
+              this.status = json.data.status;
+              this.query = json.data.query || null;
+            }
+          } catch (_) {}
+        },
+        destroy() {
+          if (this.eventSource) this.eventSource.close();
+        }
+      };
+    }
+
     function logTail(id, status) {
       return {
         lines: [],
