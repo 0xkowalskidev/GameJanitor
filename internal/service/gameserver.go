@@ -374,12 +374,14 @@ func (s *GameserverService) Stop(ctx context.Context, id string) error {
 		return fmt.Errorf("gameserver %s not found after stop", id)
 	}
 
+	oldStatus := gs.Status
 	gs.ContainerID = nil
 	gs.Status = StatusStopped
 	if err := models.UpdateGameserver(s.db, gs); err != nil {
 		return err
 	}
 
+	s.broadcaster.Publish(StatusEvent{GameserverID: id, OldStatus: oldStatus, NewStatus: StatusStopped})
 	s.log.Info("gameserver stopped", "id", id)
 	return nil
 }
