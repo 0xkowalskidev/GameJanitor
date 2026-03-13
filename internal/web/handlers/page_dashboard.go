@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -27,6 +29,8 @@ type gameserverView struct {
 	GameName      string
 	GridPath      string
 	HeroPath      string
+	IconPath      string
+	GamePort      string
 	Status        string
 	PlayersOnline int
 	MaxPlayers    int
@@ -63,7 +67,9 @@ func (h *PageDashboardHandlers) Dashboard(w http.ResponseWriter, r *http.Request
 			GameName: game.Name,
 			GridPath: game.GridPath,
 			HeroPath: game.HeroPath,
+			IconPath: game.IconPath,
 			Status:   gs.Status,
+			GamePort: firstGamePort(gs.Ports),
 		}
 		if qd := h.querySvc.GetQueryData(gs.ID); qd != nil {
 			v.PlayersOnline = qd.PlayersOnline
@@ -82,5 +88,28 @@ func (h *PageDashboardHandlers) Dashboard(w http.ResponseWriter, r *http.Request
 		"StoppedGameservers": stoppedViews,
 		"HasGameservers":     len(gameservers) > 0,
 		"Games":              games,
+		"RunningCount":       len(activeViews),
+		"StoppedCount":       len(stoppedViews),
+		"TotalCount":         len(gameservers),
 	})
+}
+
+// firstGamePort extracts the first game port number from a gameserver's port config.
+func firstGamePort(portsJSON json.RawMessage) string {
+	if len(portsJSON) == 0 {
+		return ""
+	}
+	var ports []struct {
+		HostPort int    `json:"host_port"`
+		Name     string `json:"name"`
+	}
+	if err := json.Unmarshal(portsJSON, &ports); err != nil || len(ports) == 0 {
+		return ""
+	}
+	for _, p := range ports {
+		if p.Name == "game" {
+			return fmt.Sprintf("%d", p.HostPort)
+		}
+	}
+	return fmt.Sprintf("%d", ports[0].HostPort)
 }

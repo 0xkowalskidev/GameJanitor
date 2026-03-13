@@ -1,53 +1,70 @@
 {{define "gameserver_card"}}
-<div id="gs-{{.ID}}" class="group relative aspect-[2/3] rounded-xl overflow-hidden border border-surface-800/60 card-glow">
-  <!-- Background Image -->
-  {{if .GridPath}}
-  <img src="{{.GridPath}}" alt="{{.GameName}}" class="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy">
-  {{else}}
-  <div class="absolute inset-0 bg-gradient-to-br from-surface-700 to-surface-800"></div>
-  {{end}}
+<div id="gs-{{.ID}}" class="group relative rounded-xl border border-surface-700/60 card-glow overflow-hidden transition-all duration-200 bg-surface-850/80">
+  <div class="flex items-center gap-4 p-4">
+    <!-- Game icon + status indicator -->
+    <div class="relative shrink-0">
+      {{if .IconPath}}
+      <img src="{{.IconPath}}" alt="{{.GameName}}" class="w-11 h-11 rounded-lg object-cover">
+      {{else}}
+      <div class="w-11 h-11 rounded-lg bg-gradient-to-br from-surface-700 to-surface-800 flex items-center justify-center">
+        <svg class="w-5 h-5 text-surface-500" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5.25 14.25h13.5m-13.5 0a3 3 0 01-3-3m3 3a3 3 0 100 6h13.5a3 3 0 100-6m-16.5-3a3 3 0 013-3h13.5a3 3 0 013 3m-19.5 0a4.5 4.5 0 01.9-2.7L5.737 5.1a3.375 3.375 0 012.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 01.9 2.7m0 0a3 3 0 01-3 3m0 3h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008zm-3 6h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008z"/></svg>
+      </div>
+      {{end}}
+      <!-- Status dot -->
+      {{- $color := statusColor .Status -}}
+      <span class="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-surface-900
+        {{- if eq $color "green"}} bg-emerald-400 shadow-sm shadow-emerald-400/50
+        {{- else if eq $color "yellow"}} bg-amber-400 shadow-sm shadow-amber-400/50 animate-glow-pulse
+        {{- else if eq $color "orange"}} bg-orange-400 shadow-sm shadow-orange-400/50 animate-glow-pulse
+        {{- else if eq $color "red"}} bg-red-400 shadow-sm shadow-red-400/50
+        {{- else}} bg-surface-500
+        {{- end}}"></span>
+    </div>
 
-  <!-- Gradient overlay -->
-  <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-black/10"></div>
-
-  <!-- Status indicator -->
-  <div class="absolute top-3 right-3 flex items-center gap-2">
-    {{- if .HasQueryData -}}
-    <span class="text-xs font-medium text-surface-300 bg-black/60 px-1.5 py-0.5 rounded">{{.PlayersOnline}}/{{.MaxPlayers}}</span>
-    {{- end -}}
-    {{template "status_badge" .Status}}
-  </div>
-
-  <!-- Server info at bottom -->
-  <div class="absolute bottom-0 left-0 right-0 p-4">
-    <a href="/gameservers/{{.ID}}" class="block">
-      <h3 class="font-display font-bold text-white text-lg leading-tight mb-0.5 group-hover:text-accent-300 transition-colors">{{.Name}}</h3>
-      <p class="text-xs text-surface-400">{{.GameName}}</p>
+    <!-- Info -->
+    <a href="/gameservers/{{.ID}}" class="min-w-0 flex-1" hx-boost="true">
+      <h3 class="font-display font-bold text-white text-sm leading-tight truncate group-hover:text-accent-300 transition-colors">{{.Name}}</h3>
+      <p class="text-xs text-surface-400 truncate mt-0.5">{{.GameName}}</p>
     </a>
-  </div>
 
-  <!-- Hover action overlay -->
-  <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-    <div class="flex items-center gap-2 bg-black/50 backdrop-blur-sm rounded-full px-4 py-2.5">
+    <!-- Meta pills -->
+    <div class="hidden sm:flex items-center gap-3 shrink-0">
+      {{if .HasQueryData}}
+      <div class="flex items-center gap-1.5 text-xs text-surface-300">
+        <svg class="w-3.5 h-3.5 text-surface-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128H5.228A2 2 0 015 19.128c0-1.113.285-2.16.786-3.07m0 0a15.932 15.932 0 014.214-4.014m0 0A5.25 5.25 0 1115 10.5a5.228 5.228 0 01-2.214-.468"/></svg>
+        <span class="tabular-nums">{{.PlayersOnline}}<span class="text-surface-500">/{{.MaxPlayers}}</span></span>
+      </div>
+      {{end}}
+      {{if .GamePort}}
+      <div class="flex items-center gap-1.5 text-xs text-surface-400 font-mono">
+        <svg class="w-3.5 h-3.5 text-surface-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244"/></svg>
+        <span>localhost:{{.GamePort}}</span>
+      </div>
+      {{end}}
+    </div>
+
+    <!-- Actions -->
+    <div class="flex items-center gap-1.5 shrink-0">
       {{if eq .Status "stopped"}}
       <button hx-post="/gameservers/{{.ID}}/start" hx-target="#gs-{{.ID}}" hx-swap="outerHTML"
-              class="w-11 h-11 rounded-full bg-emerald-500/90 hover:bg-emerald-400 text-white flex items-center justify-center shadow-xl shadow-emerald-500/30 transition-all hover:scale-110" title="Start">
-        <svg class="w-5 h-5 ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              class="w-9 h-9 rounded-lg bg-emerald-500/90 hover:bg-emerald-400 text-white flex items-center justify-center shadow-lg shadow-emerald-500/30 transition-all hover:scale-110" title="Start">
+        <svg class="w-4 h-4 ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
       </button>
       {{else if or (eq .Status "running") (eq .Status "started")}}
-      <button hx-post="/gameservers/{{.ID}}/stop" hx-target="#gs-{{.ID}}" hx-swap="outerHTML"
-              class="w-10 h-10 rounded-full bg-red-500/90 hover:bg-red-400 text-white flex items-center justify-center shadow-xl shadow-red-500/30 transition-all hover:scale-110" title="Stop">
-        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
-      </button>
       <button hx-post="/gameservers/{{.ID}}/restart" hx-target="#gs-{{.ID}}" hx-swap="outerHTML"
-              class="w-10 h-10 rounded-full bg-amber-500/90 hover:bg-amber-400 text-white flex items-center justify-center shadow-xl shadow-amber-500/30 transition-all hover:scale-110" title="Restart">
+              class="w-9 h-9 rounded-lg bg-surface-800 hover:bg-amber-500/90 text-surface-400 hover:text-white border border-surface-700/60 flex items-center justify-center transition-all hover:scale-105 hover:border-amber-500/30 hover:shadow-lg hover:shadow-amber-500/20" title="Restart">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
       </button>
+      <button hx-post="/gameservers/{{.ID}}/stop" hx-target="#gs-{{.ID}}" hx-swap="outerHTML"
+              class="w-9 h-9 rounded-lg bg-surface-800 hover:bg-red-500/90 text-surface-400 hover:text-white border border-surface-700/60 flex items-center justify-center transition-all hover:scale-105 hover:border-red-500/30 hover:shadow-lg hover:shadow-red-500/20" title="Stop">
+        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
+      </button>
+      {{else}}
+      <div class="w-9 h-9 rounded-lg bg-surface-800/60 border border-surface-700/40 flex items-center justify-center">
+        <svg class="w-4 h-4 text-surface-500 animate-glow-pulse" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      </div>
       {{end}}
     </div>
   </div>
-
-  <!-- Click through to detail (behind hover overlay) -->
-  <a href="/gameservers/{{.ID}}" class="absolute inset-0 z-0" hx-boost="true"></a>
 </div>
 {{end}}
