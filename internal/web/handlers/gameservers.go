@@ -166,11 +166,8 @@ type queryInfo struct {
 }
 
 type containerInfo struct {
-	State         string    `json:"state"`
-	StartedAt     time.Time `json:"started_at"`
-	MemoryUsageMB int       `json:"memory_usage_mb"`
-	MemoryLimitMB int       `json:"memory_limit_mb"`
-	CPUPercent    float64   `json:"cpu_percent"`
+	State     string    `json:"state"`
+	StartedAt time.Time `json:"started_at"`
 }
 
 func (h *GameserverHandlers) Status(w http.ResponseWriter, r *http.Request) {
@@ -209,25 +206,45 @@ func (h *GameserverHandlers) Status(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			h.log.Warn("failed to inspect container for status", "id", id, "error", err)
 		} else {
-			ci := &containerInfo{
+			resp.Container = &containerInfo{
 				State:     info.State,
 				StartedAt: info.StartedAt,
 			}
-
-			stats, err := h.docker.ContainerStats(r.Context(), *gs.ContainerID)
-			if err != nil {
-				h.log.Warn("failed to get container stats", "id", id, "error", err)
-			} else {
-				ci.MemoryUsageMB = stats.MemoryUsageMB
-				ci.MemoryLimitMB = stats.MemoryLimitMB
-				ci.CPUPercent = stats.CPUPercent
-			}
-
-			resp.Container = ci
 		}
 	}
 
 	respondOK(w, resp)
+}
+
+func (h *GameserverHandlers) Stats(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	gs, err := h.svc.GetGameserver(id)
+	if err != nil {
+		h.log.Error("getting gameserver for stats", "id", id, "error", err)
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if gs == nil {
+		respondError(w, http.StatusNotFound, "gameserver "+id+" not found")
+		return
+	}
+	if gs.ContainerID == nil {
+		respondError(w, http.StatusBadRequest, "gameserver has no container")
+		return
+	}
+
+	stats, err := h.docker.ContainerStats(r.Context(), *gs.ContainerID)
+	if err != nil {
+		h.log.Warn("failed to get container stats", "id", id, "error", err)
+		respondError(w, http.StatusInternalServerError, "failed to get container stats")
+		return
+	}
+
+	respondOK(w, map[string]any{
+		"cpu_percent":     stats.CPUPercent,
+		"memory_usage_mb": stats.MemoryUsageMB,
+		"memory_limit_mb": stats.MemoryLimitMB,
+	})
 }
 
 func (h *GameserverHandlers) Logs(w http.ResponseWriter, r *http.Request) {

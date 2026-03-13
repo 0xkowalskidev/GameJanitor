@@ -188,7 +188,7 @@ func (s *QueryService) pollLoop(ctx context.Context, gameserverID, gameSlug stri
 				promoted = true
 			} else if changed {
 				s.log.Debug("GSQ data changed, notifying", "id", gameserverID, "players", info.Players)
-				s.broadcaster.PublishStatus(StatusEvent{
+				s.broadcaster.Publish(StatusEvent{
 					GameserverID: gameserverID,
 					OldStatus:    StatusRunning,
 					NewStatus:    StatusRunning,

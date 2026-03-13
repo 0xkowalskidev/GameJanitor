@@ -101,7 +101,6 @@ func runServe(cmd *cobra.Command, args []string) error {
 	scheduler := service.NewScheduler(database, backupSvc, gameserverSvc, consoleSvc, logger)
 	scheduleSvc := service.NewScheduleService(database, scheduler, logger)
 	statusMgr := service.NewStatusManager(database, dockerClient, broadcaster, querySvc, logger)
-	statsCollector := service.NewStatsCollector(database, dockerClient, broadcaster, logger)
 
 	// Crash recovery
 	ctx := context.Background()
@@ -113,10 +112,6 @@ func runServe(cmd *cobra.Command, args []string) error {
 	// Start status manager (Docker events watcher)
 	statusMgr.Start(ctx)
 	defer statusMgr.Stop()
-
-	// Start stats collector
-	statsCollector.Start(ctx)
-	defer statsCollector.Stop()
 
 	// Start scheduler
 	if err := scheduler.Start(ctx); err != nil {
