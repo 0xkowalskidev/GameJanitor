@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -21,6 +22,32 @@ type PageGameserverHandlers struct {
 
 func NewPageGameserverHandlers(gameSvc *service.GameService, gameserverSvc *service.GameserverService, querySvc *service.QueryService, renderer *Renderer, log *slog.Logger) *PageGameserverHandlers {
 	return &PageGameserverHandlers{gameSvc: gameSvc, gameserverSvc: gameserverSvc, querySvc: querySvc, renderer: renderer, log: log}
+}
+
+type gameserverFormData struct {
+	MemoryLimitMB int
+	CPULimit      float64
+	AutoStart     bool
+	Ports         json.RawMessage
+	Env           json.RawMessage
+}
+
+func parseGameserverForm(r *http.Request) (*gameserverFormData, error) {
+	memoryLimitMB, err := strconv.Atoi(r.FormValue("memory_limit_mb"))
+	if err != nil && r.FormValue("memory_limit_mb") != "" {
+		return nil, fmt.Errorf("invalid memory value")
+	}
+	cpuLimit, err := strconv.ParseFloat(r.FormValue("cpu_limit"), 64)
+	if err != nil && r.FormValue("cpu_limit") != "" {
+		return nil, fmt.Errorf("invalid CPU value")
+	}
+	return &gameserverFormData{
+		MemoryLimitMB: memoryLimitMB,
+		CPULimit:      cpuLimit,
+		AutoStart:     r.FormValue("auto_start") == "true",
+		Ports:         validateJSONOrDefault(r.FormValue("ports_json"), "[]"),
+		Env:           validateJSONOrDefault(r.FormValue("env_json"), "{}"),
+	}, nil
 }
 
 func (h *PageGameserverHandlers) New(w http.ResponseWriter, r *http.Request) {
@@ -82,29 +109,20 @@ func (h *PageGameserverHandlers) Create(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	memoryLimitMB, err := strconv.Atoi(r.FormValue("memory_limit_mb"))
-	if err != nil && r.FormValue("memory_limit_mb") != "" {
-		http.Error(w, "Invalid memory value", http.StatusBadRequest)
+	form, err := parseGameserverForm(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	cpuLimit, err := strconv.ParseFloat(r.FormValue("cpu_limit"), 64)
-	if err != nil && r.FormValue("cpu_limit") != "" {
-		http.Error(w, "Invalid CPU value", http.StatusBadRequest)
-		return
-	}
-	autoStart := r.FormValue("auto_start") == "true"
-
-	ports := validateJSONOrDefault(r.FormValue("ports_json"), "[]")
-	env := validateJSONOrDefault(r.FormValue("env_json"), "{}")
 
 	gs := &models.Gameserver{
 		Name:          name,
 		GameID:        gameID,
-		Ports:         ports,
-		Env:           env,
-		MemoryLimitMB: memoryLimitMB,
-		CPULimit:      cpuLimit,
-		AutoStart:     autoStart,
+		Ports:         form.Ports,
+		Env:           form.Env,
+		MemoryLimitMB: form.MemoryLimitMB,
+		CPULimit:      form.CPULimit,
+		AutoStart:     form.AutoStart,
 	}
 
 	if err := h.gameserverSvc.CreateGameserver(r.Context(), gs); err != nil {
@@ -218,31 +236,22 @@ func (h *PageGameserverHandlers) Update(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	memoryLimitMB, err := strconv.Atoi(r.FormValue("memory_limit_mb"))
-	if err != nil && r.FormValue("memory_limit_mb") != "" {
-		http.Error(w, "Invalid memory value", http.StatusBadRequest)
+	form, err := parseGameserverForm(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	cpuLimit, err := strconv.ParseFloat(r.FormValue("cpu_limit"), 64)
-	if err != nil && r.FormValue("cpu_limit") != "" {
-		http.Error(w, "Invalid CPU value", http.StatusBadRequest)
-		return
-	}
-	autoStart := r.FormValue("auto_start") == "true"
-
-	ports := validateJSONOrDefault(r.FormValue("ports_json"), "[]")
-	env := validateJSONOrDefault(r.FormValue("env_json"), "{}")
 
 	// Preserve immutable fields from existing record
 	gs := &models.Gameserver{
 		ID:            existing.ID,
 		Name:          name,
 		GameID:        existing.GameID,
-		Ports:         ports,
-		Env:           env,
-		MemoryLimitMB: memoryLimitMB,
-		CPULimit:      cpuLimit,
-		AutoStart:     autoStart,
+		Ports:         form.Ports,
+		Env:           form.Env,
+		MemoryLimitMB: form.MemoryLimitMB,
+		CPULimit:      form.CPULimit,
+		AutoStart:     form.AutoStart,
 		ContainerID:   existing.ContainerID,
 		VolumeName:    existing.VolumeName,
 		Status:        existing.Status,
@@ -277,25 +286,7 @@ func (h *PageGameserverHandlers) Card(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.log.Error("getting game for card", "game_id", gs.GameID, "error", err)
 	}
-	view := gameserverView{
-		ID:          gs.ID,
-		Name:        gs.Name,
-		GameID:      gs.GameID,
-		Status:      gs.Status,
-		GamePort:    firstGamePort(gs.Ports),
-		ShowLogTail: shouldShowLogTail(gs.Status),
-	}
-	if game != nil {
-		view.GameName = game.Name
-		view.GridPath = game.GridPath
-		view.HeroPath = game.HeroPath
-		view.IconPath = game.IconPath
-	}
-	if qd := h.querySvc.GetQueryData(gs.ID); qd != nil {
-		view.PlayersOnline = qd.PlayersOnline
-		view.MaxPlayers = qd.MaxPlayers
-		view.HasQueryData = true
-	}
+	view := buildGameserverView(gs, game, h.querySvc)
 
 	w.Header().Set("HX-Push-Url", "false")
 	h.renderer.RenderPartial(w, "dashboard", "gameserver_card", view)

@@ -46,6 +46,29 @@ func shouldShowLogTail(status string) bool {
 	return false
 }
 
+func buildGameserverView(gs *models.Gameserver, game *models.Game, querySvc *service.QueryService) gameserverView {
+	v := gameserverView{
+		ID:          gs.ID,
+		Name:        gs.Name,
+		GameID:      gs.GameID,
+		Status:      gs.Status,
+		GamePort:    firstGamePort(gs.Ports),
+		ShowLogTail: shouldShowLogTail(gs.Status),
+	}
+	if game != nil {
+		v.GameName = game.Name
+		v.GridPath = game.GridPath
+		v.HeroPath = game.HeroPath
+		v.IconPath = game.IconPath
+	}
+	if qd := querySvc.GetQueryData(gs.ID); qd != nil {
+		v.PlayersOnline = qd.PlayersOnline
+		v.MaxPlayers = qd.MaxPlayers
+		v.HasQueryData = true
+	}
+	return v
+}
+
 func (h *PageDashboardHandlers) Dashboard(w http.ResponseWriter, r *http.Request) {
 	gameservers, err := h.gameserverSvc.ListGameservers(models.GameserverFilter{})
 	if err != nil {
@@ -69,23 +92,7 @@ func (h *PageDashboardHandlers) Dashboard(w http.ResponseWriter, r *http.Request
 	var activeViews, stoppedViews []gameserverView
 	for _, gs := range gameservers {
 		game := gameLookup[gs.GameID]
-		v := gameserverView{
-			ID:          gs.ID,
-			Name:        gs.Name,
-			GameID:      gs.GameID,
-			GameName:    game.Name,
-			GridPath:    game.GridPath,
-			HeroPath:    game.HeroPath,
-			IconPath:    game.IconPath,
-			Status:      gs.Status,
-			GamePort:    firstGamePort(gs.Ports),
-			ShowLogTail: shouldShowLogTail(gs.Status),
-		}
-		if qd := h.querySvc.GetQueryData(gs.ID); qd != nil {
-			v.PlayersOnline = qd.PlayersOnline
-			v.MaxPlayers = qd.MaxPlayers
-			v.HasQueryData = true
-		}
+		v := buildGameserverView(&gs, &game, h.querySvc)
 		if gs.Status == "stopped" {
 			stoppedViews = append(stoppedViews, v)
 		} else {
