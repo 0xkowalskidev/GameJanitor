@@ -16,11 +16,12 @@ type StatusManager struct {
 	docker      *docker.Client
 	log         *slog.Logger
 	broadcaster *EventBroadcaster
+	querySvc    *QueryService
 	cancel      context.CancelFunc
 }
 
-func NewStatusManager(db *sql.DB, dockerClient *docker.Client, broadcaster *EventBroadcaster, log *slog.Logger) *StatusManager {
-	return &StatusManager{db: db, docker: dockerClient, broadcaster: broadcaster, log: log}
+func NewStatusManager(db *sql.DB, dockerClient *docker.Client, broadcaster *EventBroadcaster, querySvc *QueryService, log *slog.Logger) *StatusManager {
+	return &StatusManager{db: db, docker: dockerClient, broadcaster: broadcaster, querySvc: querySvc, log: log}
 }
 
 // Start begins watching Docker events and updating gameserver status.
@@ -106,8 +107,9 @@ func (m *StatusManager) recoverGameserver(ctx context.Context, gs *models.Gamese
 
 	switch info.State {
 	case "running":
-		m.log.Info("container is running, setting running", "id", gs.ID)
-		setGameserverStatus(m.db, m.log, m.broadcaster, gs.ID, StatusRunning)
+		m.log.Info("container is running, setting started and starting GSQ poll", "id", gs.ID)
+		setGameserverStatus(m.db, m.log, m.broadcaster, gs.ID, StatusStarted)
+		m.querySvc.StartPolling(gs.ID)
 	case "exited", "dead", "created":
 		m.log.Info("container is not running, setting stopped", "id", gs.ID, "state", info.State)
 		m.clearContainerAndSetStatus(gs, StatusStopped)
@@ -163,6 +165,7 @@ func (m *StatusManager) handleEvent(event docker.ContainerEvent) {
 		m.log.Debug("docker event: container started", "id", gsID)
 
 	case "die", "stop":
+		m.querySvc.StopPolling(gsID)
 		if gs.Status == StatusStopping {
 			// Expected stop — lifecycle service handles the transition
 			m.log.Debug("docker event: expected container stop", "id", gsID)

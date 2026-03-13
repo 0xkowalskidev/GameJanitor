@@ -27,7 +27,23 @@
             <h1 class="font-display font-bold text-2xl sm:text-3xl text-white">{{.Gameserver.Name}}</h1>
             <div class="flex items-center gap-2 mt-1">
               {{if .Game}}<a href="/games/{{.Game.ID}}" class="text-xs text-surface-400 hover:text-accent-300 transition-colors">{{.Game.Name}}</a>{{end}}
-              <span id="gs-status-badge">{{template "status_badge" .Gameserver.Status}}</span>
+              <span class="inline-flex items-center gap-1.5 text-xs font-medium">
+                <span class="w-2 h-2 rounded-full"
+                      :class="{
+                        'bg-emerald-400 shadow-lg shadow-emerald-400/50': status === 'running',
+                        'bg-amber-400 shadow-lg shadow-amber-400/50': status === 'started',
+                        'bg-orange-400 shadow-lg shadow-orange-400/50': status === 'pulling' || status === 'starting' || status === 'stopping',
+                        'bg-red-400 shadow-lg shadow-red-400/50': status === 'error',
+                        'bg-surface-500': status === 'stopped'
+                      }"></span>
+                <span :class="{
+                        'text-emerald-400': status === 'running',
+                        'text-amber-400': status === 'started',
+                        'text-orange-400': status === 'pulling' || status === 'starting' || status === 'stopping',
+                        'text-red-400': status === 'error',
+                        'text-surface-400': status === 'stopped'
+                      }" x-text="status"></span>
+              </span>
             </div>
           </div>
         <a href="/gameservers/{{.Gameserver.ID}}/edit" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-surface-800/60 hover:bg-surface-700 border border-surface-700/60 text-surface-300 hover:text-white text-sm font-medium transition-colors">
@@ -41,35 +57,32 @@
 
   <div class="max-w-7xl mx-auto px-4 sm:px-6 py-6">
     <!-- Action Buttons -->
-    <div class="flex flex-wrap items-center gap-3 mb-6" id="gs-actions">
-      {{if eq .Gameserver.Status "stopped"}}
-      <button hx-post="/gameservers/{{.Gameserver.ID}}/start" hx-target="#content" hx-swap="innerHTML"
+    <div class="flex flex-wrap items-center gap-3 mb-6">
+      <button x-show="status === 'stopped'" hx-post="/gameservers/{{.Gameserver.ID}}/start" hx-target="#content" hx-swap="innerHTML"
               class="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-display font-semibold transition-colors shadow-lg shadow-emerald-600/20">
         <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
         Start
       </button>
-      {{else if or (eq .Gameserver.Status "running") (eq .Gameserver.Status "started")}}
-      <button hx-post="/gameservers/{{.Gameserver.ID}}/stop" hx-target="#content" hx-swap="innerHTML"
-              class="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-display font-semibold transition-colors shadow-lg shadow-red-600/20">
+      <button x-show="status === 'running' || status === 'started'" hx-post="/gameservers/{{.Gameserver.ID}}/stop" hx-target="#content" hx-swap="innerHTML"
+              class="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-display font-semibold transition-colors shadow-lg shadow-red-600/20" x-cloak>
         <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
         Stop
       </button>
-      <button hx-post="/gameservers/{{.Gameserver.ID}}/restart" hx-target="#content" hx-swap="innerHTML"
-              class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-surface-800 hover:bg-surface-700 border border-surface-700 text-white font-medium transition-colors">
+      <button x-show="status === 'running' || status === 'started'" hx-post="/gameservers/{{.Gameserver.ID}}/restart" hx-target="#content" hx-swap="innerHTML"
+              class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-surface-800 hover:bg-surface-700 border border-surface-700 text-white font-medium transition-colors" x-cloak>
         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
         Restart
       </button>
-      <a href="/gameservers/{{.Gameserver.ID}}/console"
-         class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-surface-800 hover:bg-surface-700 border border-surface-700 text-white font-medium transition-colors">
+      <a x-show="status === 'running' || status === 'started'" href="/gameservers/{{.Gameserver.ID}}/console"
+         class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-surface-800 hover:bg-surface-700 border border-surface-700 text-white font-medium transition-colors" x-cloak>
         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z"/></svg>
         Console
       </a>
-      <a href="/gameservers/{{.Gameserver.ID}}/files"
-         class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-surface-800 hover:bg-surface-700 border border-surface-700 text-white font-medium transition-colors">
+      <a x-show="status === 'running' || status === 'started'" href="/gameservers/{{.Gameserver.ID}}/files"
+         class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-surface-800 hover:bg-surface-700 border border-surface-700 text-white font-medium transition-colors" x-cloak>
         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
         Files
       </a>
-      {{end}}
       <a href="/gameservers/{{.Gameserver.ID}}/schedules"
          class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-surface-800 hover:bg-surface-700 border border-surface-700 text-white font-medium transition-colors">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
@@ -99,6 +112,36 @@
       <div class="rounded-xl bg-surface-850/80 border border-surface-800/60 p-4">
         <p class="text-xs text-surface-400 mb-1">Volume</p>
         <p class="text-sm text-white font-mono truncate">{{.Gameserver.VolumeName}}</p>
+      </div>
+    </div>
+
+    <!-- Query Data (players, map, version) — driven by Alpine -->
+    <div x-show="query" class="rounded-xl bg-surface-850/80 border border-surface-800/60 p-4 mb-6" x-cloak>
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="font-display font-semibold text-white text-sm">Server Info</h3>
+        <span class="text-xs text-surface-400" x-text="query.players_online + '/' + query.max_players + ' players'"></span>
+      </div>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+        <div>
+          <p class="text-xs text-surface-400 mb-0.5">Players</p>
+          <p class="text-sm font-semibold text-white" x-text="query.players_online + ' / ' + query.max_players"></p>
+        </div>
+        <div x-show="query.map">
+          <p class="text-xs text-surface-400 mb-0.5">Map</p>
+          <p class="text-sm font-semibold text-white" x-text="query.map"></p>
+        </div>
+        <div x-show="query.version">
+          <p class="text-xs text-surface-400 mb-0.5">Version</p>
+          <p class="text-sm font-semibold text-white" x-text="query.version"></p>
+        </div>
+      </div>
+      <div x-show="query.players && query.players.length > 0">
+        <p class="text-xs text-surface-400 mb-1.5">Online Players</p>
+        <div class="flex flex-wrap gap-1.5">
+          <template x-for="player in (query.players || [])" :key="typeof player === 'string' ? player : player.name">
+            <span class="text-xs bg-surface-800 border border-surface-700 text-surface-300 px-2 py-0.5 rounded-md" x-text="typeof player === 'string' ? player : player.name"></span>
+          </template>
+        </div>
       </div>
     </div>
 
@@ -181,14 +224,28 @@
 function gsDetail() {
   return {
     eventSource: null,
+    status: '{{.Gameserver.Status}}',
+    query: {{if .QueryData}}{{queryJSON .QueryData}}{{else}}null{{end}},
     connectSSE() {
       this.eventSource = new EventSource('/api/events');
       this.eventSource.addEventListener('status', (e) => {
         const data = JSON.parse(e.data);
         if (data.gameserver_id === '{{.Gameserver.ID}}') {
-          htmx.ajax('GET', '/gameservers/{{.Gameserver.ID}}', {target: '#content', swap: 'innerHTML'});
+          this.refreshStatus();
         }
       });
+    },
+    async refreshStatus() {
+      try {
+        const resp = await fetch('/api/gameservers/{{.Gameserver.ID}}/status');
+        const json = await resp.json();
+        if (json.data) {
+          this.status = json.data.status;
+          this.query = json.data.query || null;
+        }
+      } catch (err) {
+        console.error('failed to refresh status', err);
+      }
     },
     destroy() {
       if (this.eventSource) this.eventSource.close();

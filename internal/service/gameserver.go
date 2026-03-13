@@ -18,10 +18,17 @@ type GameserverService struct {
 	docker      *docker.Client
 	log         *slog.Logger
 	broadcaster *EventBroadcaster
+	querySvc    *QueryService
 }
 
 func NewGameserverService(db *sql.DB, dockerClient *docker.Client, broadcaster *EventBroadcaster, log *slog.Logger) *GameserverService {
 	return &GameserverService{db: db, docker: dockerClient, broadcaster: broadcaster, log: log}
+}
+
+// SetQueryService sets the query service for GSQ polling after start.
+// Called after both services are created to break the circular dependency.
+func (s *GameserverService) SetQueryService(qs *QueryService) {
+	s.querySvc = qs
 }
 
 func (s *GameserverService) ListGameservers(filter models.GameserverFilter) ([]models.Gameserver, error) {
@@ -192,9 +199,8 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 		return err
 	}
 
-	// GSQ stub: promote to running immediately (real GSQ polling in Phase 11)
-	if err := setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusRunning); err != nil {
-		return err
+	if s.querySvc != nil {
+		s.querySvc.StartPolling(id)
 	}
 
 	s.log.Info("gameserver started", "id", id, "container_id", containerID[:12])

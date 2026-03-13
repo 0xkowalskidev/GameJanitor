@@ -21,6 +21,7 @@ func NewRouter(
 	fileSvc *service.FileService,
 	scheduleSvc *service.ScheduleService,
 	backupSvc *service.BackupService,
+	querySvc *service.QueryService,
 	dockerClient *docker.Client,
 	broadcaster *service.EventBroadcaster,
 	log *slog.Logger,
@@ -46,7 +47,7 @@ func NewRouter(
 
 	// API handlers (JSON)
 	gameHandlers := handlers.NewGameHandlers(gameSvc, log)
-	gameserverHandlers := handlers.NewGameserverHandlers(gameserverSvc, dockerClient, log)
+	gameserverHandlers := handlers.NewGameserverHandlers(gameserverSvc, querySvc, dockerClient, log)
 	eventHandlers := handlers.NewEventHandlers(broadcaster, log)
 	scheduleHandlers := handlers.NewScheduleHandlers(scheduleSvc, log)
 	backupHandlers := handlers.NewBackupHandlers(backupSvc, log)
@@ -103,9 +104,9 @@ func NewRouter(
 	})
 
 	// Page handlers (HTML)
-	pageDashboard := handlers.NewPageDashboardHandlers(gameSvc, gameserverSvc, renderer, log)
+	pageDashboard := handlers.NewPageDashboardHandlers(gameSvc, gameserverSvc, querySvc, renderer, log)
 	pageGames := handlers.NewPageGameHandlers(gameSvc, gameserverSvc, renderer, log)
-	pageGameservers := handlers.NewPageGameserverHandlers(gameSvc, gameserverSvc, renderer, log)
+	pageGameservers := handlers.NewPageGameserverHandlers(gameSvc, gameserverSvc, querySvc, renderer, log)
 	pageActions := handlers.NewPageActionHandlers(gameSvc, gameserverSvc, renderer, log)
 	pageConsole := handlers.NewPageConsoleHandlers(consoleSvc, gameSvc, gameserverSvc, renderer, log)
 	pageFiles := handlers.NewPageFileHandlers(fileSvc, gameSvc, gameserverSvc, renderer, log)

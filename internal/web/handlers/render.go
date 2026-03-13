@@ -27,6 +27,7 @@ func NewRenderer() (*Renderer, error) {
 		"deref":       func(s *string) string { if s != nil { return *s }; return "" },
 		"derefTime":   func(t *time.Time) time.Time { if t != nil { return *t }; return time.Time{} },
 		"formatBytes": formatBytes,
+		"queryJSON":   queryJSON,
 	}
 
 	// Parse partials and layout as the base template set
@@ -148,6 +149,15 @@ func formatBytes(b int64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
+}
+
+// queryJSON serializes any value to a JS-safe JSON string for embedding in templates.
+func queryJSON(v any) template.JS {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return template.JS("null")
+	}
+	return template.JS(b)
 }
 
 func jsonPretty(raw json.RawMessage) string {
