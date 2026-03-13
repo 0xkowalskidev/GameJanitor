@@ -36,7 +36,8 @@ func SeedGames(db *sql.DB) error {
 				{"key":"DIFFICULTY","default":"normal","label":"Difficulty","type":"select","options":["peaceful","easy","normal","hard"]},
 				{"key":"MOTD","default":"A Gamejanitor Server","label":"Message of the Day"},
 				{"key":"PVP","default":"true","label":"PvP","type":"boolean"},
-				{"key":"SERVER_PORT","default":"25565","system":true}
+				{"key":"SERVER_PORT","default":"25565","system":true},
+				{"key":"SAVE_TIMEOUT_SECONDS","default":"5","system":true}
 			]`,
 			minMemoryMB:          2048,
 			minCPU:               1.0,
@@ -57,7 +58,8 @@ func SeedGames(db *sql.DB) error {
 				{"key":"SERVER_WORLDSIZE","default":"3000","label":"World Size","type":"number"},
 				{"key":"RCON_PASSWORD","default":"changeme","label":"RCON Password"},
 				{"key":"SERVER_PORT","default":"28015","system":true},
-				{"key":"RCON_PORT","default":"28016","system":true}
+				{"key":"RCON_PORT","default":"28016","system":true},
+				{"key":"SAVE_TIMEOUT_SECONDS","default":"15","system":true}
 			]`,
 			minMemoryMB:          4096,
 			minCPU:               2.0,
@@ -80,7 +82,8 @@ func SeedGames(db *sql.DB) error {
 				{"key":"MAP","default":"TheIsland","label":"Map","type":"select","options":["TheIsland","TheCenter","ScorchedEarth_P","Ragnarok","Aberration_P","Extinction","Valguero_P","Genesis","CrystalIsles","LostIsland","Fjordur"]},
 				{"key":"GAME_PORT","default":"7777","system":true},
 				{"key":"QUERY_PORT","default":"27015","system":true},
-				{"key":"RCON_PORT","default":"27020","system":true}
+				{"key":"RCON_PORT","default":"27020","system":true},
+				{"key":"SAVE_TIMEOUT_SECONDS","default":"30","system":true}
 			]`,
 			minMemoryMB:          6144,
 			minCPU:               2.0,
@@ -102,7 +105,8 @@ func SeedGames(db *sql.DB) error {
 				{"key":"GAME_TYPE","default":"0","label":"Game Type","type":"select","options":["0","1","2","3"]},
 				{"key":"GAME_MODE","default":"1","label":"Game Mode","type":"select","options":["0","1","2"]},
 				{"key":"MAP","default":"de_dust2","label":"Starting Map"},
-				{"key":"GAME_PORT","default":"27015","system":true}
+				{"key":"GAME_PORT","default":"27015","system":true},
+				{"key":"SAVE_TIMEOUT_SECONDS","default":"5","system":true}
 			]`,
 			minMemoryMB:          2048,
 			minCPU:               2.0,
@@ -123,7 +127,8 @@ func SeedGames(db *sql.DB) error {
 				{"key":"RCON_PASSWORD","default":"changeme","label":"RCON Password"},
 				{"key":"GAMEMODE","default":"sandbox","label":"Game Mode","type":"select","options":["sandbox","terrortown","prop_hunt","murder","deathrun"]},
 				{"key":"MAP","default":"gm_flatgrass","label":"Starting Map"},
-				{"key":"GAME_PORT","default":"27015","system":true}
+				{"key":"GAME_PORT","default":"27015","system":true},
+				{"key":"SAVE_TIMEOUT_SECONDS","default":"5","system":true}
 			]`,
 			minMemoryMB:          2048,
 			minCPU:               1.0,
@@ -145,7 +150,8 @@ func SeedGames(db *sql.DB) error {
 				{"key":"SERVER_PASSWORD","default":"","label":"Server Password"},
 				{"key":"DIFFICULTY","default":"Normal","label":"Difficulty","type":"select","options":["Casual","Normal","Hard"]},
 				{"key":"GAME_PORT","default":"8211","system":true},
-				{"key":"RCON_PORT","default":"25575","system":true}
+				{"key":"RCON_PORT","default":"25575","system":true},
+				{"key":"SAVE_TIMEOUT_SECONDS","default":"15","system":true}
 			]`,
 			minMemoryMB:          4096,
 			minCPU:               2.0,
@@ -166,7 +172,8 @@ func SeedGames(db *sql.DB) error {
 				{"key":"PASSWORD","default":"","label":"Server Password"},
 				{"key":"DIFFICULTY","default":"1","label":"Difficulty","type":"select","options":["0","1","2","3"]},
 				{"key":"WORLD_SIZE","default":"2","label":"World Size","type":"select","options":["1","2","3"]},
-				{"key":"GAME_PORT","default":"7777","system":true}
+				{"key":"GAME_PORT","default":"7777","system":true},
+				{"key":"SAVE_TIMEOUT_SECONDS","default":"5","system":true}
 			]`,
 			minMemoryMB:          1024,
 			minCPU:               1.0,
@@ -186,7 +193,8 @@ func SeedGames(db *sql.DB) error {
 				{"key":"WORLD_NAME","default":"Gamejanitor","label":"World Name"},
 				{"key":"SERVER_PASSWORD","default":"changeme","label":"Server Password"},
 				{"key":"GAME_PORT","default":"2456","system":true},
-				{"key":"QUERY_PORT","default":"2457","system":true}
+				{"key":"QUERY_PORT","default":"2457","system":true},
+				{"key":"SAVE_TIMEOUT_SECONDS","default":"15","system":true}
 			]`,
 			minMemoryMB:          4096,
 			minCPU:               2.0,

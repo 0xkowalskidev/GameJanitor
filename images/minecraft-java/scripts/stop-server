@@ -20,4 +20,4 @@ done
 
 echo "[stop-server] timeout waiting for graceful shutdown, force killing"
 pkill -9 -f "server.jar" 2>/dev/null || true
-exit 0
+exit 1
