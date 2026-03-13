@@ -274,11 +274,12 @@ func (h *PageGameserverHandlers) Card(w http.ResponseWriter, r *http.Request) {
 		h.log.Error("getting game for card", "game_id", gs.GameID, "error", err)
 	}
 	view := gameserverView{
-		ID:       gs.ID,
-		Name:     gs.Name,
-		GameID:   gs.GameID,
-		Status:   gs.Status,
-		GamePort: firstGamePort(gs.Ports),
+		ID:          gs.ID,
+		Name:        gs.Name,
+		GameID:      gs.GameID,
+		Status:      gs.Status,
+		GamePort:    firstGamePort(gs.Ports),
+		ShowLogTail: shouldShowLogTail(gs.Status),
 	}
 	if game != nil {
 		view.GameName = game.Name
