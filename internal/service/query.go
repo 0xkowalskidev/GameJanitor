@@ -224,7 +224,12 @@ func (s *QueryService) getHostPort(gs *models.Gameserver) uint16 {
 	if err := json.Unmarshal(gs.Ports, &ports); err != nil {
 		return 0
 	}
-	// Use the "game" port
+	// Prefer dedicated "query" port, fall back to "game" port
+	for _, p := range ports {
+		if p.Name == "query" {
+			return uint16(p.HostPort)
+		}
+	}
 	for _, p := range ports {
 		if p.Name == "game" {
 			return uint16(p.HostPort)

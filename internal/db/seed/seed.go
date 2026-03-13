@@ -51,13 +51,14 @@ func SeedGames(db *sql.DB) error {
 			iconPath: "/static/games/rust/rust-icon.ico",
 			gridPath: "/static/games/rust/rust-grid.png",
 			heroPath: "/static/games/rust/rust-hero.png",
-			defaultPorts: `[{"name":"game","port":28015,"protocol":"udp"},{"name":"rcon","port":28016,"protocol":"tcp"}]`,
+			defaultPorts: `[{"name":"game","port":28015,"protocol":"udp"},{"name":"query","port":28017,"protocol":"udp"},{"name":"rcon","port":28016,"protocol":"tcp"}]`,
 			defaultEnv: `[
 				{"key":"SERVER_MAXPLAYERS","default":"50","label":"Max Players","type":"number"},
 				{"key":"SERVER_HOSTNAME","default":"Gamejanitor Rust Server","label":"Server Name"},
 				{"key":"SERVER_WORLDSIZE","default":"3000","label":"World Size","type":"number"},
 				{"key":"RCON_PASSWORD","default":"changeme","label":"RCON Password"},
 				{"key":"SERVER_PORT","default":"28015","system":true},
+				{"key":"QUERY_PORT","default":"28017","system":true},
 				{"key":"RCON_PORT","default":"28016","system":true},
 				{"key":"SAVE_TIMEOUT_SECONDS","default":"15","system":true}
 			]`,

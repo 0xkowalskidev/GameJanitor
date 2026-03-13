@@ -1,0 +1,29 @@
+#!/bin/bash
+set -e
+
+SERVER_PORT="${SERVER_PORT:-28015}"
+QUERY_PORT="${QUERY_PORT:-28017}"
+RCON_PORT="${RCON_PORT:-28016}"
+RCON_PASSWORD="${RCON_PASSWORD:-changeme}"
+SERVER_HOSTNAME="${SERVER_HOSTNAME:-Gamejanitor Rust Server}"
+SERVER_MAXPLAYERS="${SERVER_MAXPLAYERS:-50}"
+SERVER_WORLDSIZE="${SERVER_WORLDSIZE:-3000}"
+
+echo "[start-server] config: hostname=${SERVER_HOSTNAME} maxplayers=${SERVER_MAXPLAYERS}"
+echo "[start-server] config: worldsize=${SERVER_WORLDSIZE} port=${SERVER_PORT} query_port=${QUERY_PORT} rcon_port=${RCON_PORT}"
+
+# LD_LIBRARY_PATH needed for Rust's bundled libraries
+export LD_LIBRARY_PATH="/data/server/RustDedicated_Data/Plugins/x86_64:${LD_LIBRARY_PATH}"
+
+echo "[start-server] starting Rust dedicated server"
+cd /data/server
+exec ./RustDedicated -batchmode \
+    +server.port "$SERVER_PORT" \
+    +server.hostname "$SERVER_HOSTNAME" \
+    +server.maxplayers "$SERVER_MAXPLAYERS" \
+    +server.worldsize "$SERVER_WORLDSIZE" \
+    +server.identity "gamejanitor" \
+    +server.queryport "$QUERY_PORT" \
+    +rcon.port "$RCON_PORT" \
+    +rcon.password "$RCON_PASSWORD" \
+    +rcon.web 0 # TODO: rcon.web 1 disables traditional Source RCON, need a WebSocket RCON client before we can switch
