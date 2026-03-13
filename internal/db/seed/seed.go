@@ -88,7 +88,7 @@ func SeedGames(db *sql.DB) error {
 			]`,
 			minMemoryMB:          6144,
 			minCPU:               2.0,
-			gsqGameSlug:          "arkse",
+			gsqGameSlug:          "ark-survival-evolved",
 			disabledCapabilities: `[]`,
 		},
 		{
