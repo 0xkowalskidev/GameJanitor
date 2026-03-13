@@ -78,6 +78,7 @@ func NewRouter(
 				r.Post("/update-game", gameserverHandlers.UpdateServerGame)
 				r.Post("/reinstall", gameserverHandlers.Reinstall)
 				r.Get("/status", gameserverHandlers.Status)
+				r.Get("/logs", gameserverHandlers.Logs)
 
 				r.Route("/schedules", func(r chi.Router) {
 					r.Get("/", scheduleHandlers.List)
