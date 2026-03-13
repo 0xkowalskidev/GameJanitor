@@ -1,9 +1,15 @@
 package handlers
 
 import (
+	"bufio"
+	"encoding/binary"
 	"encoding/json"
+	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/0xkowalskidev/gamejanitor/internal/docker"
@@ -221,4 +227,80 @@ func (h *GameserverHandlers) Status(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondOK(w, resp)
+}
+
+func (h *GameserverHandlers) Logs(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	gs, err := h.svc.GetGameserver(id)
+	if err != nil {
+		h.log.Error("getting gameserver for logs", "id", id, "error", err)
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if gs == nil {
+		respondError(w, http.StatusNotFound, "gameserver "+id+" not found")
+		return
+	}
+	if gs.ContainerID == nil {
+		respondError(w, http.StatusBadRequest, "gameserver has no container")
+		return
+	}
+
+	tail := 100
+	if v := r.URL.Query().Get("tail"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			tail = n
+		}
+	}
+
+	reader, err := h.docker.ContainerLogs(r.Context(), *gs.ContainerID, tail, false)
+	if err != nil {
+		h.log.Error("reading container logs", "id", id, "error", err)
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	defer reader.Close()
+
+	lines := readDockerLogs(reader)
+	respondOK(w, map[string]any{"lines": lines})
+}
+
+// readDockerLogs parses Docker's multiplexed log stream into plain text lines.
+// Docker log format: [stream_type(1)][padding(3)][size(4)][payload(size)]
+func readDockerLogs(r io.Reader) []string {
+	br := bufio.NewReaderSize(r, 32*1024)
+	header := make([]byte, 8)
+	var lines []string
+
+	for {
+		_, err := io.ReadFull(br, header)
+		if err != nil {
+			break
+		}
+
+		streamType := header[0]
+		frameSize := binary.BigEndian.Uint32(header[4:8])
+		if frameSize == 0 {
+			continue
+		}
+
+		payload := make([]byte, frameSize)
+		if _, err := io.ReadFull(br, payload); err != nil {
+			break
+		}
+
+		text := strings.TrimRight(string(payload), "\n")
+		prefix := ""
+		if streamType == 2 {
+			prefix = "[ERR] "
+		}
+
+		for _, line := range strings.Split(text, "\n") {
+			if line != "" {
+				lines = append(lines, fmt.Sprintf("%s%s", prefix, line))
+			}
+		}
+	}
+
+	return lines
 }

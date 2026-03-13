@@ -153,6 +153,45 @@ var statusCmd = &cobra.Command{
 	},
 }
 
+var logsCmd = &cobra.Command{
+	Use:   "logs <gameserver>",
+	Short: "Show gameserver container logs",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		gsID, err := resolveGameserverID(args[0])
+		if err != nil {
+			return exitError(err)
+		}
+
+		tail, _ := cmd.Flags().GetInt("tail")
+		path := fmt.Sprintf("/api/gameservers/%s/logs?tail=%d", gsID, tail)
+
+		resp, err := apiGet(path)
+		if err != nil {
+			return exitError(err)
+		}
+
+		if jsonOutput {
+			printJSONResponse(resp)
+			return nil
+		}
+
+		var data struct {
+			Lines []string `json:"lines"`
+		}
+		if err := json.Unmarshal(resp.Data, &data); err != nil {
+			return fmt.Errorf("parsing response: %w", err)
+		}
+
+		for _, line := range data.Lines {
+			fmt.Println(line)
+		}
+		return nil
+	},
+}
+
 func init() {
-	gameserversCmd.AddCommand(startCmd, stopCmd, restartCmd, updateGameCmd, reinstallCmd, statusCmd)
+	logsCmd.Flags().Int("tail", 100, "Number of lines to show")
+
+	gameserversCmd.AddCommand(startCmd, stopCmd, restartCmd, updateGameCmd, reinstallCmd, statusCmd, logsCmd)
 }
