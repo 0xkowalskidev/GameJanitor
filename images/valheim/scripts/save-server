@@ -1,0 +1,6 @@
+#!/bin/bash
+
+# Valheim has no console command or RCON to trigger a manual save.
+# The server auto-saves periodically and saves on graceful shutdown (SIGINT/SIGTERM).
+echo "[save-server] Valheim does not support manual save triggers"
+echo "[save-server] world is auto-saved periodically and on graceful shutdown"

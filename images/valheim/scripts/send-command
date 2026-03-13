@@ -1,0 +1,4 @@
+#!/bin/bash
+
+echo "[send-command] Valheim dedicated server does not support remote commands"
+exit 1

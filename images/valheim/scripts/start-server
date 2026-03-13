@@ -1,0 +1,30 @@
+#!/bin/bash
+set -e
+
+SERVER_NAME="${SERVER_NAME:-Gamejanitor Valheim Server}"
+WORLD_NAME="${WORLD_NAME:-Gamejanitor}"
+SERVER_PASSWORD="${SERVER_PASSWORD:-changeme}"
+GAME_PORT="${GAME_PORT:-2456}"
+
+echo "[start-server] config: name=${SERVER_NAME} world=${WORLD_NAME} port=${GAME_PORT}"
+
+# Valheim stores worlds under ~/.config/unity3d/IronGate/Valheim/worlds_local
+# Symlink to /data/worlds so saves persist on the Docker volume
+SAVE_DIR="/home/gameserver/.config/unity3d/IronGate/Valheim/worlds_local"
+mkdir -p /data/worlds
+mkdir -p "$(dirname "$SAVE_DIR")"
+ln -sfn /data/worlds "$SAVE_DIR"
+
+export LD_LIBRARY_PATH="/data/server/linux64:${LD_LIBRARY_PATH}"
+export SteamAppId=892970
+
+echo "[start-server] starting Valheim dedicated server"
+cd /data/server
+exec ./valheim_server.x86_64 \
+    -name "$SERVER_NAME" \
+    -port "$GAME_PORT" \
+    -world "$WORLD_NAME" \
+    -password "$SERVER_PASSWORD" \
+    -nographics \
+    -batchmode \
+    -public 1

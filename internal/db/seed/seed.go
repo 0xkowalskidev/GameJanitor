@@ -201,7 +201,7 @@ func SeedGames(db *sql.DB) error {
 			minMemoryMB:          4096,
 			minCPU:               2.0,
 			gsqGameSlug:          "valheim",
-			disabledCapabilities: `[]`,
+			disabledCapabilities: `["command"]`,
 		},
 	}
 
