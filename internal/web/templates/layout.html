@@ -10,6 +10,40 @@
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=DM+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css">
   <script src="/static/htmx.min.js" defer></script>
+  <script>
+    function logTail(id, status) {
+      return {
+        lines: [],
+        _interval: null,
+        start() {
+          this._fetch();
+          if (status !== 'error') {
+            this._interval = setInterval(() => this._fetch(), 2000);
+          }
+        },
+        destroy() {
+          if (this._interval) clearInterval(this._interval);
+        },
+        async _fetch() {
+          try {
+            const res = await fetch('/api/gameservers/' + id + '/logs?tail=5');
+            if (!res.ok) return;
+            const json = await res.json();
+            const lines = json.data?.lines;
+            if (lines && lines.length > 0) {
+              const last5 = lines.slice(-5);
+              while (last5.length < 5) last5.unshift('');
+              this.lines = last5;
+              this.$nextTick(() => {
+                const el = this.$refs.logScroll;
+                if (el) el.scrollTop = el.scrollHeight;
+              });
+            }
+          } catch (_) {}
+        }
+      };
+    }
+  </script>
   <script src="/static/alpine.min.js" defer></script>
   <style>
     [x-cloak] { display: none !important; }

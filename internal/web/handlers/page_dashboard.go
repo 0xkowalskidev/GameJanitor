@@ -35,6 +35,15 @@ type gameserverView struct {
 	PlayersOnline int
 	MaxPlayers    int
 	HasQueryData  bool
+	ShowLogTail   bool
+}
+
+func shouldShowLogTail(status string) bool {
+	switch status {
+	case "starting", "started", "pulling", "error":
+		return true
+	}
+	return false
 }
 
 func (h *PageDashboardHandlers) Dashboard(w http.ResponseWriter, r *http.Request) {
@@ -61,15 +70,16 @@ func (h *PageDashboardHandlers) Dashboard(w http.ResponseWriter, r *http.Request
 	for _, gs := range gameservers {
 		game := gameLookup[gs.GameID]
 		v := gameserverView{
-			ID:       gs.ID,
-			Name:     gs.Name,
-			GameID:   gs.GameID,
-			GameName: game.Name,
-			GridPath: game.GridPath,
-			HeroPath: game.HeroPath,
-			IconPath: game.IconPath,
-			Status:   gs.Status,
-			GamePort: firstGamePort(gs.Ports),
+			ID:          gs.ID,
+			Name:        gs.Name,
+			GameID:      gs.GameID,
+			GameName:    game.Name,
+			GridPath:    game.GridPath,
+			HeroPath:    game.HeroPath,
+			IconPath:    game.IconPath,
+			Status:      gs.Status,
+			GamePort:    firstGamePort(gs.Ports),
+			ShowLogTail: shouldShowLogTail(gs.Status),
 		}
 		if qd := h.querySvc.GetQueryData(gs.ID); qd != nil {
 			v.PlayersOnline = qd.PlayersOnline
