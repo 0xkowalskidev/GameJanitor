@@ -11,22 +11,26 @@ import (
 type PageDashboardHandlers struct {
 	gameSvc       *service.GameService
 	gameserverSvc *service.GameserverService
+	querySvc      *service.QueryService
 	renderer      *Renderer
 	log           *slog.Logger
 }
 
-func NewPageDashboardHandlers(gameSvc *service.GameService, gameserverSvc *service.GameserverService, renderer *Renderer, log *slog.Logger) *PageDashboardHandlers {
-	return &PageDashboardHandlers{gameSvc: gameSvc, gameserverSvc: gameserverSvc, renderer: renderer, log: log}
+func NewPageDashboardHandlers(gameSvc *service.GameService, gameserverSvc *service.GameserverService, querySvc *service.QueryService, renderer *Renderer, log *slog.Logger) *PageDashboardHandlers {
+	return &PageDashboardHandlers{gameSvc: gameSvc, gameserverSvc: gameserverSvc, querySvc: querySvc, renderer: renderer, log: log}
 }
 
 type gameserverView struct {
-	ID       string
-	Name     string
-	GameID   string
-	GameName string
-	GridPath string
-	HeroPath string
-	Status   string
+	ID            string
+	Name          string
+	GameID        string
+	GameName      string
+	GridPath      string
+	HeroPath      string
+	Status        string
+	PlayersOnline int
+	MaxPlayers    int
+	HasQueryData  bool
 }
 
 func (h *PageDashboardHandlers) Dashboard(w http.ResponseWriter, r *http.Request) {
@@ -52,7 +56,7 @@ func (h *PageDashboardHandlers) Dashboard(w http.ResponseWriter, r *http.Request
 	views := make([]gameserverView, len(gameservers))
 	for i, gs := range gameservers {
 		game := gameLookup[gs.GameID]
-		views[i] = gameserverView{
+		v := gameserverView{
 			ID:       gs.ID,
 			Name:     gs.Name,
 			GameID:   gs.GameID,
@@ -61,6 +65,12 @@ func (h *PageDashboardHandlers) Dashboard(w http.ResponseWriter, r *http.Request
 			HeroPath: game.HeroPath,
 			Status:   gs.Status,
 		}
+		if qd := h.querySvc.GetQueryData(gs.ID); qd != nil {
+			v.PlayersOnline = qd.PlayersOnline
+			v.MaxPlayers = qd.MaxPlayers
+			v.HasQueryData = true
+		}
+		views[i] = v
 	}
 
 	h.renderer.Render(w, r, "dashboard", map[string]any{

@@ -14,12 +14,13 @@ import (
 type PageGameserverHandlers struct {
 	gameSvc       *service.GameService
 	gameserverSvc *service.GameserverService
+	querySvc      *service.QueryService
 	renderer      *Renderer
 	log           *slog.Logger
 }
 
-func NewPageGameserverHandlers(gameSvc *service.GameService, gameserverSvc *service.GameserverService, renderer *Renderer, log *slog.Logger) *PageGameserverHandlers {
-	return &PageGameserverHandlers{gameSvc: gameSvc, gameserverSvc: gameserverSvc, renderer: renderer, log: log}
+func NewPageGameserverHandlers(gameSvc *service.GameService, gameserverSvc *service.GameserverService, querySvc *service.QueryService, renderer *Renderer, log *slog.Logger) *PageGameserverHandlers {
+	return &PageGameserverHandlers{gameSvc: gameSvc, gameserverSvc: gameserverSvc, querySvc: querySvc, renderer: renderer, log: log}
 }
 
 func (h *PageGameserverHandlers) New(w http.ResponseWriter, r *http.Request) {
@@ -132,6 +133,7 @@ func (h *PageGameserverHandlers) Detail(w http.ResponseWriter, r *http.Request) 
 	h.renderer.Render(w, r, "gameservers/detail", map[string]any{
 		"Gameserver": gs,
 		"Game":       game,
+		"QueryData":  h.querySvc.GetQueryData(id),
 	})
 }
 
@@ -276,6 +278,11 @@ func (h *PageGameserverHandlers) Card(w http.ResponseWriter, r *http.Request) {
 		view.GameName = game.Name
 		view.GridPath = game.GridPath
 		view.HeroPath = game.HeroPath
+	}
+	if qd := h.querySvc.GetQueryData(gs.ID); qd != nil {
+		view.PlayersOnline = qd.PlayersOnline
+		view.MaxPlayers = qd.MaxPlayers
+		view.HasQueryData = true
 	}
 
 	h.renderer.RenderPartial(w, "dashboard", "gameserver_card", view)

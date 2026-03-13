@@ -13,13 +13,14 @@ import (
 )
 
 type GameserverHandlers struct {
-	svc    *service.GameserverService
-	docker *docker.Client
-	log    *slog.Logger
+	svc      *service.GameserverService
+	querySvc *service.QueryService
+	docker   *docker.Client
+	log      *slog.Logger
 }
 
-func NewGameserverHandlers(svc *service.GameserverService, dockerClient *docker.Client, log *slog.Logger) *GameserverHandlers {
-	return &GameserverHandlers{svc: svc, docker: dockerClient, log: log}
+func NewGameserverHandlers(svc *service.GameserverService, querySvc *service.QueryService, dockerClient *docker.Client, log *slog.Logger) *GameserverHandlers {
+	return &GameserverHandlers{svc: svc, querySvc: querySvc, docker: dockerClient, log: log}
 }
 
 func (h *GameserverHandlers) List(w http.ResponseWriter, r *http.Request) {
@@ -146,7 +147,15 @@ func (h *GameserverHandlers) doAction(w http.ResponseWriter, r *http.Request, ac
 type statusResponse struct {
 	Status    string         `json:"status"`
 	Container *containerInfo `json:"container"`
-	Query     any            `json:"query"`
+	Query     *queryInfo     `json:"query"`
+}
+
+type queryInfo struct {
+	PlayersOnline int      `json:"players_online"`
+	MaxPlayers    int      `json:"max_players"`
+	Players       []string `json:"players"`
+	Map           string   `json:"map"`
+	Version       string   `json:"version"`
 }
 
 type containerInfo struct {
@@ -172,7 +181,20 @@ func (h *GameserverHandlers) Status(w http.ResponseWriter, r *http.Request) {
 
 	resp := statusResponse{
 		Status: gs.Status,
-		Query:  nil,
+	}
+
+	if qd := h.querySvc.GetQueryData(id); qd != nil {
+		players := make([]string, len(qd.Players))
+		for i, p := range qd.Players {
+			players[i] = p.Name
+		}
+		resp.Query = &queryInfo{
+			PlayersOnline: qd.PlayersOnline,
+			MaxPlayers:    qd.MaxPlayers,
+			Players:       players,
+			Map:           qd.Map,
+			Version:       qd.Version,
+		}
 	}
 
 	if gs.ContainerID != nil {
