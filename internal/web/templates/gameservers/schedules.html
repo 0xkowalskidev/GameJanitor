@@ -1,137 +1,108 @@
 {{define "title"}}Schedules - {{.Gameserver.Name}} - Gamejanitor{{end}}
 
 {{define "content"}}
-<div x-data="schedulesPage()">
-  <!-- Hero Banner -->
-  <div class="relative w-full overflow-hidden" style="height: min(20vw, 200px)">
-    {{if and .Game .Game.HeroPath}}
-    <img src="{{.Game.HeroPath}}" alt="{{.Game.Name}}" class="absolute inset-0 w-full h-full object-cover">
-    {{else if and .Game .Game.GridPath}}
-    <img src="{{.Game.GridPath}}" alt="{{.Game.Name}}" class="absolute inset-0 w-full h-full object-cover blur-sm scale-110">
-    {{else}}
-    <div class="absolute inset-0 bg-gradient-to-br from-surface-700 to-surface-900"></div>
-    {{end}}
-    <div class="absolute inset-0 bg-gradient-to-t from-surface-950 via-surface-950/60 to-surface-950/20"></div>
+{{template "gameserver_hero" .}}
+{{end}}
 
-    <div class="absolute bottom-0 left-0 right-0 max-w-7xl mx-auto px-4 sm:px-6 pb-4">
-      <a href="/gameservers/{{.Gameserver.ID}}" class="inline-flex items-center gap-1 text-xs text-surface-400 hover:text-white mb-2 transition-colors">
-        <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
-        {{.Gameserver.Name}}
-      </a>
-      <div class="flex items-center gap-3">
-        {{if and .Game .Game.IconPath}}
-        <img src="{{.Game.IconPath}}" alt="" class="w-8 h-8 rounded-lg shadow-lg">
-        {{end}}
-        <div>
-          <h1 class="font-display font-bold text-xl sm:text-2xl text-white">Schedules</h1>
-          <div class="flex items-center gap-2 mt-0.5">
-            <span class="text-xs text-surface-400">{{.Gameserver.Name}}</span>
-            <span>{{template "status_badge" .Gameserver.Status}}</span>
-          </div>
-        </div>
+{{define "gs_content"}}
+<div x-data="schedulesPage()" class="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+  <!-- New Schedule Form -->
+  <div class="rounded-xl bg-surface-850/80 border border-surface-800/60 p-5 mb-6">
+    <h2 class="font-display font-semibold text-white text-sm mb-4">New Schedule</h2>
+    <form hx-post="/gameservers/{{.Gameserver.ID}}/schedules" hx-target="#content" hx-swap="innerHTML" hx-boost="false"
+          class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div>
+        <label class="block text-xs text-surface-400 mb-1">Name</label>
+        <input type="text" name="name" required placeholder="Nightly Restart"
+               class="w-full rounded-lg bg-surface-900/60 border border-surface-700/60 text-white text-sm px-3 py-2 focus:outline-none focus:border-accent-500">
       </div>
-    </div>
+      <div>
+        <label class="block text-xs text-surface-400 mb-1">Type</label>
+        <select name="type" x-model="newType"
+                class="w-full rounded-lg bg-surface-900/60 border border-surface-700/60 text-white text-sm px-3 py-2 focus:outline-none focus:border-accent-500">
+          <option value="restart">Restart</option>
+          <option value="backup">Backup</option>
+          <option value="command">Command</option>
+          <option value="update">Update</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs text-surface-400 mb-1">Cron Expression</label>
+        <input type="text" name="cron_expr" required placeholder="0 4 * * *"
+               class="w-full rounded-lg bg-surface-900/60 border border-surface-700/60 text-white text-sm px-3 py-2 font-mono focus:outline-none focus:border-accent-500">
+      </div>
+      <div x-show="newType === 'command'">
+        <label class="block text-xs text-surface-400 mb-1">Command</label>
+        <input type="text" name="command" placeholder="save-all"
+               class="w-full rounded-lg bg-surface-900/60 border border-surface-700/60 text-white text-sm px-3 py-2 font-mono focus:outline-none focus:border-accent-500">
+      </div>
+      <div class="sm:col-span-2 lg:col-span-4 flex justify-end">
+        <button type="submit"
+                class="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-accent-600 hover:bg-accent-500 text-white font-display font-semibold text-sm transition-colors">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+          Create Schedule
+        </button>
+      </div>
+    </form>
   </div>
 
-  <div class="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-    <!-- New Schedule Form -->
-    <div class="rounded-xl bg-surface-850/80 border border-surface-800/60 p-5 mb-6">
-      <h2 class="font-display font-semibold text-white text-sm mb-4">New Schedule</h2>
-      <form hx-post="/gameservers/{{.Gameserver.ID}}/schedules" hx-target="#content" hx-swap="innerHTML" hx-boost="false"
-            class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <div>
-          <label class="block text-xs text-surface-400 mb-1">Name</label>
-          <input type="text" name="name" required placeholder="Nightly Restart"
-                 class="w-full rounded-lg bg-surface-900/60 border border-surface-700/60 text-white text-sm px-3 py-2 focus:outline-none focus:border-accent-500">
-        </div>
-        <div>
-          <label class="block text-xs text-surface-400 mb-1">Type</label>
-          <select name="type" x-model="newType"
-                  class="w-full rounded-lg bg-surface-900/60 border border-surface-700/60 text-white text-sm px-3 py-2 focus:outline-none focus:border-accent-500">
-            <option value="restart">Restart</option>
-            <option value="backup">Backup</option>
-            <option value="command">Command</option>
-            <option value="update">Update</option>
-          </select>
-        </div>
-        <div>
-          <label class="block text-xs text-surface-400 mb-1">Cron Expression</label>
-          <input type="text" name="cron_expr" required placeholder="0 4 * * *"
-                 class="w-full rounded-lg bg-surface-900/60 border border-surface-700/60 text-white text-sm px-3 py-2 font-mono focus:outline-none focus:border-accent-500">
-        </div>
-        <div x-show="newType === 'command'">
-          <label class="block text-xs text-surface-400 mb-1">Command</label>
-          <input type="text" name="command" placeholder="save-all"
-                 class="w-full rounded-lg bg-surface-900/60 border border-surface-700/60 text-white text-sm px-3 py-2 font-mono focus:outline-none focus:border-accent-500">
-        </div>
-        <div class="sm:col-span-2 lg:col-span-4 flex justify-end">
-          <button type="submit"
-                  class="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-accent-600 hover:bg-accent-500 text-white font-display font-semibold text-sm transition-colors">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
-            Create Schedule
-          </button>
-        </div>
-      </form>
-    </div>
-
-    <!-- Schedule List -->
-    {{if .Schedules}}
-    <div class="rounded-xl bg-surface-850/80 border border-surface-800/60 overflow-hidden">
-      <table class="w-full text-sm">
-        <thead>
-          <tr class="border-b border-surface-800/60">
-            <th class="text-left px-4 py-3 text-xs font-medium text-surface-400 uppercase tracking-wider">Name</th>
-            <th class="text-left px-4 py-3 text-xs font-medium text-surface-400 uppercase tracking-wider">Type</th>
-            <th class="text-left px-4 py-3 text-xs font-medium text-surface-400 uppercase tracking-wider">Cron</th>
-            <th class="text-left px-4 py-3 text-xs font-medium text-surface-400 uppercase tracking-wider">Last Run</th>
-            <th class="text-left px-4 py-3 text-xs font-medium text-surface-400 uppercase tracking-wider">Next Run</th>
-            <th class="text-center px-4 py-3 text-xs font-medium text-surface-400 uppercase tracking-wider">Enabled</th>
-            <th class="text-right px-4 py-3 text-xs font-medium text-surface-400 uppercase tracking-wider">Actions</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-surface-800/40">
-          {{range .Schedules}}
-          <tr class="hover:bg-surface-800/30 transition-colors">
-            <td class="px-4 py-3 text-white font-medium">{{.Name}}</td>
-            <td class="px-4 py-3">
-              <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium
-                {{if eq .Type "restart"}}bg-yellow-900/30 text-yellow-400 border border-yellow-800/40
-                {{else if eq .Type "backup"}}bg-blue-900/30 text-blue-400 border border-blue-800/40
-                {{else if eq .Type "command"}}bg-purple-900/30 text-purple-400 border border-purple-800/40
-                {{else if eq .Type "update"}}bg-emerald-900/30 text-emerald-400 border border-emerald-800/40
-                {{end}}">
-                {{.Type}}
-              </span>
-            </td>
-            <td class="px-4 py-3 font-mono text-surface-300 text-xs">{{.CronExpr}}</td>
-            <td class="px-4 py-3 text-surface-400 text-xs">{{if .LastRun}}{{formatTime (derefTime .LastRun)}}{{else}}-{{end}}</td>
-            <td class="px-4 py-3 text-surface-400 text-xs">{{if .NextRun}}{{formatTime (derefTime .NextRun)}}{{else}}-{{end}}</td>
-            <td class="px-4 py-3 text-center">
-              <button hx-post="/gameservers/{{$.Gameserver.ID}}/schedules/{{.ID}}/toggle" hx-target="#content" hx-swap="innerHTML" hx-boost="false"
-                      class="text-xs px-2 py-1 rounded-md transition-colors
-                        {{if .Enabled}}bg-emerald-900/30 text-emerald-400 border border-emerald-800/40 hover:bg-emerald-900/50
-                        {{else}}bg-surface-800 text-surface-500 border border-surface-700 hover:bg-surface-700{{end}}">
-                {{if .Enabled}}On{{else}}Off{{end}}
-              </button>
-            </td>
-            <td class="px-4 py-3 text-right">
-              <button hx-delete="/gameservers/{{$.Gameserver.ID}}/schedules/{{.ID}}" hx-target="#content" hx-swap="innerHTML" hx-boost="false"
-                      hx-confirm="Delete schedule '{{.Name}}'?"
-                      class="text-xs text-red-400 hover:text-red-300 transition-colors">
-                Delete
-              </button>
-            </td>
-          </tr>
-          {{end}}
-        </tbody>
-      </table>
-    </div>
-    {{else}}
-    <div class="rounded-xl bg-surface-850/80 border border-surface-800/60 p-8 text-center">
-      <p class="text-surface-400">No schedules configured. Create one above to automate tasks.</p>
-    </div>
-    {{end}}
+  <!-- Schedule List -->
+  {{if .Schedules}}
+  <div class="rounded-xl bg-surface-850/80 border border-surface-800/60 overflow-hidden">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="border-b border-surface-800/60">
+          <th class="text-left px-4 py-3 text-xs font-medium text-surface-400 uppercase tracking-wider">Name</th>
+          <th class="text-left px-4 py-3 text-xs font-medium text-surface-400 uppercase tracking-wider">Type</th>
+          <th class="text-left px-4 py-3 text-xs font-medium text-surface-400 uppercase tracking-wider">Cron</th>
+          <th class="text-left px-4 py-3 text-xs font-medium text-surface-400 uppercase tracking-wider">Last Run</th>
+          <th class="text-left px-4 py-3 text-xs font-medium text-surface-400 uppercase tracking-wider">Next Run</th>
+          <th class="text-center px-4 py-3 text-xs font-medium text-surface-400 uppercase tracking-wider">Enabled</th>
+          <th class="text-right px-4 py-3 text-xs font-medium text-surface-400 uppercase tracking-wider">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-surface-800/40">
+        {{range .Schedules}}
+        <tr class="hover:bg-surface-800/30 transition-colors">
+          <td class="px-4 py-3 text-white font-medium">{{.Name}}</td>
+          <td class="px-4 py-3">
+            <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium
+              {{if eq .Type "restart"}}bg-yellow-900/30 text-yellow-400 border border-yellow-800/40
+              {{else if eq .Type "backup"}}bg-blue-900/30 text-blue-400 border border-blue-800/40
+              {{else if eq .Type "command"}}bg-purple-900/30 text-purple-400 border border-purple-800/40
+              {{else if eq .Type "update"}}bg-emerald-900/30 text-emerald-400 border border-emerald-800/40
+              {{end}}">
+              {{.Type}}
+            </span>
+          </td>
+          <td class="px-4 py-3 font-mono text-surface-300 text-xs">{{.CronExpr}}</td>
+          <td class="px-4 py-3 text-surface-400 text-xs">{{if .LastRun}}{{formatTime (derefTime .LastRun)}}{{else}}-{{end}}</td>
+          <td class="px-4 py-3 text-surface-400 text-xs">{{if .NextRun}}{{formatTime (derefTime .NextRun)}}{{else}}-{{end}}</td>
+          <td class="px-4 py-3 text-center">
+            <button hx-post="/gameservers/{{$.Gameserver.ID}}/schedules/{{.ID}}/toggle" hx-target="#content" hx-swap="innerHTML" hx-boost="false"
+                    class="text-xs px-2 py-1 rounded-md transition-colors
+                      {{if .Enabled}}bg-emerald-900/30 text-emerald-400 border border-emerald-800/40 hover:bg-emerald-900/50
+                      {{else}}bg-surface-800 text-surface-500 border border-surface-700 hover:bg-surface-700{{end}}">
+              {{if .Enabled}}On{{else}}Off{{end}}
+            </button>
+          </td>
+          <td class="px-4 py-3 text-right">
+            <button hx-delete="/gameservers/{{$.Gameserver.ID}}/schedules/{{.ID}}" hx-target="#content" hx-swap="innerHTML" hx-boost="false"
+                    hx-confirm="Delete schedule '{{.Name}}'?"
+                    class="text-xs text-red-400 hover:text-red-300 transition-colors">
+              Delete
+            </button>
+          </td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
   </div>
+  {{else}}
+  <div class="rounded-xl bg-surface-850/80 border border-surface-800/60 p-8 text-center">
+    <p class="text-surface-400">No schedules configured. Create one above to automate tasks.</p>
+  </div>
+  {{end}}
 </div>
 
 <script>

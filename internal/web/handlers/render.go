@@ -99,7 +99,11 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string,
 
 	templateName := "layout.html"
 	if req.Header.Get("HX-Request") == "true" {
-		templateName = "content"
+		if req.Header.Get("HX-Target") == "gs-content" {
+			templateName = "gs_content"
+		} else {
+			templateName = "content"
+		}
 	}
 
 	if err := t.ExecuteTemplate(w, templateName, data); err != nil {
