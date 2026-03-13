@@ -30,7 +30,7 @@ func setGameserverStatus(db *sql.DB, log *slog.Logger, broadcaster *EventBroadca
 		return err
 	}
 	if gs == nil {
-		return fmt.Errorf("gameserver %s not found", id)
+		return ErrNotFoundf("gameserver %s not found", id)
 	}
 
 	oldStatus := gs.Status
@@ -59,4 +59,8 @@ func isNonTerminalStatus(status string) bool {
 		return true
 	}
 	return false
+}
+
+func isRunningStatus(status string) bool {
+	return status == StatusStarted || status == StatusRunning
 }

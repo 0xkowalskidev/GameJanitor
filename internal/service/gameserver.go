@@ -57,7 +57,9 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gam
 	}
 
 	if err := models.CreateGameserver(s.db, gs); err != nil {
-		s.docker.RemoveVolume(ctx, gs.VolumeName)
+		if rmErr := s.docker.RemoveVolume(ctx, gs.VolumeName); rmErr != nil {
+			s.log.Error("failed to clean up volume after gameserver creation failure", "volume", gs.VolumeName, "error", rmErr)
+		}
 		return err
 	}
 
@@ -70,10 +72,10 @@ func (s *GameserverService) UpdateGameserver(gs *models.Gameserver) error {
 		return err
 	}
 	if existing == nil {
-		return fmt.Errorf("gameserver %s not found", gs.ID)
+		return ErrNotFoundf("gameserver %s not found", gs.ID)
 	}
 	if existing.Status != StatusStopped {
-		return fmt.Errorf("gameserver %s must be stopped before updating (current status: %s)", gs.ID, existing.Status)
+		return ErrConflictf("gameserver %s must be stopped before updating (current status: %s)", gs.ID, existing.Status)
 	}
 
 	s.log.Info("updating gameserver", "id", gs.ID)
@@ -86,7 +88,7 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 		return err
 	}
 	if gs == nil {
-		return fmt.Errorf("gameserver %s not found", id)
+		return ErrNotFoundf("gameserver %s not found", id)
 	}
 
 	s.log.Info("deleting gameserver", "id", id, "name", gs.Name)
@@ -124,7 +126,7 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 		return err
 	}
 	if gs == nil {
-		return fmt.Errorf("gameserver %s not found", id)
+		return ErrNotFoundf("gameserver %s not found", id)
 	}
 
 	switch gs.Status {
@@ -138,7 +140,7 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 		return fmt.Errorf("getting game for gameserver %s: %w", id, err)
 	}
 	if game == nil {
-		return fmt.Errorf("game %s not found for gameserver %s", gs.GameID, id)
+		return ErrNotFoundf("game %s not found for gameserver %s", gs.GameID, id)
 	}
 
 	// Pull image
@@ -229,7 +231,7 @@ func (s *GameserverService) Stop(ctx context.Context, id string) error {
 		return err
 	}
 	if gs == nil {
-		return fmt.Errorf("gameserver %s not found", id)
+		return ErrNotFoundf("gameserver %s not found", id)
 	}
 
 	if gs.Status == StatusStopped {
@@ -275,7 +277,7 @@ func (s *GameserverService) Restart(ctx context.Context, id string) error {
 		return err
 	}
 	if gs == nil {
-		return fmt.Errorf("gameserver %s not found", id)
+		return ErrNotFoundf("gameserver %s not found", id)
 	}
 
 	if gs.Status != StatusStopped {
@@ -293,7 +295,7 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) err
 		return err
 	}
 	if gs == nil {
-		return fmt.Errorf("gameserver %s not found", id)
+		return ErrNotFoundf("gameserver %s not found", id)
 	}
 
 	game, err := models.GetGame(s.db, gs.GameID)
@@ -301,7 +303,7 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) err
 		return fmt.Errorf("getting game for gameserver %s: %w", id, err)
 	}
 	if game == nil {
-		return fmt.Errorf("game %s not found", gs.GameID)
+		return ErrNotFoundf("game %s not found", gs.GameID)
 	}
 
 	s.log.Info("updating game for gameserver", "id", id, "game", game.ID)
@@ -357,7 +359,7 @@ func (s *GameserverService) Reinstall(ctx context.Context, id string) error {
 		return err
 	}
 	if gs == nil {
-		return fmt.Errorf("gameserver %s not found", id)
+		return ErrNotFoundf("gameserver %s not found", id)
 	}
 
 	game, err := models.GetGame(s.db, gs.GameID)
@@ -365,7 +367,7 @@ func (s *GameserverService) Reinstall(ctx context.Context, id string) error {
 		return fmt.Errorf("getting game for gameserver %s: %w", id, err)
 	}
 	if game == nil {
-		return fmt.Errorf("game %s not found", gs.GameID)
+		return ErrNotFoundf("game %s not found", gs.GameID)
 	}
 
 	s.log.Info("reinstalling gameserver", "id", id)

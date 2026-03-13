@@ -155,9 +155,10 @@ function consoleApp() {
 
       this.command = '';
 
+      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
       const resp = await fetch('/gameservers/{{.Gameserver.ID}}/console/command', {
         method: 'POST',
-        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': csrfToken},
         body: 'command=' + encodeURIComponent(cmd)
       });
 

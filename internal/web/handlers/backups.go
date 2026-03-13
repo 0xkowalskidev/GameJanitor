@@ -39,7 +39,10 @@ func (h *BackupHandlers) Create(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Name string `json:"name"`
 	}
-	json.NewDecoder(r.Body).Decode(&req)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
 
 	backup, err := h.svc.CreateBackup(r.Context(), gsID, req.Name)
 	if err != nil {

@@ -188,12 +188,13 @@
 </div>
 
 <script>
+const _csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
 function filesBrowser() {
   const gsID = '{{.Gameserver.ID}}';
   return {
     mode: 'browser',
     currentPath: '{{.Path}}',
-    entries: {{safeJS .EntriesJSON}},
+    entries: {{rawJS .EntriesJSON}},
     breadcrumbs: [],
     loading: false,
     error: '',
@@ -329,6 +330,7 @@ function filesBrowser() {
       try {
         const resp = await fetch('/gameservers/' + gsID + '/files/content?path=' + encodeURIComponent(this.editingPath), {
           method: 'PUT',
+          headers: {'X-CSRF-Token': _csrfToken},
           body: content,
         });
         if (!resp.ok) {
@@ -360,7 +362,7 @@ function filesBrowser() {
       if (!name) return;
       const path = this.currentPath + '/' + name;
 
-      const resp = await fetch('/gameservers/' + gsID + '/files/mkdir?path=' + encodeURIComponent(path), { method: 'POST' });
+      const resp = await fetch('/gameservers/' + gsID + '/files/mkdir?path=' + encodeURIComponent(path), { method: 'POST', headers: {'X-CSRF-Token': _csrfToken} });
       if (!resp.ok) {
         this.error = await resp.text();
         return;
@@ -377,6 +379,7 @@ function filesBrowser() {
 
       const resp = await fetch('/gameservers/' + gsID + '/files/content?path=' + encodeURIComponent(path), {
         method: 'PUT',
+        headers: {'X-CSRF-Token': _csrfToken},
         body: '',
       });
       if (!resp.ok) {
@@ -395,7 +398,7 @@ function filesBrowser() {
     async doDelete() {
       if (!this.deleteTarget) return;
       const path = this.currentPath + '/' + this.deleteTarget.Name;
-      const resp = await fetch('/gameservers/' + gsID + '/files/entry?path=' + encodeURIComponent(path), { method: 'DELETE' });
+      const resp = await fetch('/gameservers/' + gsID + '/files/entry?path=' + encodeURIComponent(path), { method: 'DELETE', headers: {'X-CSRF-Token': _csrfToken} });
       if (!resp.ok) {
         this.error = await resp.text();
       }

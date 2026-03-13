@@ -2,8 +2,10 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
-	"strings"
+
+	"github.com/0xkowalskidev/gamejanitor/internal/service"
 )
 
 type envelope struct {
@@ -34,14 +36,11 @@ func respondError(w http.ResponseWriter, statusCode int, message string) {
 	json.NewEncoder(w).Encode(envelope{Status: "error", Error: message})
 }
 
-// serviceErrorStatus maps service-layer error messages to HTTP status codes.
+// serviceErrorStatus extracts the HTTP status code from a ServiceError, falling back to 500.
 func serviceErrorStatus(err error) int {
-	msg := err.Error()
-	if strings.Contains(msg, "not found") {
-		return http.StatusNotFound
-	}
-	if strings.Contains(msg, "must be stopped") || strings.Contains(msg, "still reference") {
-		return http.StatusConflict
+	var svcErr *service.ServiceError
+	if errors.As(err, &svcErr) {
+		return svcErr.Code
 	}
 	return http.StatusInternalServerError
 }

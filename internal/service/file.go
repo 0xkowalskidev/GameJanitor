@@ -61,7 +61,7 @@ func (s *FileService) ListDirectory(ctx context.Context, gameserverID string, di
 			return fmt.Errorf("listing directory %s: %w", dirPath, execErr)
 		}
 		if exitCode != 0 {
-			return fmt.Errorf("listing directory %s failed: %s", dirPath, stderr)
+			return fmt.Errorf("listing directory %s: %s", dirPath, stderr)
 		}
 		entries = parseLsOutput(stdout)
 		return nil
@@ -110,7 +110,7 @@ func (s *FileService) DeletePath(ctx context.Context, gameserverID string, targe
 			return fmt.Errorf("deleting %s: %w", targetPath, execErr)
 		}
 		if exitCode != 0 {
-			return fmt.Errorf("deleting %s failed: %s", targetPath, stderr)
+			return fmt.Errorf("deleting %s: %s", targetPath, stderr)
 		}
 		return nil
 	})
@@ -128,7 +128,7 @@ func (s *FileService) CreateDirectory(ctx context.Context, gameserverID string, 
 			return fmt.Errorf("creating directory %s: %w", dirPath, execErr)
 		}
 		if exitCode != 0 {
-			return fmt.Errorf("creating directory %s failed: %s", dirPath, stderr)
+			return fmt.Errorf("creating directory %s: %s", dirPath, stderr)
 		}
 		return nil
 	})
@@ -140,7 +140,7 @@ func (s *FileService) withContainer(ctx context.Context, gameserverID string, fn
 		return fmt.Errorf("getting gameserver %s: %w", gameserverID, err)
 	}
 	if gs == nil {
-		return fmt.Errorf("gameserver %s not found", gameserverID)
+		return ErrNotFoundf("gameserver %s not found", gameserverID)
 	}
 
 	if isRunningStatus(gs.Status) && gs.ContainerID != nil {
@@ -175,7 +175,7 @@ func (s *FileService) getTempContainer(ctx context.Context, gs *models.Gameserve
 		return "", fmt.Errorf("getting game %s: %w", gs.GameID, err)
 	}
 	if game == nil {
-		return "", fmt.Errorf("game %s not found", gs.GameID)
+		return "", ErrNotFoundf("game %s not found", gs.GameID)
 	}
 
 	containerName := "gamejanitor-files-" + gs.ID

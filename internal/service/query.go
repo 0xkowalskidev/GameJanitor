@@ -12,6 +12,13 @@ import (
 	"github.com/0xkowalskidev/gsq"
 )
 
+const (
+	// queryPollInterval is how often GSQ polls each gameserver for status.
+	queryPollInterval = 5 * time.Second
+	// queryMaxConsecutiveFails is how many poll failures before setting error status.
+	queryMaxConsecutiveFails = 5
+)
+
 type QueryData struct {
 	PlayersOnline int          `json:"players_online"`
 	MaxPlayers    int          `json:"max_players"`
@@ -53,12 +60,7 @@ func (s *QueryService) GetQueryData(gameserverID string) *QueryData {
 // StartPolling begins GSQ polling for a gameserver.
 // For games without query support, immediately promotes started → running.
 func (s *QueryService) StartPolling(gameserverID string) {
-	s.mu.Lock()
-	if cancel, exists := s.pollers[gameserverID]; exists {
-		cancel()
-	}
-	s.mu.Unlock()
-
+	// DB lookups outside lock
 	gs, err := models.GetGameserver(s.db, gameserverID)
 	if err != nil || gs == nil {
 		s.log.Error("failed to load gameserver for polling", "id", gameserverID, "error", err)
@@ -72,7 +74,6 @@ func (s *QueryService) StartPolling(gameserverID string) {
 	}
 
 	if !s.gameSupportsQuery(game) {
-		// No query support — promote immediately if in started state
 		if gs.Status == StatusStarted {
 			s.log.Info("game does not support query, promoting to running", "id", gameserverID)
 			setGameserverStatus(s.db, s.log, s.broadcaster, gameserverID, StatusRunning)
@@ -90,7 +91,12 @@ func (s *QueryService) StartPolling(gameserverID string) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
+
+	// Hold lock through cancel + register to prevent TOCTOU race
 	s.mu.Lock()
+	if oldCancel, exists := s.pollers[gameserverID]; exists {
+		oldCancel()
+	}
 	s.pollers[gameserverID] = cancel
 	s.mu.Unlock()
 
@@ -126,7 +132,7 @@ func (s *QueryService) pollLoop(ctx context.Context, gameserverID, gameSlug stri
 	consecutiveFailures := 0
 	promoted := false
 
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(queryPollInterval)
 	defer ticker.Stop()
 
 	for {
@@ -151,8 +157,8 @@ func (s *QueryService) pollLoop(ctx context.Context, gameserverID, gameSlug stri
 			consecutiveFailures++
 			s.log.Debug("GSQ poll failed", "id", gameserverID, "failures", consecutiveFailures, "error", err)
 
-			if promoted && consecutiveFailures >= 5 {
-				s.log.Warn("GSQ poll failed 5 consecutive times, setting error", "id", gameserverID)
+			if promoted && consecutiveFailures >= queryMaxConsecutiveFails {
+				s.log.Warn("GSQ poll exceeded max consecutive failures, setting error", "id", gameserverID, "failures", queryMaxConsecutiveFails)
 				setGameserverStatus(s.db, s.log, s.broadcaster, gameserverID, StatusError)
 				return
 			}

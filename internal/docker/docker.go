@@ -109,8 +109,8 @@ func (c *Client) PullImage(ctx context.Context, imageName string) error {
 	for {
 		var msg map[string]any
 		if err := decoder.Decode(&msg); err != nil {
-			if err == io.EOF {
-				break
+			if err != io.EOF {
+				c.log.Warn("error decoding image pull progress", "image", imageName, "error", err)
 			}
 			break
 		}

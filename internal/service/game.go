@@ -2,7 +2,9 @@ package service
 
 import (
 	"database/sql"
+	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/0xkowalskidev/gamejanitor/internal/models"
 )
@@ -31,10 +33,24 @@ func (s *GameService) CreateGame(game *models.Game) error {
 
 func (s *GameService) UpdateGame(game *models.Game) error {
 	s.log.Info("updating game", "id", game.ID)
-	return models.UpdateGame(s.db, game)
+	err := models.UpdateGame(s.db, game)
+	if err != nil && strings.Contains(err.Error(), "not found") {
+		return ErrNotFound(err.Error())
+	}
+	return err
 }
 
 func (s *GameService) DeleteGame(id string) error {
 	s.log.Info("deleting game", "id", id)
-	return models.DeleteGame(s.db, id)
+	err := models.DeleteGame(s.db, id)
+	if err != nil {
+		if strings.Contains(err.Error(), "still reference") {
+			return ErrConflict(err.Error())
+		}
+		if strings.Contains(err.Error(), "not found") {
+			return ErrNotFound(err.Error())
+		}
+		return fmt.Errorf("deleting game %s: %w", id, err)
+	}
+	return nil
 }

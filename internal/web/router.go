@@ -1,10 +1,13 @@
 package web
 
 import (
+	"crypto/rand"
 	"fmt"
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
 
 	"github.com/0xkowalskidev/gamejanitor/internal/docker"
 	"github.com/0xkowalskidev/gamejanitor/internal/service"
@@ -12,6 +15,7 @@ import (
 	"github.com/0xkowalskidev/gamejanitor/internal/web/static"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/gorilla/csrf"
 )
 
 func NewRouter(
@@ -25,11 +29,17 @@ func NewRouter(
 	dockerClient *docker.Client,
 	broadcaster *service.EventBroadcaster,
 	logPath string,
+	dataDir string,
 	log *slog.Logger,
 ) (http.Handler, error) {
 	renderer, err := handlers.NewRenderer()
 	if err != nil {
 		return nil, fmt.Errorf("initializing template renderer: %w", err)
+	}
+
+	csrfKey, err := loadOrCreateCSRFKey(dataDir)
+	if err != nil {
+		return nil, fmt.Errorf("initializing CSRF key: %w", err)
 	}
 
 	r := chi.NewRouter()
@@ -46,7 +56,7 @@ func NewRouter(
 	staticFS, _ := fs.Sub(static.Files, ".")
 	r.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
 
-	// API handlers (JSON)
+	// API handlers (JSON) — no CSRF (uses JSON bodies, not forms)
 	gameHandlers := handlers.NewGameHandlers(gameSvc, log)
 	gameserverHandlers := handlers.NewGameserverHandlers(gameserverSvc, consoleSvc, querySvc, dockerClient, log)
 	eventHandlers := handlers.NewEventHandlers(broadcaster, log)
@@ -111,6 +121,14 @@ func NewRouter(
 		r.Get("/events", eventHandlers.SSE)
 	})
 
+	// CSRF middleware for page routes (HTML forms + HTMX)
+	csrfMiddleware := csrf.Protect(
+		csrfKey,
+		csrf.Path("/"),
+		csrf.Secure(false), // Allow HTTP for local dev; reverse proxy handles HTTPS in prod
+		csrf.RequestHeader("X-CSRF-Token"),
+	)
+
 	// Page handlers (HTML)
 	pageDashboard := handlers.NewPageDashboardHandlers(gameSvc, gameserverSvc, querySvc, renderer, log)
 	pageGames := handlers.NewPageGameHandlers(gameSvc, gameserverSvc, renderer, log)
@@ -121,52 +139,56 @@ func NewRouter(
 	pageSchedules := handlers.NewPageScheduleHandlers(scheduleSvc, gameSvc, gameserverSvc, renderer, log)
 	pageBackups := handlers.NewPageBackupHandlers(backupSvc, gameSvc, gameserverSvc, renderer, log)
 
-	r.Get("/", pageDashboard.Dashboard)
+	r.Group(func(r chi.Router) {
+		r.Use(csrfMiddleware)
 
-	r.Route("/games", func(r chi.Router) {
-		r.Get("/", pageGames.List)
-		r.Get("/new", pageGames.New)
-		r.Post("/", pageGames.Create)
-		r.Route("/{id}", func(r chi.Router) {
-			r.Get("/", pageGames.Detail)
-			r.Get("/edit", pageGames.Edit)
-			r.Put("/", pageGames.Update)
-			r.Delete("/", pageGames.Delete)
+		r.Get("/", pageDashboard.Dashboard)
+
+		r.Route("/games", func(r chi.Router) {
+			r.Get("/", pageGames.List)
+			r.Get("/new", pageGames.New)
+			r.Post("/", pageGames.Create)
+			r.Route("/{id}", func(r chi.Router) {
+				r.Get("/", pageGames.Detail)
+				r.Get("/edit", pageGames.Edit)
+				r.Put("/", pageGames.Update)
+				r.Delete("/", pageGames.Delete)
+			})
 		})
-	})
 
-	r.Route("/gameservers", func(r chi.Router) {
-		r.Get("/new", pageGameservers.New)
-		r.Post("/", pageGameservers.Create)
-		r.Route("/{id}", func(r chi.Router) {
-			r.Get("/", pageGameservers.Detail)
-			r.Get("/edit", pageGameservers.Edit)
-			r.Put("/", pageGameservers.Update)
-			r.Delete("/", pageGameservers.Delete)
-			r.Get("/card", pageGameservers.Card)
-			r.Post("/start", pageActions.Start)
-			r.Post("/stop", pageActions.Stop)
-			r.Post("/restart", pageActions.Restart)
-			r.Post("/update-game", pageActions.UpdateGame)
-			r.Post("/reinstall", pageActions.Reinstall)
-			r.Get("/console", pageConsole.Console)
-			r.Get("/console/stream", pageConsole.LogStream)
-			r.Post("/console/command", pageConsole.SendCommand)
-			r.Get("/files", pageFiles.List)
-			r.Get("/files/list", pageFiles.ListJSON)
-			r.Get("/files/content", pageFiles.ReadFile)
-			r.Put("/files/content", pageFiles.WriteFile)
-			r.Delete("/files/entry", pageFiles.DeletePath)
-			r.Post("/files/mkdir", pageFiles.CreateDirectory)
-			r.Get("/schedules", pageSchedules.List)
-			r.Post("/schedules", pageSchedules.Create)
-			r.Put("/schedules/{scheduleId}", pageSchedules.Update)
-			r.Delete("/schedules/{scheduleId}", pageSchedules.Delete)
-			r.Post("/schedules/{scheduleId}/toggle", pageSchedules.Toggle)
-			r.Get("/backups", pageBackups.List)
-			r.Post("/backups", pageBackups.Create)
-			r.Post("/backups/{backupId}/restore", pageBackups.Restore)
-			r.Delete("/backups/{backupId}", pageBackups.Delete)
+		r.Route("/gameservers", func(r chi.Router) {
+			r.Get("/new", pageGameservers.New)
+			r.Post("/", pageGameservers.Create)
+			r.Route("/{id}", func(r chi.Router) {
+				r.Get("/", pageGameservers.Detail)
+				r.Get("/edit", pageGameservers.Edit)
+				r.Put("/", pageGameservers.Update)
+				r.Delete("/", pageGameservers.Delete)
+				r.Get("/card", pageGameservers.Card)
+				r.Post("/start", pageActions.Start)
+				r.Post("/stop", pageActions.Stop)
+				r.Post("/restart", pageActions.Restart)
+				r.Post("/update-game", pageActions.UpdateGame)
+				r.Post("/reinstall", pageActions.Reinstall)
+				r.Get("/console", pageConsole.Console)
+				r.Get("/console/stream", pageConsole.LogStream)
+				r.Post("/console/command", pageConsole.SendCommand)
+				r.Get("/files", pageFiles.List)
+				r.Get("/files/list", pageFiles.ListJSON)
+				r.Get("/files/content", pageFiles.ReadFile)
+				r.Put("/files/content", pageFiles.WriteFile)
+				r.Delete("/files/entry", pageFiles.DeletePath)
+				r.Post("/files/mkdir", pageFiles.CreateDirectory)
+				r.Get("/schedules", pageSchedules.List)
+				r.Post("/schedules", pageSchedules.Create)
+				r.Put("/schedules/{scheduleId}", pageSchedules.Update)
+				r.Delete("/schedules/{scheduleId}", pageSchedules.Delete)
+				r.Post("/schedules/{scheduleId}/toggle", pageSchedules.Toggle)
+				r.Get("/backups", pageBackups.List)
+				r.Post("/backups", pageBackups.Create)
+				r.Post("/backups/{backupId}/restore", pageBackups.Restore)
+				r.Delete("/backups/{backupId}", pageBackups.Delete)
+			})
 		})
 	})
 
@@ -178,4 +200,23 @@ func jsonContentType(next http.Handler) http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		next.ServeHTTP(w, r)
 	})
+}
+
+func loadOrCreateCSRFKey(dataDir string) ([]byte, error) {
+	keyPath := filepath.Join(dataDir, "csrf.key")
+	key, err := os.ReadFile(keyPath)
+	if err == nil && len(key) == 32 {
+		return key, nil
+	}
+
+	key = make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		return nil, fmt.Errorf("generating CSRF key: %w", err)
+	}
+
+	if err := os.WriteFile(keyPath, key, 0600); err != nil {
+		return nil, fmt.Errorf("writing CSRF key: %w", err)
+	}
+
+	return key, nil
 }

@@ -42,7 +42,7 @@ func (s *BackupService) CreateBackup(ctx context.Context, gameserverID string, n
 		return nil, fmt.Errorf("getting gameserver %s: %w", gameserverID, err)
 	}
 	if gs == nil {
-		return nil, fmt.Errorf("gameserver %s not found", gameserverID)
+		return nil, ErrNotFoundf("gameserver %s not found", gameserverID)
 	}
 	if !isRunningStatus(gs.Status) || gs.ContainerID == nil {
 		return nil, fmt.Errorf("gameserver must be running to create backup (current status: %s)", gs.Status)
@@ -132,7 +132,7 @@ func (s *BackupService) RestoreBackup(ctx context.Context, backupID string) erro
 		return fmt.Errorf("getting backup %s: %w", backupID, err)
 	}
 	if backup == nil {
-		return fmt.Errorf("backup %s not found", backupID)
+		return ErrNotFoundf("backup %s not found", backupID)
 	}
 
 	gs, err := models.GetGameserver(s.db, backup.GameserverID)
@@ -140,7 +140,7 @@ func (s *BackupService) RestoreBackup(ctx context.Context, backupID string) erro
 		return fmt.Errorf("getting gameserver %s: %w", backup.GameserverID, err)
 	}
 	if gs == nil {
-		return fmt.Errorf("gameserver %s not found", backup.GameserverID)
+		return ErrNotFoundf("gameserver %s not found", backup.GameserverID)
 	}
 
 	game, err := models.GetGame(s.db, gs.GameID)
@@ -148,7 +148,7 @@ func (s *BackupService) RestoreBackup(ctx context.Context, backupID string) erro
 		return fmt.Errorf("getting game for gameserver %s: %w", gs.ID, err)
 	}
 	if game == nil {
-		return fmt.Errorf("game %s not found", gs.GameID)
+		return ErrNotFoundf("game %s not found", gs.GameID)
 	}
 
 	wasRunning := isRunningStatus(gs.Status)
@@ -234,7 +234,7 @@ func (s *BackupService) DeleteBackup(ctx context.Context, backupID string) error
 		return fmt.Errorf("getting backup %s: %w", backupID, err)
 	}
 	if backup == nil {
-		return fmt.Errorf("backup %s not found", backupID)
+		return ErrNotFoundf("backup %s not found", backupID)
 	}
 
 	s.log.Info("deleting backup", "backup_id", backupID, "path", backup.FilePath)
