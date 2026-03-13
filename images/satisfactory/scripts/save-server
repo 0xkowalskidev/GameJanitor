@@ -1,0 +1,4 @@
+#!/bin/bash
+echo "[save-server] Satisfactory does not support remote saves without HTTPS API setup"
+echo "[save-server] use the in-game Server Manager to save"
+exit 0

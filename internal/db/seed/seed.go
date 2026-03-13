@@ -204,6 +204,26 @@ func SeedGames(db *sql.DB) error {
 			gsqGameSlug:          "valheim",
 			disabledCapabilities: `["command"]`,
 		},
+		{
+			id:       "satisfactory",
+			name:     "Satisfactory",
+			image:    "registry.0xkowalski.dev/gamejanitor/satisfactory",
+			iconPath: "/static/games/satisfactory/satisfactory-icon.ico",
+			gridPath: "/static/games/satisfactory/satisfactory-grid.png",
+			heroPath: "/static/games/satisfactory/satisfactory-hero.png",
+			defaultPorts: `[{"name":"game","port":7777,"protocol":"udp"},{"name":"api","port":7777,"protocol":"tcp"},{"name":"reliable","port":8888,"protocol":"tcp"}]`,
+			defaultEnv: `[
+				{"key":"SERVER_NAME","default":"Gamejanitor Satisfactory Server","label":"Server Name"},
+				{"key":"MAX_PLAYERS","default":"4","label":"Max Players","type":"number"},
+				{"key":"GAME_PORT","default":"7777","system":true},
+				{"key":"RELIABLE_PORT","default":"8888","system":true},
+				{"key":"SAVE_TIMEOUT_SECONDS","default":"15","system":true}
+			]`,
+			minMemoryMB:          8192,
+			minCPU:               2.0,
+			gsqGameSlug:          "",
+			disabledCapabilities: `["query","command","save"]`,
+		},
 	}
 
 	for _, g := range games {

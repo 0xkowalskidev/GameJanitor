@@ -1,0 +1,4 @@
+#!/bin/bash
+echo "[send-command] Satisfactory does not support RCON"
+echo "[send-command] use the in-game Server Manager for server management"
+exit 1
