@@ -72,11 +72,13 @@ func (h *PageActionHandlers) doAction(w http.ResponseWriter, r *http.Request, ac
 			GameID:   gs.GameID,
 			GameName: gs.GameID,
 			Status:   gs.Status,
+			GamePort: firstGamePort(gs.Ports),
 		}
 		if game != nil {
 			view.GameName = game.Name
 			view.GridPath = game.GridPath
 			view.HeroPath = game.HeroPath
+			view.IconPath = game.IconPath
 		}
 		h.renderer.RenderPartial(w, "dashboard", "gameserver_card", view)
 		return

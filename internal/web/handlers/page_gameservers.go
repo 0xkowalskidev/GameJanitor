@@ -274,15 +274,17 @@ func (h *PageGameserverHandlers) Card(w http.ResponseWriter, r *http.Request) {
 		h.log.Error("getting game for card", "game_id", gs.GameID, "error", err)
 	}
 	view := gameserverView{
-		ID:     gs.ID,
-		Name:   gs.Name,
-		GameID: gs.GameID,
-		Status: gs.Status,
+		ID:       gs.ID,
+		Name:     gs.Name,
+		GameID:   gs.GameID,
+		Status:   gs.Status,
+		GamePort: firstGamePort(gs.Ports),
 	}
 	if game != nil {
 		view.GameName = game.Name
 		view.GridPath = game.GridPath
 		view.HeroPath = game.HeroPath
+		view.IconPath = game.IconPath
 	}
 	if qd := h.querySvc.GetQueryData(gs.ID); qd != nil {
 		view.PlayersOnline = qd.PlayersOnline
