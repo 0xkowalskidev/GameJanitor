@@ -65,11 +65,7 @@
       <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
         {{range .Games}}
         <a href="/gameservers/new?game={{.ID}}" class="group relative aspect-[2/3] rounded-xl overflow-hidden border border-surface-800/60 card-glow">
-          {{if .GridPath}}
-          <img src="{{.GridPath}}" alt="{{.Name}}" class="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105">
-          {{else}}
-          <div class="absolute inset-0 bg-gradient-to-br from-surface-700 to-surface-800"></div>
-          {{end}}
+          <img src="{{if .GridPath}}{{.GridPath}}{{else}}/static/games/default/default-grid.svg{{end}}" alt="{{.Name}}" class="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" onerror="this.onerror=null;this.src='/static/games/default/default-grid.svg'">
           <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
           <div class="absolute bottom-0 left-0 right-0 p-3">
             <span class="font-display font-semibold text-sm text-white">{{.Name}}</span>
