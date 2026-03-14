@@ -9,15 +9,19 @@ import (
 	"strings"
 	"time"
 
+	"github.com/0xkowalskidev/gamejanitor/internal/netinfo"
+	"github.com/0xkowalskidev/gamejanitor/internal/service"
 	"github.com/0xkowalskidev/gamejanitor/internal/web/templates"
 	"github.com/gorilla/csrf"
 )
 
 type Renderer struct {
-	templates map[string]*template.Template
+	templates   map[string]*template.Template
+	netInfo     *netinfo.Info
+	settingsSvc *service.SettingsService
 }
 
-func NewRenderer() (*Renderer, error) {
+func NewRenderer(netInfo *netinfo.Info, settingsSvc *service.SettingsService) (*Renderer, error) {
 	funcMap := template.FuncMap{
 		"statusColor": statusColor,
 		"formatTime":  formatTime,
@@ -39,7 +43,7 @@ func NewRenderer() (*Renderer, error) {
 		return nil, fmt.Errorf("parsing base templates: %w", err)
 	}
 
-	r := &Renderer{templates: make(map[string]*template.Template)}
+	r := &Renderer{templates: make(map[string]*template.Template), netInfo: netInfo, settingsSvc: settingsSvc}
 
 	// Find all page templates (top-level and subdirectories, excluding partials and layout)
 	pages := []string{
@@ -88,9 +92,13 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string,
 		return
 	}
 
-	// Inject CSRF token into template data
+	// Inject CSRF token, network info, and connection address into template data
 	if m, ok := data.(map[string]any); ok {
 		m["CSRFToken"] = csrf.Token(req)
+		m["NetInfo"] = r.netInfo
+		m["ConnectionAddress"] = r.settingsSvc.GetConnectionAddress()
+		m["ConnectionAddressConfigured"] = r.settingsSvc.IsConnectionAddressConfigured()
+		m["ConnectionAddressFromEnv"] = r.settingsSvc.IsConnectionAddressFromEnv()
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

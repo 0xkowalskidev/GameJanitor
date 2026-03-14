@@ -13,6 +13,7 @@ import (
 	"github.com/0xkowalskidev/gamejanitor/internal/db"
 	"github.com/0xkowalskidev/gamejanitor/internal/db/seed"
 	"github.com/0xkowalskidev/gamejanitor/internal/docker"
+	"github.com/0xkowalskidev/gamejanitor/internal/netinfo"
 	"github.com/0xkowalskidev/gamejanitor/internal/service"
 	"github.com/0xkowalskidev/gamejanitor/internal/web"
 	"github.com/spf13/cobra"
@@ -122,7 +123,10 @@ func runServe(cmd *cobra.Command, args []string) error {
 	defer scheduler.Stop()
 	defer querySvc.StopAll()
 
-	router, err := web.NewRouter(gameSvc, gameserverSvc, consoleSvc, fileSvc, scheduleSvc, backupSvc, querySvc, dockerClient, broadcaster, logPath, cfg.DataDir, logger)
+	settingsSvc := service.NewSettingsService(database, logger)
+	netInfo := netinfo.Detect(logger)
+
+	router, err := web.NewRouter(gameSvc, gameserverSvc, consoleSvc, fileSvc, scheduleSvc, backupSvc, querySvc, settingsSvc, dockerClient, broadcaster, netInfo, logPath, cfg.DataDir, logger)
 	if err != nil {
 		return fmt.Errorf("failed to initialize router: %w", err)
 	}

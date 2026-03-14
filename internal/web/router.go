@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 
 	"github.com/0xkowalskidev/gamejanitor/internal/docker"
+	"github.com/0xkowalskidev/gamejanitor/internal/netinfo"
 	"github.com/0xkowalskidev/gamejanitor/internal/service"
 	"github.com/0xkowalskidev/gamejanitor/internal/web/handlers"
 	"github.com/0xkowalskidev/gamejanitor/internal/web/static"
@@ -26,13 +27,15 @@ func NewRouter(
 	scheduleSvc *service.ScheduleService,
 	backupSvc *service.BackupService,
 	querySvc *service.QueryService,
+	settingsSvc *service.SettingsService,
 	dockerClient *docker.Client,
 	broadcaster *service.EventBroadcaster,
+	netInfo *netinfo.Info,
 	logPath string,
 	dataDir string,
 	log *slog.Logger,
 ) (http.Handler, error) {
-	renderer, err := handlers.NewRenderer()
+	renderer, err := handlers.NewRenderer(netInfo, settingsSvc)
 	if err != nil {
 		return nil, fmt.Errorf("initializing template renderer: %w", err)
 	}
@@ -142,9 +145,10 @@ func NewRouter(
 	}
 
 	// Page handlers (HTML)
-	pageDashboard := handlers.NewPageDashboardHandlers(gameSvc, gameserverSvc, querySvc, renderer, log)
+	pageDashboard := handlers.NewPageDashboardHandlers(gameSvc, gameserverSvc, querySvc, settingsSvc, renderer, log)
 	pageGames := handlers.NewPageGameHandlers(gameSvc, gameserverSvc, renderer, log)
-	pageGameservers := handlers.NewPageGameserverHandlers(gameSvc, gameserverSvc, querySvc, renderer, log)
+	pageGameservers := handlers.NewPageGameserverHandlers(gameSvc, gameserverSvc, querySvc, settingsSvc, renderer, log)
+	pageSettings := handlers.NewPageSettingsHandlers(settingsSvc, renderer, log)
 	pageActions := handlers.NewPageActionHandlers(gameSvc, gameserverSvc, renderer, log)
 	pageConsole := handlers.NewPageConsoleHandlers(consoleSvc, gameSvc, gameserverSvc, renderer, log)
 	pageFiles := handlers.NewPageFileHandlers(fileSvc, gameSvc, gameserverSvc, renderer, log)
@@ -168,6 +172,9 @@ func NewRouter(
 				r.Delete("/", pageGames.Delete)
 			})
 		})
+
+		r.Post("/settings/connection-address", pageSettings.SetConnectionAddress)
+		r.Delete("/settings/connection-address", pageSettings.ClearConnectionAddress)
 
 		r.Route("/gameservers", func(r chi.Router) {
 			r.Get("/new", pageGameservers.New)
