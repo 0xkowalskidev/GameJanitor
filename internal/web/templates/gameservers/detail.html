@@ -8,6 +8,28 @@
 <div class="max-w-7xl mx-auto px-4 sm:px-6 py-6"
      x-data="overviewData()" x-init="startLogTail()">
 
+  <!-- Error Banner -->
+  <div x-show="status === 'error' && errorReason" x-cloak x-transition
+       class="rounded-xl bg-red-950/30 border border-red-800/40 p-4 mb-6">
+    <div class="flex items-start gap-3">
+      <svg class="w-5 h-5 text-red-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9.303 3.376c-.866 1.5-3.032 1.5-3.898 0L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374z M12 15.75h.007v.008H12v-.008z"/></svg>
+      <div>
+        <h3 class="text-sm font-display font-semibold text-red-300">Gameserver Error</h3>
+        <p class="text-sm text-red-400/80 mt-1" x-text="errorReason"></p>
+        <div class="flex gap-2 mt-3">
+          <button hx-post="/gameservers/{{.Gameserver.ID}}/start" hx-swap="none"
+                  class="text-xs px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium transition-colors">
+            Retry Start
+          </button>
+          <a href="/gameservers/{{.Gameserver.ID}}/edit"
+             class="text-xs px-3 py-1.5 rounded-lg bg-surface-700 hover:bg-surface-600 text-surface-300 font-medium transition-colors">
+            Edit Config
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Two Column Layout -->
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <!-- Left Column (2/3) -->

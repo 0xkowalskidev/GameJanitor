@@ -179,15 +179,19 @@
           </div>
         </div>
 
-        <!-- Port Mapping — shown prominently when conflicts exist -->
-        <div x-show="hasPortConflicts && ports.length > 0" x-cloak x-transition>
-          <div class="p-4 rounded-xl bg-amber-900/15 border border-amber-700/30">
-            <div class="flex items-start gap-3 mb-3">
+        <!-- Port Mapping — shown prominently when conflicts exist or were recently shown -->
+        <div x-show="portsElevated && ports.length > 0" x-cloak x-transition>
+          <div class="p-4 rounded-xl transition-colors"
+               :class="hasPortConflicts ? 'bg-amber-900/15 border border-amber-700/30' : 'bg-surface-900/40 border border-surface-800/60'">
+            <div x-show="hasPortConflicts" class="flex items-start gap-3 mb-3">
               <svg class="w-5 h-5 text-amber-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>
               <div>
                 <h3 class="font-display font-semibold text-amber-300 text-sm">Port Conflict</h3>
                 <p class="text-xs text-amber-400/70 mt-0.5">One or more ports overlap with another gameserver. Only one can be running at a time unless you change the ports.</p>
               </div>
+            </div>
+            <div x-show="!hasPortConflicts" class="mb-3">
+              <label class="block text-sm font-medium text-surface-300">Port Mapping</label>
             </div>
             <div class="space-y-2">
               <template x-for="(port, idx) in ports" :key="'conflict-' + idx">
@@ -262,7 +266,7 @@
             </div>
 
             <!-- Ports (inside advanced when no conflicts) -->
-            <div x-show="!hasPortConflicts && ports.length > 0">
+            <div x-show="!portsElevated && ports.length > 0">
               <label class="block text-sm font-medium text-surface-300 mb-2">Port Mapping</label>
               <div class="space-y-2">
                 <template x-for="(port, idx) in ports" :key="'adv-' + idx">
@@ -308,7 +312,7 @@
         </div>
 
         <!-- Hidden JSON fields for form submission -->
-        <input type="hidden" name="ports_json" :value="JSON.stringify(ports)">
+        <input type="hidden" name="ports_json" :value="JSON.stringify(ports.map(p => ({...p, host_port: Number(p.host_port), container_port: Number(p.container_port), port: p.port ? Number(p.port) : undefined})))">
         <input type="hidden" name="env_json" :value="buildEnvJSON()">
 
         <!-- Submit -->
@@ -320,7 +324,7 @@
           </button>
           <button type="submit" name="restart" value="true"
                   class="px-8 py-3 rounded-xl bg-surface-700 hover:bg-surface-600 text-white font-display font-semibold transition-colors border border-surface-600">
-            Save &amp; Restart
+            {{if or (eq .Gameserver.Status "stopped") (eq .Gameserver.Status "error")}}Save &amp; Start{{else}}Save &amp; Restart{{end}}
           </button>
           {{else}}
           <button type="submit"
@@ -437,8 +441,12 @@ function gameserverForm() {
       return usedPorts.find(u => u.port === hp) || null;
     },
 
+    portsElevated: false,
+
     get hasPortConflicts() {
-      return this.ports.some(p => this.portConflict(p));
+      const has = this.ports.some(p => this.portConflict(p));
+      if (has) this.portsElevated = true;
+      return has;
     },
 
     onGameChange() {

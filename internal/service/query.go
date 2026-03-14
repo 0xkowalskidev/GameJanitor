@@ -76,7 +76,7 @@ func (s *QueryService) StartPolling(gameserverID string) {
 	if !s.gameSupportsQuery(game) {
 		if gs.Status == StatusStarted {
 			s.log.Info("game does not support query, promoting to running", "id", gameserverID)
-			setGameserverStatus(s.db, s.log, s.broadcaster, gameserverID, StatusRunning)
+			setGameserverStatus(s.db, s.log, s.broadcaster, gameserverID, StatusRunning, "")
 		}
 		return
 	}
@@ -85,7 +85,7 @@ func (s *QueryService) StartPolling(gameserverID string) {
 	if hostPort == 0 {
 		s.log.Warn("no host port found for gameserver, promoting immediately", "id", gameserverID)
 		if gs.Status == StatusStarted {
-			setGameserverStatus(s.db, s.log, s.broadcaster, gameserverID, StatusRunning)
+			setGameserverStatus(s.db, s.log, s.broadcaster, gameserverID, StatusRunning, "")
 		}
 		return
 	}
@@ -98,6 +98,7 @@ func (s *QueryService) StartPolling(gameserverID string) {
 		oldCancel()
 	}
 	s.pollers[gameserverID] = cancel
+	delete(s.cache, gameserverID)
 	s.mu.Unlock()
 
 	go s.pollLoop(ctx, gameserverID, *game.GSQGameSlug, hostPort)
@@ -159,7 +160,7 @@ func (s *QueryService) pollLoop(ctx context.Context, gameserverID, gameSlug stri
 
 			if promoted && consecutiveFailures >= queryMaxConsecutiveFails {
 				s.log.Warn("GSQ poll exceeded max consecutive failures, setting error", "id", gameserverID, "failures", queryMaxConsecutiveFails)
-				setGameserverStatus(s.db, s.log, s.broadcaster, gameserverID, StatusError)
+				setGameserverStatus(s.db, s.log, s.broadcaster, gameserverID, StatusError, "Gameserver stopped responding to queries.")
 				return
 			}
 		} else {
@@ -184,7 +185,7 @@ func (s *QueryService) pollLoop(ctx context.Context, gameserverID, gameSlug stri
 
 			if !promoted {
 				s.log.Info("GSQ query succeeded, promoting to running", "id", gameserverID, "players", info.Players, "max", info.MaxPlayers)
-				setGameserverStatus(s.db, s.log, s.broadcaster, gameserverID, StatusRunning)
+				setGameserverStatus(s.db, s.log, s.broadcaster, gameserverID, StatusRunning, "")
 				promoted = true
 			} else if changed {
 				s.log.Debug("GSQ data changed, notifying", "id", gameserverID, "players", info.Players)
@@ -224,8 +225,8 @@ func (s *QueryService) gameSupportsQuery(game *models.Game) bool {
 
 func (s *QueryService) getHostPort(gs *models.Gameserver) uint16 {
 	var ports []struct {
-		Name     string `json:"name"`
-		HostPort int    `json:"host_port"`
+		Name     string  `json:"name"`
+		HostPort flexInt `json:"host_port"`
 	}
 	if err := json.Unmarshal(gs.Ports, &ports); err != nil {
 		return 0

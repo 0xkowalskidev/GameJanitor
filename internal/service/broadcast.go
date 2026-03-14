@@ -9,6 +9,7 @@ type StatusEvent struct {
 	GameserverID string    `json:"gameserver_id"`
 	OldStatus    string    `json:"old_status"`
 	NewStatus    string    `json:"new_status"`
+	ErrorReason  string    `json:"error_reason,omitempty"`
 	Timestamp    time.Time `json:"timestamp"`
 }
 

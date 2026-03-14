@@ -1,8 +1,8 @@
 package handlers
 
 import (
+	"bytes"
 	"encoding/json"
-	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -36,6 +36,7 @@ type gameserverView struct {
 	MaxPlayers    int
 	HasQueryData  bool
 	ShowLogTail   bool
+	ErrorReason   string
 }
 
 func shouldShowLogTail(status string) bool {
@@ -52,6 +53,7 @@ func buildGameserverView(gs *models.Gameserver, game *models.Game, querySvc *ser
 		Name:        gs.Name,
 		GameID:      gs.GameID,
 		Status:      gs.Status,
+		ErrorReason: gs.ErrorReason,
 		GamePort:    firstGamePort(gs.Ports),
 		ShowLogTail: shouldShowLogTail(gs.Status),
 	}
@@ -112,21 +114,24 @@ func (h *PageDashboardHandlers) Dashboard(w http.ResponseWriter, r *http.Request
 }
 
 // firstGamePort extracts the first game port number from a gameserver's port config.
+// Uses json.Number to handle host_port stored as either int or string.
 func firstGamePort(portsJSON json.RawMessage) string {
 	if len(portsJSON) == 0 {
 		return ""
 	}
 	var ports []struct {
-		HostPort int    `json:"host_port"`
-		Name     string `json:"name"`
+		HostPort json.Number `json:"host_port"`
+		Name     string      `json:"name"`
 	}
-	if err := json.Unmarshal(portsJSON, &ports); err != nil || len(ports) == 0 {
+	dec := json.NewDecoder(bytes.NewReader(portsJSON))
+	dec.UseNumber()
+	if err := dec.Decode(&ports); err != nil || len(ports) == 0 {
 		return ""
 	}
 	for _, p := range ports {
 		if p.Name == "game" {
-			return fmt.Sprintf("%d", p.HostPort)
+			return p.HostPort.String()
 		}
 	}
-	return fmt.Sprintf("%d", ports[0].HostPort)
+	return ports[0].HostPort.String()
 }
