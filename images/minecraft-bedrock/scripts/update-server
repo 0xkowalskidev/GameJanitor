@@ -1,0 +1,5 @@
+#!/bin/bash
+set -e
+
+echo "[update-server] re-running install to fetch latest version"
+exec /scripts/install-server

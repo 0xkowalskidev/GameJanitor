@@ -227,12 +227,14 @@ func SeedGames(db *sql.DB) error {
 			heroPath: "/static/games/minecraft-bedrock/minecraft-bedrock-hero.png",
 			defaultPorts: `[{"name":"game","port":19132,"protocol":"udp"}]`,
 			defaultEnv: `[
-				{"key":"EULA","default":"false","label":"Accept Minecraft EULA","type":"boolean","required":true,"notice":"You must agree to the <a href=\"https://aka.ms/MinecraftEULA\" target=\"_blank\" class=\"underline text-accent-400 hover:text-accent-300\">Minecraft EULA</a> to run this server."},
 				{"key":"SERVER_NAME","default":"Gamejanitor Bedrock Server","label":"Server Name"},
 				{"key":"GAMEMODE","default":"survival","label":"Game Mode","type":"select","options":["survival","creative","adventure"]},
 				{"key":"DIFFICULTY","default":"normal","label":"Difficulty","type":"select","options":["peaceful","easy","normal","hard"]},
 				{"key":"MAX_PLAYERS","default":"10","label":"Max Players","type":"number"},
 				{"key":"LEVEL_NAME","default":"Gamejanitor","label":"World Name"},
+				{"key":"ONLINE_MODE","default":"true","label":"Online Mode (Xbox Auth)","type":"boolean"},
+				{"key":"ALLOW_CHEATS","default":"false","label":"Allow Cheats","type":"boolean"},
+				{"key":"VIEW_DISTANCE","default":"32","label":"View Distance","type":"number"},
 				{"key":"SERVER_PORT","default":"19132","system":true},
 				{"key":"SAVE_TIMEOUT_SECONDS","default":"5","system":true}
 			]`,
