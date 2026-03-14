@@ -107,6 +107,7 @@ func (h *PageGameserverHandlers) New(w http.ResponseWriter, r *http.Request) {
 	type gameJSON struct {
 		ID           string          `json:"id"`
 		Name         string          `json:"name"`
+		IconPath     string          `json:"icon_path"`
 		GridPath     string          `json:"grid_path"`
 		DefaultPorts json.RawMessage `json:"default_ports"`
 		DefaultEnv   json.RawMessage `json:"default_env"`
@@ -117,6 +118,7 @@ func (h *PageGameserverHandlers) New(w http.ResponseWriter, r *http.Request) {
 		gamesForJS[i] = gameJSON{
 			ID:                  g.ID,
 			Name:                g.Name,
+			IconPath:            g.IconPath,
 			GridPath:            g.GridPath,
 			DefaultPorts:        g.DefaultPorts,
 			DefaultEnv:          g.DefaultEnv,
