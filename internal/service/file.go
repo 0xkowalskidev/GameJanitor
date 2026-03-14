@@ -219,6 +219,31 @@ func (s *FileService) withContainer(ctx context.Context, gameserverID string, fn
 	return fn(containerID)
 }
 
+func (s *FileService) RenamePath(ctx context.Context, gameserverID string, oldPath string, newPath string) error {
+	oldPath, err := validatePath(oldPath)
+	if err != nil {
+		return err
+	}
+	newPath, err = validatePath(newPath)
+	if err != nil {
+		return err
+	}
+	if oldPath == "/data" || newPath == "/data" {
+		return fmt.Errorf("cannot rename the root data directory")
+	}
+
+	return s.withContainer(ctx, gameserverID, func(containerID string) error {
+		exitCode, _, stderr, execErr := s.docker.Exec(ctx, containerID, []string{"mv", oldPath, newPath})
+		if execErr != nil {
+			return fmt.Errorf("renaming %s to %s: %w", oldPath, newPath, execErr)
+		}
+		if exitCode != 0 {
+			return fmt.Errorf("renaming %s to %s: %s", oldPath, newPath, stderr)
+		}
+		return nil
+	})
+}
+
 // validatePath ensures the path is within /data and contains no traversal.
 func validatePath(p string) (string, error) {
 	cleaned := path.Clean(p)
