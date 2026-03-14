@@ -133,6 +133,103 @@ func (h *PageGameserverHandlers) Create(w http.ResponseWriter, r *http.Request) 
 	http.Redirect(w, r, "/gameservers/"+gs.ID, http.StatusSeeOther)
 }
 
+// gameSetting is a human-readable game setting for display on the detail page.
+type gameSetting struct {
+	Label string
+	Value string
+	Type  string
+}
+
+// portEntry is a parsed port for display on the detail page.
+type portEntry struct {
+	Name          string
+	HostPort      int
+	ContainerPort int
+	Protocol      string
+}
+
+// buildGameSettings merges game default env metadata with the gameserver's actual env values.
+func buildGameSettings(game *models.Game, gs *models.Gameserver) []gameSetting {
+	if game == nil {
+		return nil
+	}
+
+	var defaults []struct {
+		Key     string   `json:"key"`
+		Label   string   `json:"label"`
+		Type    string   `json:"type"`
+		System  bool     `json:"system"`
+		Options []string `json:"options"`
+	}
+	if err := json.Unmarshal(game.DefaultEnv, &defaults); err != nil {
+		return nil
+	}
+
+	var envMap map[string]string
+	if err := json.Unmarshal(gs.Env, &envMap); err != nil {
+		return nil
+	}
+
+	var settings []gameSetting
+	for _, d := range defaults {
+		if d.System || d.Label == "" {
+			continue
+		}
+		val := envMap[d.Key]
+		if val == "" {
+			continue
+		}
+
+		displayVal := val
+		if d.Type == "boolean" {
+			if val == "true" {
+				displayVal = "Enabled"
+			} else {
+				displayVal = "Disabled"
+			}
+		}
+
+		settings = append(settings, gameSetting{
+			Label: d.Label,
+			Value: displayVal,
+			Type:  d.Type,
+		})
+	}
+	return settings
+}
+
+// parsePorts extracts structured port entries from a gameserver's port JSON.
+func parsePorts(portsJSON json.RawMessage) []portEntry {
+	var raw []struct {
+		Name          string `json:"name"`
+		HostPort      int    `json:"host_port"`
+		ContainerPort int    `json:"container_port"`
+		Port          int    `json:"port"`
+		Protocol      string `json:"protocol"`
+	}
+	if err := json.Unmarshal(portsJSON, &raw); err != nil {
+		return nil
+	}
+	entries := make([]portEntry, len(raw))
+	for i, p := range raw {
+		hp := p.HostPort
+		if hp == 0 {
+			hp = p.Port
+		}
+		cp := p.ContainerPort
+		if cp == 0 {
+			cp = p.Port
+		}
+		entries[i] = portEntry{
+			Name:          p.Name,
+			HostPort:      hp,
+			ContainerPort: cp,
+			Protocol:      p.Protocol,
+		}
+	}
+	return entries
+}
+
 func (h *PageGameserverHandlers) Detail(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	gs, err := h.gameserverSvc.GetGameserver(id)
@@ -151,9 +248,12 @@ func (h *PageGameserverHandlers) Detail(w http.ResponseWriter, r *http.Request) 
 		h.log.Error("getting game for gameserver detail", "game_id", gs.GameID, "error", err)
 	}
 	h.renderer.Render(w, r, "gameservers/detail", map[string]any{
-		"Gameserver": gs,
-		"Game":       game,
-		"QueryData":  h.querySvc.GetQueryData(id),
+		"Gameserver":   gs,
+		"Game":         game,
+		"QueryData":    h.querySvc.GetQueryData(id),
+		"GamePort":     firstGamePort(gs.Ports),
+		"GameSettings": buildGameSettings(game, gs),
+		"Ports":        parsePorts(gs.Ports),
 	})
 }
 
