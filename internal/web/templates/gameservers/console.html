@@ -5,25 +5,25 @@
 {{end}}
 
 {{define "gs_content"}}
-<div x-data="consoleApp()" @keydown.window="handleGlobalKeydown($event)" class="max-w-7xl mx-auto px-4 sm:px-6 py-4">
-  {{if not .CanRead}}
+{{if not .CanRead}}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 py-4">
   <div class="rounded-xl bg-surface-850/80 border border-surface-800/60 p-8 text-center">
     <p class="text-surface-400">Console is not available for this game.</p>
   </div>
-  {{else if not .IsRunning}}
-  <div class="rounded-xl bg-surface-850/80 border border-surface-800/60 p-8 text-center">
-    <p class="text-surface-400">Gameserver is not running. Start the gameserver to view the console.</p>
-  </div>
-  {{else}}
+</div>
+{{else}}
+<div x-data="consoleApp()" @keydown.window="handleGlobalKeydown($event)"
+     @gs-status-changed.window="onStatusChanged($event.detail)"
+     class="max-w-7xl mx-auto px-4 sm:px-6 py-4">
   <!-- Console Output -->
   <div class="rounded-xl bg-surface-950 border border-surface-800/60 overflow-hidden relative">
     <!-- Header bar -->
     <div class="flex items-center justify-between px-4 py-2 border-b border-surface-800/60 bg-surface-900/50">
       <div class="flex items-center gap-2">
         <div class="w-2 h-2 rounded-full transition-colors"
-             :class="connected ? 'bg-emerald-500' : reconnecting ? 'bg-amber-500 animate-pulse' : 'bg-red-500'"></div>
+             :class="connected ? 'bg-emerald-500' : !serverRunning ? 'bg-surface-500' : reconnecting ? 'bg-amber-500 animate-pulse' : 'bg-red-500'"></div>
         <span class="text-xs text-surface-400"
-              x-text="connected ? 'Connected' : reconnecting ? 'Reconnecting...' : 'Disconnected'"></span>
+              x-text="connected ? 'Connected' : !serverRunning ? 'Gameserver is stopped' : reconnecting ? 'Reconnecting...' : 'Disconnected'"></span>
       </div>
       <div class="flex items-center gap-3">
         <button @click="toggleSearch()" title="Search (Ctrl+F)"
@@ -82,18 +82,17 @@
              @keydown.down.prevent="historyDown()"
              placeholder="Type a command..."
              autocomplete="off"
-             class="flex-1 bg-transparent border-none outline-none px-2 py-3 font-mono text-sm text-white placeholder-surface-600 focus:ring-0">
-      <button type="submit" :disabled="!command.trim()"
+             :disabled="!connected"
+             class="flex-1 bg-transparent border-none outline-none px-2 py-3 font-mono text-sm text-white placeholder-surface-600 focus:ring-0 disabled:opacity-40">
+      <button type="submit" :disabled="!command.trim() || !connected"
               class="px-4 py-3 text-sm font-medium text-accent-400 hover:text-accent-300 disabled:text-surface-600 disabled:cursor-not-allowed transition-colors">
         Send
       </button>
     </form>
     {{end}}
   </div>
-  {{end}}
 </div>
 
-{{if and .CanRead .IsRunning}}
 <script>
 function consoleApp() {
   const HISTORY_KEY = 'console_history_{{.Gameserver.ID}}';
@@ -104,6 +103,7 @@ function consoleApp() {
     command: '',
     connected: false,
     reconnecting: false,
+    serverRunning: {{if or (eq .Gameserver.Status "running") (eq .Gameserver.Status "started")}}true{{else}}false{{end}},
     autoScroll: true,
     newLinesSincePause: 0,
     eventSource: null,
@@ -130,6 +130,27 @@ function consoleApp() {
 
     init() {
       this.connectStream();
+    },
+
+    onStatusChanged(detail) {
+      if (detail.id !== '{{.Gameserver.ID}}') return;
+      this.serverRunning = detail.status === 'running' || detail.status === 'started';
+      if (this.serverRunning && !this.connected) {
+        if (this.reconnectTimer) {
+          clearTimeout(this.reconnectTimer);
+          this.reconnectTimer = null;
+        }
+        this.reconnectAttempts = 0;
+        this.reconnecting = false;
+        this.connectStream();
+      } else if (!this.serverRunning) {
+        // Stop reconnecting — wait for status event instead
+        if (this.reconnectTimer) {
+          clearTimeout(this.reconnectTimer);
+          this.reconnectTimer = null;
+        }
+        this.reconnecting = false;
+      }
     },
 
     lineClass(line) {
@@ -172,6 +193,7 @@ function consoleApp() {
 
       this.eventSource.onopen = () => {
         this.connected = true;
+        this.hasConnected = true;
         this.reconnecting = false;
         this.reconnectAttempts = 0;
       };
@@ -184,6 +206,7 @@ function consoleApp() {
         this.connected = false;
         this.reconnecting = false;
         this.appendLine('[Stream ended]', 'system');
+        this.scheduleReconnect();
       });
 
       this.eventSource.onerror = () => {
@@ -275,7 +298,7 @@ function consoleApp() {
 
     async sendCommand() {
       const cmd = this.command.trim();
-      if (!cmd) return;
+      if (!cmd || !this.connected) return;
 
       this.pushHistory(cmd);
       this.historyIndex = -1;
