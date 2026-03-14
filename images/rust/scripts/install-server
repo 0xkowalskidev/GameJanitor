@@ -9,3 +9,34 @@ steamcmd.sh \
     +quit
 
 echo "[install-server] Rust dedicated server installed"
+
+OXIDE_ENABLED="${OXIDE_ENABLED:-false}"
+
+if [ "$OXIDE_ENABLED" = "true" ]; then
+    echo "[install-server] fetching latest Oxide.Rust release from GitHub"
+    RELEASE_JSON=$(curl -fsSL "https://api.github.com/repos/OxideMod/Oxide.Rust/releases/latest")
+
+    ASSET_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name == "Oxide.Rust-linux.zip") | .browser_download_url')
+    TAG=$(echo "$RELEASE_JSON" | jq -r '.tag_name')
+
+    if [ -z "$ASSET_URL" ] || [ "$ASSET_URL" = "null" ]; then
+        echo "[install-server] ERROR: could not find Oxide.Rust-linux.zip in latest release"
+        exit 1
+    fi
+
+    echo "[install-server] downloading Oxide.Rust $TAG"
+    curl -fsSL -o /tmp/oxide.zip -L "$ASSET_URL"
+
+    echo "[install-server] extracting Oxide into server directory"
+    unzip -qo /tmp/oxide.zip -d /data/server/
+    rm -f /tmp/oxide.zip
+
+    echo "[install-server] Oxide.Rust $TAG installed"
+else
+    # oxide/ dir is created at runtime, DLLs are from the zip
+    if [ -d "/data/server/oxide" ] || ls /data/server/RustDedicated_Data/Managed/Oxide.*.dll >/dev/null 2>&1; then
+        echo "[install-server] OXIDE_ENABLED=false, removing Oxide files"
+        rm -rf /data/server/oxide
+        rm -f /data/server/RustDedicated_Data/Managed/Oxide.*.dll
+    fi
+fi
