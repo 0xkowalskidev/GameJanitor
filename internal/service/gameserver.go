@@ -182,10 +182,6 @@ func (s *GameserverService) UpdateGameserver(gs *models.Gameserver) error {
 	if existing == nil {
 		return ErrNotFoundf("gameserver %s not found", gs.ID)
 	}
-	if existing.Status != StatusStopped {
-		return ErrConflictf("gameserver %s must be stopped before updating (current status: %s)", gs.ID, existing.Status)
-	}
-
 	s.log.Info("updating gameserver", "id", gs.ID)
 	return models.UpdateGameserver(s.db, gs)
 }

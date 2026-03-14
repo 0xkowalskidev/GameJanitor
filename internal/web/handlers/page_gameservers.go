@@ -88,9 +88,12 @@ func (h *PageGameserverHandlers) New(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.renderer.Render(w, r, "gameservers/new", map[string]any{
+	h.renderer.Render(w, r, "gameservers/form", map[string]any{
+		"Mode":      "new",
 		"Games":     games,
 		"GamesJSON": string(gamesJSONBytes),
+		"PortsJSON": "[]",
+		"EnvJSON":   "{}",
 	})
 }
 
@@ -300,9 +303,33 @@ func (h *PageGameserverHandlers) Edit(w http.ResponseWriter, r *http.Request) {
 		envJSON = string(gs.Env)
 	}
 
-	h.renderer.Render(w, r, "gameservers/edit", map[string]any{
+	// Build single-game array for the shared form template
+	gameForJS := struct {
+		ID           string          `json:"id"`
+		Name         string          `json:"name"`
+		GridPath     string          `json:"grid_path"`
+		DefaultPorts json.RawMessage `json:"default_ports"`
+		DefaultEnv   json.RawMessage `json:"default_env"`
+		MinMemoryMB  int             `json:"min_memory_mb"`
+		MinCPU       float64         `json:"min_cpu"`
+	}{}
+	if game != nil {
+		gameForJS.ID = game.ID
+		gameForJS.Name = game.Name
+		gameForJS.GridPath = game.GridPath
+		gameForJS.DefaultPorts = game.DefaultPorts
+		gameForJS.DefaultEnv = game.DefaultEnv
+		gameForJS.MinMemoryMB = game.MinMemoryMB
+		gameForJS.MinCPU = game.MinCPU
+	}
+	gamesJSONBytes, _ := json.Marshal([]any{gameForJS})
+
+	h.renderer.Render(w, r, "gameservers/form", map[string]any{
+		"Mode":       "edit",
 		"Gameserver": gs,
 		"Game":       game,
+		"Games":      []models.Game{*game},
+		"GamesJSON":  string(gamesJSONBytes),
 		"PortsJSON":  portsJSON,
 		"EnvJSON":    envJSON,
 	})
@@ -358,6 +385,12 @@ func (h *PageGameserverHandlers) Update(w http.ResponseWriter, r *http.Request) 
 		h.log.Error("updating gameserver from web form", "id", id, "error", err)
 		http.Error(w, "Failed to update gameserver: "+err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	if r.FormValue("restart") == "true" && (existing.Status == "running" || existing.Status == "started") {
+		if err := h.gameserverSvc.Restart(r.Context(), id); err != nil {
+			h.log.Error("restarting gameserver after update", "id", id, "error", err)
+		}
 	}
 
 	w.Header().Set("HX-Redirect", "/gameservers/"+id)
