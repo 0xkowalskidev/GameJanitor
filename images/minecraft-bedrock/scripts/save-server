@@ -1,0 +1,8 @@
+#!/bin/bash
+TIMEOUT=${SAVE_TIMEOUT_SECONDS:-5}
+
+echo "[save-server] sending save hold (timeout: ${TIMEOUT}s)"
+/scripts/send-command "save hold"
+sleep "$TIMEOUT"
+/scripts/send-command "save resume"
+echo "[save-server] save complete"

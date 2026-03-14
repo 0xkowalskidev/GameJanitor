@@ -1,0 +1,31 @@
+#!/bin/bash
+set -e
+
+BEDROCK_VERSION="${BEDROCK_VERSION:-latest}"
+DOWNLOAD_API="https://net.web.minecraft-services.net/api/v1.0/download/links"
+CURL_ARGS=(-H "Accept-Encoding: identity" -A "Mozilla/5.0")
+
+if [ "$BEDROCK_VERSION" = "latest" ]; then
+    echo "[install-server] fetching latest Bedrock version from download API"
+    DOWNLOAD_URL=$(curl -fsSL "$DOWNLOAD_API" | jq -r '.result.links[] | select(.downloadType == "serverBedrockLinux") | .downloadUrl')
+
+    if [ -z "$DOWNLOAD_URL" ] || [ "$DOWNLOAD_URL" = "null" ]; then
+        echo "[install-server] ERROR: could not resolve latest Bedrock download URL"
+        exit 1
+    fi
+
+    BEDROCK_VERSION=$(echo "$DOWNLOAD_URL" | grep -oP '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+')
+    echo "[install-server] resolved 'latest' to $BEDROCK_VERSION"
+else
+    DOWNLOAD_URL="https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-${BEDROCK_VERSION}.zip"
+fi
+
+echo "[install-server] downloading Bedrock server $BEDROCK_VERSION from $DOWNLOAD_URL"
+curl -fsSL "${CURL_ARGS[@]}" -o /tmp/bedrock-server.zip "$DOWNLOAD_URL"
+
+echo "[install-server] extracting to /data/server/"
+mkdir -p /data/server
+unzip -o /tmp/bedrock-server.zip -d /data/server/
+rm -f /tmp/bedrock-server.zip
+
+echo "[install-server] Bedrock $BEDROCK_VERSION installed"
