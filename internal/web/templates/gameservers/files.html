@@ -5,7 +5,20 @@
 {{end}}
 
 {{define "gs_content"}}
-<div x-data="fileManager()" x-init="init()" class="max-w-7xl mx-auto px-4 sm:px-6 py-4">
+<div x-data="fileManager()" x-init="init()" class="max-w-7xl mx-auto px-4 sm:px-6 py-4"
+     @dragover.prevent="if (mode === 'browser') dragOver = true"
+     @dragleave.self="dragOver = false"
+     @drop.prevent="handleDrop($event)">
+
+  <!-- Drag & drop overlay -->
+  <div x-show="dragOver" x-cloak
+       class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 backdrop-blur-sm pointer-events-none">
+    <div class="flex flex-col items-center gap-3 p-8 rounded-2xl border-2 border-dashed border-accent-500/60 bg-surface-900/80">
+      <svg class="w-12 h-12 text-accent-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
+      <p class="text-accent-300 font-medium">Drop files to upload</p>
+      <p class="text-xs text-surface-400" x-text="'to ' + currentPath"></p>
+    </div>
+  </div>
 
   <!-- Toolbar -->
   <div class="flex items-center justify-between mb-3 gap-3">
@@ -32,21 +45,31 @@
         <input type="text" x-model="searchFilter" placeholder="Filter..."
                class="w-36 pl-8 pr-3 py-1.5 text-xs rounded-lg bg-surface-900/80 border border-surface-700/50 text-surface-200 placeholder-surface-600 focus:ring-1 focus:ring-accent-500/50 focus:border-accent-500/50 outline-none transition-all focus:w-48">
       </div>
-      <button x-show="mode === 'browser'" @click="showCreateMenu = !showCreateMenu" class="relative inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-accent-600/90 text-white hover:bg-accent-500 transition-colors shadow-sm shadow-accent-600/20">
-        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
-        New
+      <!-- Upload button -->
+      <button x-show="mode === 'browser'" @click="$refs.fileUpload.click()" :disabled="uploading"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-surface-800 text-surface-300 hover:text-white hover:bg-surface-700 transition-colors border border-surface-700/50">
+        <svg x-show="!uploading" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
+        <svg x-show="uploading" x-cloak class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg>
+        Upload
       </button>
-      <!-- Create dropdown -->
-      <div x-show="showCreateMenu" x-cloak @click.outside="showCreateMenu = false"
-           class="absolute right-4 sm:right-6 top-12 z-20 w-48 rounded-xl bg-surface-800 border border-surface-700/60 shadow-2xl overflow-hidden animate-fade-in">
-        <button @click="startCreate('folder')" class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-surface-300 hover:text-white hover:bg-surface-700/60 transition-colors">
-          <svg class="w-4 h-4 text-accent-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10.5v6m3-3H9m4.06-7.19l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"/></svg>
-          New Folder
+      <input type="file" x-ref="fileUpload" multiple class="hidden" @change="uploadFiles($event)">
+      <!-- New button + dropdown wrapper -->
+      <div class="relative" x-show="mode === 'browser'">
+        <button @click="showCreateMenu = !showCreateMenu" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-accent-600/90 text-white hover:bg-accent-500 transition-colors shadow-sm shadow-accent-600/20">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+          New
         </button>
-        <button @click="startCreate('file')" class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-surface-300 hover:text-white hover:bg-surface-700/60 transition-colors">
-          <svg class="w-4 h-4 text-surface-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m3.75 9v6m3-3H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>
-          New File
-        </button>
+        <div x-show="showCreateMenu" x-cloak @click.outside="showCreateMenu = false"
+             class="absolute right-0 top-full mt-2 z-20 w-48 rounded-xl bg-surface-800 border border-surface-700/60 shadow-2xl overflow-hidden animate-fade-in">
+          <button @click="startCreate('folder')" class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-surface-300 hover:text-white hover:bg-surface-700/60 transition-colors">
+            <svg class="w-4 h-4 text-accent-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10.5v6m3-3H9m4.06-7.19l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"/></svg>
+            New Folder
+          </button>
+          <button @click="startCreate('file')" class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-surface-300 hover:text-white hover:bg-surface-700/60 transition-colors">
+            <svg class="w-4 h-4 text-surface-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m3.75 9v6m3-3H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>
+            New File
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -119,21 +142,44 @@
           <template x-for="entry in filteredEntries" :key="entry.Name">
             <tr class="border-b border-surface-800/20 hover:bg-surface-800/30 transition-colors group"
                 :class="entry.IsDir ? 'cursor-pointer' : ''">
-              <td class="px-4 py-2" @click="entry.IsDir ? navigateTo(currentPath + '/' + entry.Name) : openFile(currentPath + '/' + entry.Name)">
+              <td class="px-4 py-2" @click="renameTarget !== entry.Name && (entry.IsDir ? navigateTo(currentPath + '/' + entry.Name) : openFile(currentPath + '/' + entry.Name))">
                 <div class="flex items-center gap-2.5 cursor-pointer">
-                  <!-- Icon -->
                   <div class="w-[18px] h-[18px] shrink-0 flex items-center justify-center" x-html="fileIcon(entry)"></div>
-                  <span class="text-surface-200 group-hover:text-white transition-colors truncate" x-text="entry.Name"></span>
+                  <!-- Normal name display -->
+                  <span x-show="renameTarget !== entry.Name" class="text-surface-200 group-hover:text-white transition-colors truncate" x-text="entry.Name"></span>
+                  <!-- Inline rename input -->
+                  <input x-show="renameTarget === entry.Name" x-cloak
+                         x-model="renameName" x-ref="renameInput"
+                         @click.stop
+                         @keydown.enter.stop="doRename(entry)"
+                         @keydown.escape.stop="cancelRename()"
+                         @blur="doRename(entry)"
+                         class="flex-1 bg-surface-800 text-sm text-white px-2 py-0.5 rounded border border-accent-500/50 outline-none focus:ring-1 focus:ring-accent-500/50">
                 </div>
               </td>
               <td class="text-right px-4 py-2 text-surface-500 tabular-nums text-xs" x-text="entry.IsDir ? '—' : formatSize(entry.Size)"></td>
               <td class="px-4 py-2 text-surface-600 text-xs hidden sm:table-cell" x-text="entry.ModTime"></td>
               <td class="px-2 py-2">
-                <button @click.stop="confirmDelete(entry)"
-                        class="p-1.5 rounded-md text-surface-700 hover:text-red-400 hover:bg-red-400/10 transition-colors opacity-0 group-hover:opacity-100"
-                        title="Delete">
-                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                </button>
+                <div class="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-colors">
+                  <!-- Download (files only) -->
+                  <button x-show="!entry.IsDir" @click.stop="downloadFile(entry)"
+                          class="p-1.5 rounded-md text-surface-700 hover:text-accent-400 hover:bg-accent-400/10 transition-colors"
+                          title="Download">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
+                  </button>
+                  <!-- Rename -->
+                  <button @click.stop="startRename(entry)"
+                          class="p-1.5 rounded-md text-surface-700 hover:text-surface-300 hover:bg-surface-700/50 transition-colors"
+                          title="Rename">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487z"/></svg>
+                  </button>
+                  <!-- Delete -->
+                  <button @click.stop="confirmDelete(entry)"
+                          class="p-1.5 rounded-md text-surface-700 hover:text-red-400 hover:bg-red-400/10 transition-colors"
+                          title="Delete">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                  </button>
+                </div>
               </td>
             </tr>
           </template>
@@ -282,6 +328,10 @@ function fileManager() {
     fileTooLarge: false,
     fileBinary: false,
     editorView: null,
+    uploading: false,
+    dragOver: false,
+    renameTarget: null,
+    renameName: '',
 
     get filteredEntries() {
       if (!this.searchFilter) return this.entries || [];
@@ -404,6 +454,59 @@ function fileManager() {
       if (!resp.ok) { this.error = await resp.text(); }
       this.deleteTarget = null; this.navigateTo(this.currentPath);
     },
+
+    async uploadFiles(event) {
+      const files = event.target?.files || event.dataTransfer?.files;
+      if (!files || files.length === 0) return;
+      this.uploading = true; this.dragOver = false; this.error = '';
+      const formData = new FormData();
+      for (const f of files) formData.append('files', f);
+      try {
+        const resp = await fetch('/gameservers/' + gsID + '/files/upload?path=' + encodeURIComponent(this.currentPath), { method: 'POST', headers: {'X-CSRF-Token': _csrfToken}, body: formData });
+        if (!resp.ok) { this.error = await resp.text(); }
+        else { this.navigateTo(this.currentPath); }
+      } catch (e) { this.error = 'Upload failed: ' + e.message; }
+      this.uploading = false;
+      if (this.$refs.fileUpload) this.$refs.fileUpload.value = '';
+    },
+
+    handleDrop(event) {
+      this.dragOver = false;
+      if (this.mode !== 'browser') return;
+      this.uploadFiles(event);
+    },
+
+    downloadFile(entry) {
+      window.location.href = '/gameservers/' + gsID + '/files/download?path=' + encodeURIComponent(this.currentPath + '/' + entry.Name);
+    },
+
+    startRename(entry) {
+      this.renameTarget = entry.Name;
+      this.renameName = entry.Name;
+      this.$nextTick(() => {
+        const input = this.$refs.renameInput;
+        if (input) {
+          input.focus();
+          const dotIdx = entry.Name.lastIndexOf('.');
+          input.setSelectionRange(0, dotIdx > 0 && !entry.IsDir ? dotIdx : entry.Name.length);
+        }
+      });
+    },
+
+    async doRename(entry) {
+      const newName = this.renameName.trim();
+      if (!newName || newName === entry.Name) { this.cancelRename(); return; }
+      const fromPath = this.currentPath + '/' + entry.Name;
+      const toPath = this.currentPath + '/' + newName;
+      try {
+        const resp = await fetch('/gameservers/' + gsID + '/files/rename?from=' + encodeURIComponent(fromPath) + '&to=' + encodeURIComponent(toPath), { method: 'POST', headers: {'X-CSRF-Token': _csrfToken} });
+        if (!resp.ok) { this.error = await resp.text(); }
+        else { this.navigateTo(this.currentPath); }
+      } catch (e) { this.error = 'Rename failed: ' + e.message; }
+      this.cancelRename();
+    },
+
+    cancelRename() { this.renameTarget = null; this.renameName = ''; },
 
     formatSize(bytes) {
       if (bytes === 0) return '0 B';
