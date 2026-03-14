@@ -30,6 +30,7 @@ func NewRenderer() (*Renderer, error) {
 		"formatBytes": formatBytes,
 		"queryJSON":   queryJSON,
 		"multiply":    func(a, b int) int { return a * b },
+		"gamePort":    func(portsJSON json.RawMessage) string { return firstGamePort(portsJSON) },
 	}
 
 	// Parse partials and layout as the base template set
