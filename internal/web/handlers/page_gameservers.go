@@ -109,19 +109,17 @@ func (h *PageGameserverHandlers) New(w http.ResponseWriter, r *http.Request) {
 		GridPath     string          `json:"grid_path"`
 		DefaultPorts json.RawMessage `json:"default_ports"`
 		DefaultEnv   json.RawMessage `json:"default_env"`
-		MinMemoryMB  int             `json:"min_memory_mb"`
-		MinCPU       float64         `json:"min_cpu"`
+		RecommendedMemoryMB int             `json:"recommended_memory_mb"`
 	}
 	gamesForJS := make([]gameJSON, len(games))
 	for i, g := range games {
 		gamesForJS[i] = gameJSON{
-			ID:           g.ID,
-			Name:         g.Name,
-			GridPath:     g.GridPath,
-			DefaultPorts: g.DefaultPorts,
-			DefaultEnv:   g.DefaultEnv,
-			MinMemoryMB:  g.MinMemoryMB,
-			MinCPU:       g.MinCPU,
+			ID:                  g.ID,
+			Name:                g.Name,
+			GridPath:            g.GridPath,
+			DefaultPorts:        g.DefaultPorts,
+			DefaultEnv:          g.DefaultEnv,
+			RecommendedMemoryMB: g.RecommendedMemoryMB,
 		}
 	}
 	gamesJSONBytes, err := json.Marshal(gamesForJS)
@@ -356,8 +354,7 @@ func (h *PageGameserverHandlers) Edit(w http.ResponseWriter, r *http.Request) {
 		GridPath     string          `json:"grid_path"`
 		DefaultPorts json.RawMessage `json:"default_ports"`
 		DefaultEnv   json.RawMessage `json:"default_env"`
-		MinMemoryMB  int             `json:"min_memory_mb"`
-		MinCPU       float64         `json:"min_cpu"`
+		RecommendedMemoryMB int             `json:"recommended_memory_mb"`
 	}{}
 	if game != nil {
 		gameForJS.ID = game.ID
@@ -365,8 +362,7 @@ func (h *PageGameserverHandlers) Edit(w http.ResponseWriter, r *http.Request) {
 		gameForJS.GridPath = game.GridPath
 		gameForJS.DefaultPorts = game.DefaultPorts
 		gameForJS.DefaultEnv = game.DefaultEnv
-		gameForJS.MinMemoryMB = game.MinMemoryMB
-		gameForJS.MinCPU = game.MinCPU
+		gameForJS.RecommendedMemoryMB = game.RecommendedMemoryMB
 	}
 	gamesJSONBytes, _ := json.Marshal([]any{gameForJS})
 

@@ -189,13 +189,9 @@ func (h *PageGameHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PageGameHandlers) parseGameForm(r *http.Request, id string) (*models.Game, error) {
-	minMemoryMB, err := strconv.Atoi(r.FormValue("min_memory_mb"))
-	if err != nil && r.FormValue("min_memory_mb") != "" {
-		return nil, fmt.Errorf("invalid min_memory_mb: %w", err)
-	}
-	minCPU, err := strconv.ParseFloat(r.FormValue("min_cpu"), 64)
-	if err != nil && r.FormValue("min_cpu") != "" {
-		return nil, fmt.Errorf("invalid min_cpu: %w", err)
+	recommendedMemoryMB, err := strconv.Atoi(r.FormValue("recommended_memory_mb"))
+	if err != nil && r.FormValue("recommended_memory_mb") != "" {
+		return nil, fmt.Errorf("invalid recommended_memory_mb: %w", err)
 	}
 
 	defaultPorts := validateJSONOrDefault(r.FormValue("default_ports_json"), "[]")
@@ -216,8 +212,7 @@ func (h *PageGameHandlers) parseGameForm(r *http.Request, id string) (*models.Ga
 		HeroPath:             r.FormValue("hero_path"),
 		DefaultPorts:         defaultPorts,
 		DefaultEnv:           defaultEnv,
-		MinMemoryMB:          minMemoryMB,
-		MinCPU:               minCPU,
+		RecommendedMemoryMB:  recommendedMemoryMB,
 		GSQGameSlug:          gsqSlug,
 		DisabledCapabilities: disabledCaps,
 	}, nil

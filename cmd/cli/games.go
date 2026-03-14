@@ -61,21 +61,19 @@ var gamesGetCmd = &cobra.Command{
 		}
 
 		var game struct {
-			ID          string  `json:"id"`
-			Name        string  `json:"name"`
-			Image       string  `json:"image"`
-			MinMemoryMB int     `json:"min_memory_mb"`
-			MinCPU      float64 `json:"min_cpu"`
+			ID                  string `json:"id"`
+			Name                string `json:"name"`
+			Image               string `json:"image"`
+			RecommendedMemoryMB int    `json:"recommended_memory_mb"`
 		}
 		if err := json.Unmarshal(resp.Data, &game); err != nil {
 			return fmt.Errorf("parsing response: %w", err)
 		}
 
-		fmt.Printf("ID:         %s\n", game.ID)
-		fmt.Printf("Name:       %s\n", game.Name)
-		fmt.Printf("Image:      %s\n", game.Image)
-		fmt.Printf("Min Memory: %d MB\n", game.MinMemoryMB)
-		fmt.Printf("Min CPU:    %.1f\n", game.MinCPU)
+		fmt.Printf("ID:                  %s\n", game.ID)
+		fmt.Printf("Name:                %s\n", game.Name)
+		fmt.Printf("Image:               %s\n", game.Image)
+		fmt.Printf("Recommended Memory:  %d MB\n", game.RecommendedMemoryMB)
 		return nil
 	},
 }
@@ -89,19 +87,17 @@ var gamesCreateCmd = &cobra.Command{
 		image, _ := cmd.Flags().GetString("image")
 		defaultPorts, _ := cmd.Flags().GetString("default-ports")
 		defaultEnv, _ := cmd.Flags().GetString("default-env")
-		minMemory, _ := cmd.Flags().GetInt("min-memory")
-		minCPU, _ := cmd.Flags().GetFloat64("min-cpu")
+		recommendedMemory, _ := cmd.Flags().GetInt("recommended-memory")
 
 		if id == "" || name == "" || image == "" {
 			return exitError(fmt.Errorf("--id, --name, and --image are required"))
 		}
 
 		body := map[string]any{
-			"id":            id,
-			"name":          name,
-			"image":         image,
-			"min_memory_mb": minMemory,
-			"min_cpu":       minCPU,
+			"id":                     id,
+			"name":                   name,
+			"image":                  image,
+			"recommended_memory_mb":  recommendedMemory,
 		}
 		if defaultPorts != "" {
 			body["default_ports"] = json.RawMessage(defaultPorts)
@@ -140,13 +136,9 @@ var gamesUpdateCmd = &cobra.Command{
 			v, _ := cmd.Flags().GetString("image")
 			body["image"] = v
 		}
-		if cmd.Flags().Changed("min-memory") {
-			v, _ := cmd.Flags().GetInt("min-memory")
-			body["min_memory_mb"] = v
-		}
-		if cmd.Flags().Changed("min-cpu") {
-			v, _ := cmd.Flags().GetFloat64("min-cpu")
-			body["min_cpu"] = v
+		if cmd.Flags().Changed("recommended-memory") {
+			v, _ := cmd.Flags().GetInt("recommended-memory")
+			body["recommended_memory_mb"] = v
 		}
 
 		resp, err := apiPut("/api/games/"+args[0], body)
@@ -190,13 +182,11 @@ func init() {
 	gamesCreateCmd.Flags().String("image", "", "Docker image")
 	gamesCreateCmd.Flags().String("default-ports", "", "Default ports JSON")
 	gamesCreateCmd.Flags().String("default-env", "", "Default env JSON")
-	gamesCreateCmd.Flags().Int("min-memory", 0, "Minimum memory (MB)")
-	gamesCreateCmd.Flags().Float64("min-cpu", 0, "Minimum CPU cores")
+	gamesCreateCmd.Flags().Int("recommended-memory", 0, "Recommended memory (MB)")
 
 	gamesUpdateCmd.Flags().String("name", "", "Display name")
 	gamesUpdateCmd.Flags().String("image", "", "Docker image")
-	gamesUpdateCmd.Flags().Int("min-memory", 0, "Minimum memory (MB)")
-	gamesUpdateCmd.Flags().Float64("min-cpu", 0, "Minimum CPU cores")
+	gamesUpdateCmd.Flags().Int("recommended-memory", 0, "Recommended memory (MB)")
 
 	gamesCmd.AddCommand(gamesListCmd, gamesGetCmd, gamesCreateCmd, gamesUpdateCmd, gamesDeleteCmd)
 }
