@@ -71,15 +71,22 @@
         </div>
       </div>
       <!-- Stats bar: connect address, players, resources -->
+      {{- $connectIP := .ConnectionAddress -}}
+      {{- if not $connectIP -}}{{- $connectIP = "127.0.0.1" -}}{{- end -}}
       <div class="flex items-center gap-4 text-xs flex-wrap" x-data="{ addressCopied: false }">
         {{if $port}}
-        <button @click="navigator.clipboard.writeText('localhost:{{$port}}'); addressCopied = true; setTimeout(() => addressCopied = false, 1500)"
+        <button @click="navigator.clipboard.writeText('{{$connectIP}}:{{$port}}'); addressCopied = true; setTimeout(() => addressCopied = false, 1500)"
                 class="flex items-center gap-1.5 font-mono text-surface-200 hover:text-white transition-colors cursor-pointer"
                 :class="status !== 'running' && 'opacity-40 pointer-events-none'" title="Copy to clipboard">
           <svg x-show="!addressCopied" class="w-3.5 h-3.5 text-surface-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244"/></svg>
           <svg x-show="addressCopied" x-cloak class="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
-          <span x-text="addressCopied ? 'Copied!' : 'localhost:{{$port}}'" :class="addressCopied && 'text-emerald-400'"></span>
+          <span x-text="addressCopied ? 'Copied!' : '{{$connectIP}}:{{$port}}'" :class="addressCopied && 'text-emerald-400'"></span>
         </button>
+        {{if not .ConnectionAddressConfigured}}
+        <span class="text-amber-400/80" title="Connection address not configured — using localhost">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>
+        </span>
+        {{end}}
         <span class="text-surface-700">·</span>
         {{end}}
         <template x-if="query">

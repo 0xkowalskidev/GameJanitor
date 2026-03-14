@@ -17,12 +17,13 @@ type PageGameserverHandlers struct {
 	gameSvc       *service.GameService
 	gameserverSvc *service.GameserverService
 	querySvc      *service.QueryService
+	settingsSvc   *service.SettingsService
 	renderer      *Renderer
 	log           *slog.Logger
 }
 
-func NewPageGameserverHandlers(gameSvc *service.GameService, gameserverSvc *service.GameserverService, querySvc *service.QueryService, renderer *Renderer, log *slog.Logger) *PageGameserverHandlers {
-	return &PageGameserverHandlers{gameSvc: gameSvc, gameserverSvc: gameserverSvc, querySvc: querySvc, renderer: renderer, log: log}
+func NewPageGameserverHandlers(gameSvc *service.GameService, gameserverSvc *service.GameserverService, querySvc *service.QueryService, settingsSvc *service.SettingsService, renderer *Renderer, log *slog.Logger) *PageGameserverHandlers {
+	return &PageGameserverHandlers{gameSvc: gameSvc, gameserverSvc: gameserverSvc, querySvc: querySvc, settingsSvc: settingsSvc, renderer: renderer, log: log}
 }
 
 type gameserverFormData struct {
@@ -460,7 +461,12 @@ func (h *PageGameserverHandlers) Card(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.log.Error("getting game for card", "game_id", gs.GameID, "error", err)
 	}
-	view := buildGameserverView(gs, game, h.querySvc)
+	connectIP := h.settingsSvc.GetConnectionAddress()
+	connectionConfigured := connectIP != ""
+	if connectIP == "" {
+		connectIP = "127.0.0.1"
+	}
+	view := buildGameserverView(gs, game, h.querySvc, connectIP, connectionConfigured)
 
 	w.Header().Set("HX-Push-Url", "false")
 	h.renderer.RenderPartial(w, "dashboard", "gameserver_card", view)

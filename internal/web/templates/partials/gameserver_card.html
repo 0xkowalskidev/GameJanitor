@@ -47,13 +47,18 @@
         <span class="tabular-nums">{{.PlayersOnline}}<span class="text-surface-500">/{{.MaxPlayers}}</span></span>
       </div>
       {{end}}
-      {{if .GamePort}}
-      <button x-data="{ copied: false }" @click.stop="navigator.clipboard.writeText('localhost:{{.GamePort}}'); copied = true; setTimeout(() => copied = false, 1500)"
+      {{if .ConnectAddress}}
+      <button x-data="{ copied: false }" @click.stop="navigator.clipboard.writeText('{{.ConnectAddress}}'); copied = true; setTimeout(() => copied = false, 1500)"
               class="flex items-center gap-1.5 text-xs text-surface-400 font-mono hover:text-white transition-colors cursor-pointer" title="Copy to clipboard">
         <svg x-show="!copied" class="w-3.5 h-3.5 text-surface-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244"/></svg>
         <svg x-show="copied" x-cloak class="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
-        <span x-text="copied ? 'Copied!' : 'localhost:{{.GamePort}}'" :class="copied ? 'text-emerald-400' : ''"></span>
+        <span x-text="copied ? 'Copied!' : '{{.ConnectAddress}}'" :class="copied ? 'text-emerald-400' : ''"></span>
       </button>
+      {{if not .ConnectionAddressConfigured}}
+      <a href="/gameservers/{{.ID}}" @click.stop class="text-amber-400/80 hover:text-amber-300 transition-colors" title="Connection address not configured — click to set up">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>
+      </a>
+      {{end}}
       {{end}}
     </div>
 

@@ -14,29 +14,32 @@ type PageDashboardHandlers struct {
 	gameSvc       *service.GameService
 	gameserverSvc *service.GameserverService
 	querySvc      *service.QueryService
+	settingsSvc   *service.SettingsService
 	renderer      *Renderer
 	log           *slog.Logger
 }
 
-func NewPageDashboardHandlers(gameSvc *service.GameService, gameserverSvc *service.GameserverService, querySvc *service.QueryService, renderer *Renderer, log *slog.Logger) *PageDashboardHandlers {
-	return &PageDashboardHandlers{gameSvc: gameSvc, gameserverSvc: gameserverSvc, querySvc: querySvc, renderer: renderer, log: log}
+func NewPageDashboardHandlers(gameSvc *service.GameService, gameserverSvc *service.GameserverService, querySvc *service.QueryService, settingsSvc *service.SettingsService, renderer *Renderer, log *slog.Logger) *PageDashboardHandlers {
+	return &PageDashboardHandlers{gameSvc: gameSvc, gameserverSvc: gameserverSvc, querySvc: querySvc, settingsSvc: settingsSvc, renderer: renderer, log: log}
 }
 
 type gameserverView struct {
-	ID            string
-	Name          string
-	GameID        string
-	GameName      string
-	GridPath      string
-	HeroPath      string
-	IconPath      string
-	GamePort      string
-	Status        string
-	PlayersOnline int
-	MaxPlayers    int
-	HasQueryData  bool
-	ShowLogTail   bool
-	ErrorReason   string
+	ID                         string
+	Name                       string
+	GameID                     string
+	GameName                   string
+	GridPath                   string
+	HeroPath                   string
+	IconPath                   string
+	GamePort                   string
+	ConnectAddress             string
+	ConnectionAddressConfigured bool
+	Status                     string
+	PlayersOnline              int
+	MaxPlayers                 int
+	HasQueryData               bool
+	ShowLogTail                bool
+	ErrorReason                string
 }
 
 func shouldShowLogTail(status string) bool {
@@ -47,15 +50,23 @@ func shouldShowLogTail(status string) bool {
 	return false
 }
 
-func buildGameserverView(gs *models.Gameserver, game *models.Game, querySvc *service.QueryService) gameserverView {
+func buildGameserverView(gs *models.Gameserver, game *models.Game, querySvc *service.QueryService, connectIP string, connectionConfigured bool) gameserverView {
+	port := firstGamePort(gs.Ports)
+	connectAddr := ""
+	if port != "" && connectIP != "" {
+		connectAddr = connectIP + ":" + port
+	}
+
 	v := gameserverView{
-		ID:          gs.ID,
-		Name:        gs.Name,
-		GameID:      gs.GameID,
-		Status:      gs.Status,
-		ErrorReason: gs.ErrorReason,
-		GamePort:    firstGamePort(gs.Ports),
-		ShowLogTail: shouldShowLogTail(gs.Status),
+		ID:                          gs.ID,
+		Name:                        gs.Name,
+		GameID:                      gs.GameID,
+		Status:                      gs.Status,
+		ErrorReason:                 gs.ErrorReason,
+		GamePort:                    port,
+		ConnectAddress:              connectAddr,
+		ConnectionAddressConfigured: connectionConfigured,
+		ShowLogTail:                 shouldShowLogTail(gs.Status),
 	}
 	if game != nil {
 		v.GameName = game.Name
@@ -91,10 +102,16 @@ func (h *PageDashboardHandlers) Dashboard(w http.ResponseWriter, r *http.Request
 		gameLookup[g.ID] = g
 	}
 
+	connectIP := h.settingsSvc.GetConnectionAddress()
+	connectionConfigured := connectIP != ""
+	if connectIP == "" {
+		connectIP = "127.0.0.1"
+	}
+
 	var activeViews, stoppedViews []gameserverView
 	for _, gs := range gameservers {
 		game := gameLookup[gs.GameID]
-		v := buildGameserverView(&gs, &game, h.querySvc)
+		v := buildGameserverView(&gs, &game, h.querySvc, connectIP, connectionConfigured)
 		if gs.Status == "stopped" {
 			stoppedViews = append(stoppedViews, v)
 		} else {
