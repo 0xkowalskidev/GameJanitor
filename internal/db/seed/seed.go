@@ -16,8 +16,7 @@ func SeedGames(db *sql.DB) error {
 		heroPath             string
 		defaultPorts         string
 		defaultEnv           string
-		minMemoryMB          int
-		minCPU               float64
+		recommendedMemoryMB  int
 		gsqGameSlug          string
 		disabledCapabilities string
 	}{
@@ -39,8 +38,7 @@ func SeedGames(db *sql.DB) error {
 				{"key":"SERVER_PORT","default":"25565","system":true},
 				{"key":"SAVE_TIMEOUT_SECONDS","default":"5","system":true}
 			]`,
-			minMemoryMB:          2048,
-			minCPU:               1.0,
+			recommendedMemoryMB:          2048,
 			gsqGameSlug:          "minecraft",
 			disabledCapabilities: `[]`,
 		},
@@ -62,8 +60,7 @@ func SeedGames(db *sql.DB) error {
 				{"key":"RCON_PORT","default":"28016","system":true},
 				{"key":"SAVE_TIMEOUT_SECONDS","default":"15","system":true}
 			]`,
-			minMemoryMB:          4096,
-			minCPU:               2.0,
+			recommendedMemoryMB:          6144,
 			gsqGameSlug:          "rust",
 			disabledCapabilities: `[]`,
 		},
@@ -86,8 +83,7 @@ func SeedGames(db *sql.DB) error {
 				{"key":"RCON_PORT","default":"27020","system":true},
 				{"key":"SAVE_TIMEOUT_SECONDS","default":"30","system":true}
 			]`,
-			minMemoryMB:          6144,
-			minCPU:               2.0,
+			recommendedMemoryMB:          8192,
 			gsqGameSlug:          "ark-survival-evolved",
 			disabledCapabilities: `[]`,
 		},
@@ -110,8 +106,7 @@ func SeedGames(db *sql.DB) error {
 				{"key":"GAME_PORT","default":"27015","system":true},
 				{"key":"SAVE_TIMEOUT_SECONDS","default":"5","system":true}
 			]`,
-			minMemoryMB:          2048,
-			minCPU:               2.0,
+			recommendedMemoryMB:          1024,
 			gsqGameSlug:          "cs2",
 			disabledCapabilities: `[]`,
 		},
@@ -133,8 +128,7 @@ func SeedGames(db *sql.DB) error {
 				{"key":"RCON_PORT","default":"27015","system":true},
 				{"key":"SAVE_TIMEOUT_SECONDS","default":"5","system":true}
 			]`,
-			minMemoryMB:          2048,
-			minCPU:               1.0,
+			recommendedMemoryMB:          1024,
 			gsqGameSlug:          "garrys-mod",
 			disabledCapabilities: `[]`,
 		},
@@ -156,8 +150,7 @@ func SeedGames(db *sql.DB) error {
 				{"key":"RCON_PORT","default":"25575","system":true},
 				{"key":"SAVE_TIMEOUT_SECONDS","default":"15","system":true}
 			]`,
-			minMemoryMB:          4096,
-			minCPU:               2.0,
+			recommendedMemoryMB:          8192,
 			gsqGameSlug:          "",
 			disabledCapabilities: `["query"]`,
 		},
@@ -178,8 +171,7 @@ func SeedGames(db *sql.DB) error {
 				{"key":"GAME_PORT","default":"7777","system":true},
 				{"key":"SAVE_TIMEOUT_SECONDS","default":"5","system":true}
 			]`,
-			minMemoryMB:          1024,
-			minCPU:               1.0,
+			recommendedMemoryMB:          1024,
 			gsqGameSlug:          "terraria",
 			disabledCapabilities: `["query"]`,
 		},
@@ -199,8 +191,7 @@ func SeedGames(db *sql.DB) error {
 				{"key":"QUERY_PORT","default":"2457","system":true},
 				{"key":"SAVE_TIMEOUT_SECONDS","default":"15","system":true}
 			]`,
-			minMemoryMB:          4096,
-			minCPU:               2.0,
+			recommendedMemoryMB:          2048,
 			gsqGameSlug:          "valheim",
 			disabledCapabilities: `["command"]`,
 		},
@@ -219,8 +210,7 @@ func SeedGames(db *sql.DB) error {
 				{"key":"RELIABLE_PORT","default":"8888","system":true},
 				{"key":"SAVE_TIMEOUT_SECONDS","default":"15","system":true}
 			]`,
-			minMemoryMB:          8192,
-			minCPU:               2.0,
+			recommendedMemoryMB:          8192,
 			gsqGameSlug:          "",
 			disabledCapabilities: `["query","command","save"]`,
 		},
@@ -228,8 +218,8 @@ func SeedGames(db *sql.DB) error {
 
 	for _, g := range games {
 		result, err := db.Exec(
-			`INSERT OR IGNORE INTO games (id, name, image, icon_path, grid_path, hero_path, default_ports, default_env, min_memory_mb, min_cpu, gsq_game_slug, disabled_capabilities) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			g.id, g.name, g.image, g.iconPath, g.gridPath, g.heroPath, g.defaultPorts, g.defaultEnv, g.minMemoryMB, g.minCPU, g.gsqGameSlug, g.disabledCapabilities,
+			`INSERT OR IGNORE INTO games (id, name, image, icon_path, grid_path, hero_path, default_ports, default_env, recommended_memory_mb, gsq_game_slug, disabled_capabilities) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			g.id, g.name, g.image, g.iconPath, g.gridPath, g.heroPath, g.defaultPorts, g.defaultEnv, g.recommendedMemoryMB, g.gsqGameSlug, g.disabledCapabilities,
 		)
 		if err != nil {
 			return fmt.Errorf("seeding game %s: %w", g.id, err)

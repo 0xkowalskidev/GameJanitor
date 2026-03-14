@@ -79,10 +79,7 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gam
 // applyGameDefaults fills in zero/empty gameserver fields from the game definition.
 func applyGameDefaults(gs *models.Gameserver, game *models.Game) error {
 	if gs.MemoryLimitMB == 0 {
-		gs.MemoryLimitMB = game.MinMemoryMB
-	}
-	if gs.CPULimit == 0 {
-		gs.CPULimit = game.MinCPU
+		gs.MemoryLimitMB = game.RecommendedMemoryMB
 	}
 
 	// Apply default ports if none provided
