@@ -37,8 +37,8 @@
     {{if eq .Mode "edit"}}
     <!-- Locked game preview -->
     <div class="flex items-center gap-3 mb-6 p-3 rounded-xl bg-surface-850/80 border border-surface-800/60">
-      {{if and .Game .Game.GridPath}}
-      <img src="{{.Game.GridPath}}" class="w-12 h-16 rounded-lg object-cover" alt="{{.Game.Name}}">
+      {{if and .Game .Game.IconPath}}
+      <img src="{{.Game.IconPath}}" class="w-11 h-11 rounded-lg object-cover" alt="{{.Game.Name}}">
       {{end}}
       <div class="flex-1 min-w-0">
         <p class="font-display font-semibold text-white text-sm">{{if .Game}}{{.Game.Name}}{{else}}{{.Gameserver.GameID}}{{end}}</p>
@@ -73,8 +73,8 @@
       {{if ne .Mode "edit"}}
       <!-- Selected game preview (new mode only) -->
       <div class="flex items-center gap-3 mb-6 p-3 rounded-xl bg-surface-850/80 border border-surface-800/60">
-        <template x-if="selectedGameData && selectedGameData.grid_path">
-          <img :src="selectedGameData.grid_path" class="w-12 h-16 rounded-lg object-cover" :alt="selectedGameData.name">
+        <template x-if="selectedGameData && selectedGameData.icon_path">
+          <img :src="selectedGameData.icon_path" class="w-11 h-11 rounded-lg object-cover" :alt="selectedGameData.name">
         </template>
         <div class="flex-1 min-w-0">
           <p class="font-display font-semibold text-white text-sm" x-text="selectedGameData ? selectedGameData.name : ''"></p>
