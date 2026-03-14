@@ -84,7 +84,7 @@ func (m *StatusManager) RecoverOnStartup(ctx context.Context) error {
 func (m *StatusManager) recoverGameserver(ctx context.Context, gs *models.Gameserver) {
 	if gs.ContainerID == nil {
 		m.log.Info("gameserver has no container, setting stopped", "id", gs.ID, "was_status", gs.Status)
-		setGameserverStatus(m.db, m.log, m.broadcaster, gs.ID, StatusStopped)
+		setGameserverStatus(m.db, m.log, m.broadcaster, gs.ID, StatusStopped, "")
 		return
 	}
 
@@ -98,14 +98,14 @@ func (m *StatusManager) recoverGameserver(ctx context.Context, gs *models.Gamese
 	switch info.State {
 	case "running":
 		m.log.Info("container is running, setting started and starting GSQ poll", "id", gs.ID)
-		setGameserverStatus(m.db, m.log, m.broadcaster, gs.ID, StatusStarted)
+		setGameserverStatus(m.db, m.log, m.broadcaster, gs.ID, StatusStarted, "")
 		m.querySvc.StartPolling(gs.ID)
 	case "exited", "dead", "created":
 		m.log.Info("container is not running, setting stopped", "id", gs.ID, "state", info.State)
 		m.clearContainerAndSetStatus(gs, StatusStopped)
 	default:
 		m.log.Warn("container in unexpected state, setting error", "id", gs.ID, "state", info.State)
-		setGameserverStatus(m.db, m.log, m.broadcaster, gs.ID, StatusError)
+		setGameserverStatus(m.db, m.log, m.broadcaster, gs.ID, StatusError, "Container found in unexpected state.")
 	}
 }
 
@@ -115,6 +115,7 @@ func (m *StatusManager) clearContainerAndSetStatus(gs *models.Gameserver, newSta
 	oldStatus := gs.Status
 	gs.ContainerID = nil
 	gs.Status = newStatus
+	gs.ErrorReason = ""
 	if err := models.UpdateGameserver(m.db, gs); err != nil {
 		m.log.Error("failed to clear container and update status", "id", gs.ID, "from", oldStatus, "to", newStatus, "error", err)
 		return
@@ -162,7 +163,7 @@ func (m *StatusManager) handleEvent(event docker.ContainerEvent) {
 		} else if gs.Status == StatusRunning || gs.Status == StatusStarted {
 			// Unexpected death
 			m.log.Warn("docker event: unexpected container death", "id", gsID, "status", gs.Status, "action", event.Action)
-			setGameserverStatus(m.db, m.log, m.broadcaster, gs.ID, StatusError)
+			setGameserverStatus(m.db, m.log, m.broadcaster, gs.ID, StatusError, "Gameserver stopped unexpectedly.")
 		}
 
 	case "kill":

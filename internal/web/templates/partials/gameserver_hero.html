@@ -44,16 +44,17 @@
                         'text-surface-400': status === 'stopped'
                       }" x-text="status"></span>
               </span>
+              <span x-show="status === 'error' && errorReason" x-cloak class="text-xs text-red-300 truncate max-w-xs" x-text="errorReason"></span>
             </div>
           </div>
         </div>
         <div class="flex items-center gap-2">
-          <button x-show="status === 'stopped'" hx-post="/gameservers/{{.Gameserver.ID}}/start" hx-swap="none"
+          <button x-show="status === 'stopped' || status === 'error'" hx-post="/gameservers/{{.Gameserver.ID}}/start" hx-swap="none"
                   class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-display font-semibold text-sm transition-colors shadow-lg shadow-emerald-600/20">
             <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-            Start
+            <span x-text="status === 'error' ? 'Retry' : 'Start'"></span>
           </button>
-          <button x-show="status === 'running' || status === 'started'" hx-post="/gameservers/{{.Gameserver.ID}}/stop" hx-swap="none"
+          <button x-show="status === 'running' || status === 'started' || status === 'error'" hx-post="/gameservers/{{.Gameserver.ID}}/stop" hx-swap="none"
                   class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-display font-semibold text-sm transition-colors shadow-lg shadow-red-600/20" x-cloak>
             <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
             Stop

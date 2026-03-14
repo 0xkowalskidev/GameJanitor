@@ -148,9 +148,10 @@ func (h *GameserverHandlers) doAction(w http.ResponseWriter, r *http.Request, ac
 }
 
 type statusResponse struct {
-	Status    string         `json:"status"`
-	Container *containerInfo `json:"container"`
-	Query     *queryInfo     `json:"query"`
+	Status      string         `json:"status"`
+	ErrorReason string         `json:"error_reason,omitempty"`
+	Container   *containerInfo `json:"container"`
+	Query       *queryInfo     `json:"query"`
 }
 
 type queryInfo struct {
@@ -180,7 +181,8 @@ func (h *GameserverHandlers) Status(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := statusResponse{
-		Status: gs.Status,
+		Status:      gs.Status,
+		ErrorReason: gs.ErrorReason,
 	}
 
 	if qd := h.querySvc.GetQueryData(id); qd != nil {

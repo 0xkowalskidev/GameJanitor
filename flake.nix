@@ -76,6 +76,16 @@
               docker push "registry.0xkowalski.dev/gamejanitor/$game"
             done
           '';
+
+          cleanup = pkgs.writeShellScriptBin "cleanup" ''
+            echo "Stopping and removing gamejanitor containers..."
+            docker ps -a --filter "name=gamejanitor-" --format '{{.ID}}' | xargs -r docker rm -f
+            echo "Removing gamejanitor volumes..."
+            docker volume ls --filter "name=gamejanitor-" --format '{{.Name}}' | xargs -r docker volume rm -f
+            echo "Removing /tmp/gamejanitor-data..."
+            rm -rf /tmp/gamejanitor-data
+            echo "Cleanup complete."
+          '';
         in
         pkgs.mkShell {
           buildInputs = [
@@ -89,6 +99,7 @@
             build-image
             push-image
             push-all-images
+            cleanup
           ];
 
           shellHook = ''

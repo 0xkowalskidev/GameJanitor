@@ -23,8 +23,8 @@ const (
 )
 
 // setGameserverStatus updates a gameserver's status in the DB and logs the transition.
-// Fetches the current gameserver from DB to get the old status for logging.
-func setGameserverStatus(db *sql.DB, log *slog.Logger, broadcaster *EventBroadcaster, id string, newStatus string) error {
+// When transitioning to error, errorReason is stored; otherwise it's cleared.
+func setGameserverStatus(db *sql.DB, log *slog.Logger, broadcaster *EventBroadcaster, id string, newStatus string, errorReason string) error {
 	gs, err := models.GetGameserver(db, id)
 	if err != nil {
 		return err
@@ -35,6 +35,11 @@ func setGameserverStatus(db *sql.DB, log *slog.Logger, broadcaster *EventBroadca
 
 	oldStatus := gs.Status
 	gs.Status = newStatus
+	if newStatus == StatusError {
+		gs.ErrorReason = errorReason
+	} else {
+		gs.ErrorReason = ""
+	}
 	if err := models.UpdateGameserver(db, gs); err != nil {
 		return fmt.Errorf("updating gameserver %s status from %s to %s: %w", id, oldStatus, newStatus, err)
 	}
@@ -46,6 +51,7 @@ func setGameserverStatus(db *sql.DB, log *slog.Logger, broadcaster *EventBroadca
 			GameserverID: id,
 			OldStatus:    oldStatus,
 			NewStatus:    newStatus,
+			ErrorReason:  gs.ErrorReason,
 			Timestamp:    time.Now(),
 		})
 	}

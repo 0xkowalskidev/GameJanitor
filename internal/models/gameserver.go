@@ -18,6 +18,7 @@ type Gameserver struct {
 	ContainerID   *string         `json:"container_id"`
 	VolumeName    string          `json:"volume_name"`
 	Status        string          `json:"status"`
+	ErrorReason   string          `json:"error_reason"`
 	CreatedAt     time.Time       `json:"created_at"`
 	UpdatedAt     time.Time       `json:"updated_at"`
 }
@@ -28,7 +29,7 @@ type GameserverFilter struct {
 }
 
 func ListGameservers(db *sql.DB, filter GameserverFilter) ([]Gameserver, error) {
-	query := "SELECT id, name, game_id, ports, env, memory_limit_mb, cpu_limit, container_id, volume_name, status, created_at, updated_at FROM gameservers WHERE 1=1"
+	query := "SELECT id, name, game_id, ports, env, memory_limit_mb, cpu_limit, container_id, volume_name, status, error_reason, created_at, updated_at FROM gameservers WHERE 1=1"
 	var args []any
 
 	if filter.GameID != nil {
@@ -59,7 +60,7 @@ func ListGameservers(db *sql.DB, filter GameserverFilter) ([]Gameserver, error) 
 }
 
 func GetGameserver(db *sql.DB, id string) (*Gameserver, error) {
-	row := db.QueryRow("SELECT id, name, game_id, ports, env, memory_limit_mb, cpu_limit, container_id, volume_name, status, created_at, updated_at FROM gameservers WHERE id = ?", id)
+	row := db.QueryRow("SELECT id, name, game_id, ports, env, memory_limit_mb, cpu_limit, container_id, volume_name, status, error_reason, created_at, updated_at FROM gameservers WHERE id = ?", id)
 	gs, err := scanGameserver(row.Scan)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -75,7 +76,7 @@ func GetGameserver(db *sql.DB, id string) (*Gameserver, error) {
 func scanGameserver(scan func(dest ...any) error) (Gameserver, error) {
 	var gs Gameserver
 	var portsStr, envStr string
-	err := scan(&gs.ID, &gs.Name, &gs.GameID, &portsStr, &envStr, &gs.MemoryLimitMB, &gs.CPULimit, &gs.ContainerID, &gs.VolumeName, &gs.Status, &gs.CreatedAt, &gs.UpdatedAt)
+	err := scan(&gs.ID, &gs.Name, &gs.GameID, &portsStr, &envStr, &gs.MemoryLimitMB, &gs.CPULimit, &gs.ContainerID, &gs.VolumeName, &gs.Status, &gs.ErrorReason, &gs.CreatedAt, &gs.UpdatedAt)
 	if err != nil {
 		return gs, err
 	}
@@ -90,8 +91,8 @@ func CreateGameserver(db *sql.DB, gs *Gameserver) error {
 	gs.UpdatedAt = now
 
 	_, err := db.Exec(
-		"INSERT INTO gameservers (id, name, game_id, ports, env, memory_limit_mb, cpu_limit, container_id, volume_name, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		gs.ID, gs.Name, gs.GameID, gs.Ports, gs.Env, gs.MemoryLimitMB, gs.CPULimit, gs.ContainerID, gs.VolumeName, gs.Status, gs.CreatedAt, gs.UpdatedAt,
+		"INSERT INTO gameservers (id, name, game_id, ports, env, memory_limit_mb, cpu_limit, container_id, volume_name, status, error_reason, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		gs.ID, gs.Name, gs.GameID, gs.Ports, gs.Env, gs.MemoryLimitMB, gs.CPULimit, gs.ContainerID, gs.VolumeName, gs.Status, gs.ErrorReason, gs.CreatedAt, gs.UpdatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("creating gameserver %s: %w", gs.ID, err)
@@ -103,8 +104,8 @@ func UpdateGameserver(db *sql.DB, gs *Gameserver) error {
 	gs.UpdatedAt = time.Now()
 
 	result, err := db.Exec(
-		"UPDATE gameservers SET name = ?, game_id = ?, ports = ?, env = ?, memory_limit_mb = ?, cpu_limit = ?, container_id = ?, volume_name = ?, status = ?, updated_at = ? WHERE id = ?",
-		gs.Name, gs.GameID, gs.Ports, gs.Env, gs.MemoryLimitMB, gs.CPULimit, gs.ContainerID, gs.VolumeName, gs.Status, gs.UpdatedAt, gs.ID,
+		"UPDATE gameservers SET name = ?, game_id = ?, ports = ?, env = ?, memory_limit_mb = ?, cpu_limit = ?, container_id = ?, volume_name = ?, status = ?, error_reason = ?, updated_at = ? WHERE id = ?",
+		gs.Name, gs.GameID, gs.Ports, gs.Env, gs.MemoryLimitMB, gs.CPULimit, gs.ContainerID, gs.VolumeName, gs.Status, gs.ErrorReason, gs.UpdatedAt, gs.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("updating gameserver %s: %w", gs.ID, err)

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strconv"
+	"strings"
 
 	"github.com/0xkowalskidev/gamejanitor/internal/docker"
 	"github.com/0xkowalskidev/gamejanitor/internal/models"
@@ -100,8 +101,8 @@ func applyGameDefaults(gs *models.Gameserver, game *models.Game) error {
 		for i, p := range gamePorts {
 			gsPorts[i] = portMapping{
 				Name:          p.Name,
-				HostPort:      p.Port,
-				ContainerPort: p.Port,
+				HostPort:      flexInt(p.Port),
+				ContainerPort: flexInt(p.Port),
 				Protocol:      p.Protocol,
 			}
 		}
@@ -230,6 +231,15 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 	return models.DeleteGameserver(s.db, id)
 }
 
+// userFriendlyError translates Docker errors into messages a user can act on.
+func userFriendlyError(prefix string, err error) string {
+	msg := strings.ToLower(err.Error())
+	if strings.Contains(msg, "address already in use") || strings.Contains(msg, "port is already allocated") {
+		return "Port conflict: a port is already in use. Edit ports or stop the conflicting gameserver."
+	}
+	return prefix + "."
+}
+
 func (s *GameserverService) Start(ctx context.Context, id string) error {
 	gs, err := models.GetGameserver(s.db, id)
 	if err != nil {
@@ -254,25 +264,25 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 	}
 
 	// Pull image
-	if err := setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusPulling); err != nil {
+	if err := setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusPulling, ""); err != nil {
 		return err
 	}
 	if err := s.docker.PullImage(ctx, game.Image); err != nil {
-		setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusError)
+		setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusError, "Failed to pull game image. Check your internet connection.")
 		return fmt.Errorf("pulling image for gameserver %s: %w", id, err)
 	}
 
 	// Merge env vars
 	env, err := mergeEnv(game, gs)
 	if err != nil {
-		setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusError)
+		setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusError, "Failed to configure environment variables.")
 		return fmt.Errorf("merging env for gameserver %s: %w", id, err)
 	}
 
 	// Parse port bindings
 	ports, err := parseGameserverPorts(gs)
 	if err != nil {
-		setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusError)
+		setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusError, "Invalid port configuration.")
 		return fmt.Errorf("parsing ports for gameserver %s: %w", id, err)
 	}
 
@@ -300,13 +310,14 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 		CPULimit:      gs.CPULimit,
 	})
 	if err != nil {
-		setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusError)
+		setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusError, userFriendlyError("Failed to create container", err))
 		return fmt.Errorf("creating container for gameserver %s: %w", id, err)
 	}
 
 	// Save container ID
 	gs.ContainerID = &containerID
 	gs.Status = StatusStarting
+	gs.ErrorReason = ""
 	if err := models.UpdateGameserver(s.db, gs); err != nil {
 		s.docker.RemoveContainer(ctx, containerID)
 		return err
@@ -314,11 +325,11 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 
 	// Start container
 	if err := s.docker.StartContainer(ctx, containerID); err != nil {
-		setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusError)
+		setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusError, userFriendlyError("Failed to start container", err))
 		return fmt.Errorf("starting container for gameserver %s: %w", id, err)
 	}
 
-	if err := setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusStarted); err != nil {
+	if err := setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusStarted, ""); err != nil {
 		return err
 	}
 
@@ -344,7 +355,7 @@ func (s *GameserverService) Stop(ctx context.Context, id string) error {
 		return nil
 	}
 
-	if err := setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusStopping); err != nil {
+	if err := setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusStopping, ""); err != nil {
 		return err
 	}
 
@@ -369,6 +380,7 @@ func (s *GameserverService) Stop(ctx context.Context, id string) error {
 	oldStatus := gs.Status
 	gs.ContainerID = nil
 	gs.Status = StatusStopped
+	gs.ErrorReason = ""
 	if err := models.UpdateGameserver(s.db, gs); err != nil {
 		return err
 	}
@@ -387,7 +399,7 @@ func (s *GameserverService) Restart(ctx context.Context, id string) error {
 		return ErrNotFoundf("gameserver %s not found", id)
 	}
 
-	if gs.Status != StatusStopped {
+	if gs.Status != StatusStopped && gs.Status != StatusError {
 		if err := s.Stop(ctx, id); err != nil {
 			return fmt.Errorf("stopping gameserver for restart: %w", err)
 		}
@@ -531,11 +543,39 @@ type envVarDef struct {
 }
 
 // Port mapping from gameserver's ports JSON
+// flexInt handles JSON values that may be a number or a string containing a number.
+type flexInt int
+
+func (fi *flexInt) UnmarshalJSON(b []byte) error {
+	// Try number first
+	var n int
+	if err := json.Unmarshal(b, &n); err == nil {
+		*fi = flexInt(n)
+		return nil
+	}
+	// Try string
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("cannot unmarshal %s into int or string", string(b))
+	}
+	if s == "" {
+		*fi = 0
+		return nil
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return fmt.Errorf("cannot parse %q as int: %w", s, err)
+	}
+	*fi = flexInt(n)
+	return nil
+}
+
 type portMapping struct {
-	Name          string `json:"name"`
-	HostPort      int    `json:"host_port"`
-	ContainerPort int    `json:"container_port"`
-	Protocol      string `json:"protocol"`
+	Name          string  `json:"name"`
+	HostPort      flexInt `json:"host_port"`
+	ContainerPort flexInt `json:"container_port"`
+	Port          flexInt `json:"port"`
+	Protocol      string  `json:"protocol"`
 }
 
 func mergeEnv(game *models.Game, gs *models.Gameserver) ([]string, error) {
@@ -580,8 +620,8 @@ func mergeEnv(game *models.Game, gs *models.Gameserver) ([]string, error) {
 		}
 		// Find matching port: system env var default value matches a container port
 		for _, p := range ports {
-			if d.Default == strconv.Itoa(p.ContainerPort) {
-				env[d.Key] = strconv.Itoa(p.ContainerPort)
+			if d.Default == strconv.Itoa(int(p.ContainerPort)) {
+				env[d.Key] = strconv.Itoa(int(p.ContainerPort))
 				break
 			}
 		}
@@ -608,9 +648,17 @@ func parseGameserverPorts(gs *models.Gameserver) ([]docker.PortBinding, error) {
 
 	bindings := make([]docker.PortBinding, len(ports))
 	for i, p := range ports {
+		hp := int(p.HostPort)
+		if hp == 0 {
+			hp = int(p.Port)
+		}
+		cp := int(p.ContainerPort)
+		if cp == 0 {
+			cp = int(p.Port)
+		}
 		bindings[i] = docker.PortBinding{
-			HostPort:      p.HostPort,
-			ContainerPort: p.ContainerPort,
+			HostPort:      hp,
+			ContainerPort: cp,
 			Protocol:      p.Protocol,
 		}
 	}

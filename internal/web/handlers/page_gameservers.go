@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -69,19 +70,21 @@ func (h *PageGameserverHandlers) buildUsedPorts(excludeID string) []usedPortEntr
 			continue
 		}
 		var ports []struct {
-			HostPort int `json:"host_port"`
-			Port     int `json:"port"`
+			HostPort json.Number `json:"host_port"`
+			Port     json.Number `json:"port"`
 		}
-		if err := json.Unmarshal(gs.Ports, &ports); err != nil {
+		dec := json.NewDecoder(bytes.NewReader(gs.Ports))
+		dec.UseNumber()
+		if err := dec.Decode(&ports); err != nil {
 			continue
 		}
 		for _, p := range ports {
-			hp := p.HostPort
+			hp, _ := p.HostPort.Int64()
 			if hp == 0 {
-				hp = p.Port
+				hp, _ = p.Port.Int64()
 			}
 			if hp != 0 {
-				used = append(used, usedPortEntry{Port: hp, GameserverName: gs.Name, GameserverID: gs.ID})
+				used = append(used, usedPortEntry{Port: int(hp), GameserverName: gs.Name, GameserverID: gs.ID})
 			}
 		}
 	}
@@ -433,7 +436,7 @@ func (h *PageGameserverHandlers) Update(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if r.FormValue("restart") == "true" && (existing.Status == "running" || existing.Status == "started") {
+	if r.FormValue("restart") == "true" {
 		if err := h.gameserverSvc.Restart(r.Context(), id); err != nil {
 			h.log.Error("restarting gameserver after update", "id", id, "error", err)
 		}
