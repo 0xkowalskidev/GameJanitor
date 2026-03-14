@@ -14,11 +14,7 @@
   <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
     {{range .Games}}
     <div class="group relative aspect-[2/3] rounded-xl overflow-hidden border border-surface-800/60 card-glow animate-slide-up">
-      {{if .GridPath}}
-      <img src="{{.GridPath}}" alt="{{.Name}}" class="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy">
-      {{else}}
-      <div class="absolute inset-0 bg-gradient-to-br from-surface-700 to-surface-800"></div>
-      {{end}}
+      <img src="{{if .GridPath}}{{.GridPath}}{{else}}/static/games/default/default-grid.svg{{end}}" alt="{{.Name}}" class="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" onerror="this.onerror=null;this.src='/static/games/default/default-grid.svg'">
       <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent"></div>
       <div class="absolute bottom-0 left-0 right-0 p-3">
         <a href="/games/{{.ID}}" class="font-display font-semibold text-sm text-white hover:text-accent-300 transition-colors">{{.Name}}</a>

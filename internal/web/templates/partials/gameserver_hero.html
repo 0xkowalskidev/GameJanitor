@@ -3,13 +3,7 @@
 <div x-data="gsHero('{{.Gameserver.ID}}', '{{.Gameserver.Status}}')" x-init="connectSSE()" @htmx:pushed-into-history.window="path = window.location.pathname">
   <!-- Hero Banner -->
   <div class="relative w-full overflow-hidden" style="height: min(30vw, 350px)">
-    {{if and .Game .Game.HeroPath}}
-    <img src="{{.Game.HeroPath}}" alt="{{.Game.Name}}" class="absolute inset-0 w-full h-full object-cover">
-    {{else if and .Game .Game.GridPath}}
-    <img src="{{.Game.GridPath}}" alt="{{.Game.Name}}" class="absolute inset-0 w-full h-full object-cover blur-sm scale-110">
-    {{else}}
-    <div class="absolute inset-0 bg-gradient-to-br from-surface-700 to-surface-900"></div>
-    {{end}}
+    <img src="{{if and .Game .Game.HeroPath}}{{.Game.HeroPath}}{{else if and .Game .Game.GridPath}}{{.Game.GridPath}}{{else}}/static/games/default/default-hero.svg{{end}}" alt="{{if .Game}}{{.Game.Name}}{{end}}" class="absolute inset-0 w-full h-full object-cover{{if and .Game (not .Game.HeroPath) .Game.GridPath}} blur-sm scale-110{{end}}" onerror="this.onerror=null;this.src='/static/games/default/default-hero.svg'">
     <div class="absolute inset-0 bg-gradient-to-t from-surface-950 via-surface-950/60 to-surface-950/20"></div>
 
     <div class="absolute bottom-0 left-0 right-0 max-w-7xl mx-auto px-4 sm:px-6 pb-4">
@@ -20,9 +14,7 @@
       <!-- Top row: Name + Actions -->
       <div class="flex items-center justify-between mb-2">
         <div class="flex items-center gap-3">
-          {{if and .Game .Game.IconPath}}
-          <img src="{{.Game.IconPath}}" alt="" class="w-10 h-10 rounded-lg shadow-lg">
-          {{end}}
+          <img src="{{if and .Game .Game.IconPath}}{{.Game.IconPath}}{{else}}/static/games/default/default-icon.svg{{end}}" alt="" class="w-10 h-10 rounded-lg shadow-lg" onerror="this.onerror=null;this.src='/static/games/default/default-icon.svg'">
           <div>
             <h1 class="font-display font-bold text-xl sm:text-2xl text-white">{{.Gameserver.Name}}</h1>
             <div class="flex items-center gap-2 mt-0.5">

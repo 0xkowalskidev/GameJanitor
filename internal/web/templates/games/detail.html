@@ -3,13 +3,7 @@
 {{define "content"}}
 <!-- Hero Banner -->
 <div class="relative w-full overflow-hidden" style="height: min(32vw, 400px)">
-  {{if .Game.HeroPath}}
-  <img src="{{.Game.HeroPath}}" alt="{{.Game.Name}}" class="absolute inset-0 w-full h-full object-cover">
-  {{else if .Game.GridPath}}
-  <img src="{{.Game.GridPath}}" alt="{{.Game.Name}}" class="absolute inset-0 w-full h-full object-cover blur-sm scale-110">
-  {{else}}
-  <div class="absolute inset-0 bg-gradient-to-br from-surface-700 to-surface-900"></div>
-  {{end}}
+  <img src="{{if .Game.HeroPath}}{{.Game.HeroPath}}{{else if .Game.GridPath}}{{.Game.GridPath}}{{else}}/static/games/default/default-hero.svg{{end}}" alt="{{.Game.Name}}" class="absolute inset-0 w-full h-full object-cover{{if and (not .Game.HeroPath) .Game.GridPath}} blur-sm scale-110{{end}}" onerror="this.onerror=null;this.src='/static/games/default/default-hero.svg'">
   <div class="absolute inset-0 bg-gradient-to-t from-surface-950 via-surface-950/60 to-transparent"></div>
   <div class="absolute bottom-0 left-0 right-0 max-w-7xl mx-auto px-4 sm:px-6 pb-6">
     <a href="/games" class="inline-flex items-center gap-1 text-xs text-surface-400 hover:text-white mb-3 transition-colors">
@@ -18,9 +12,7 @@
     </a>
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-3">
-        {{if .Game.IconPath}}
-        <img src="{{.Game.IconPath}}" alt="" class="w-10 h-10 rounded-lg shadow-lg">
-        {{end}}
+        <img src="{{if .Game.IconPath}}{{.Game.IconPath}}{{else}}/static/games/default/default-icon.svg{{end}}" alt="" class="w-10 h-10 rounded-lg shadow-lg" onerror="this.onerror=null;this.src='/static/games/default/default-icon.svg'">
         <h1 class="font-display font-bold text-3xl text-white">{{.Game.Name}}</h1>
       </div>
       <div class="flex items-center gap-2">

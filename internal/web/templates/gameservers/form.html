@@ -37,9 +37,7 @@
     {{if eq .Mode "edit"}}
     <!-- Locked game preview -->
     <div class="flex items-center gap-3 mb-6 p-3 rounded-xl bg-surface-850/80 border border-surface-800/60">
-      {{if and .Game .Game.IconPath}}
-      <img src="{{.Game.IconPath}}" class="w-11 h-11 rounded-lg object-cover" alt="{{.Game.Name}}">
-      {{end}}
+      <img src="{{if and .Game .Game.IconPath}}{{.Game.IconPath}}{{else}}/static/games/default/default-icon.svg{{end}}" class="w-11 h-11 rounded-lg object-cover" alt="{{if .Game}}{{.Game.Name}}{{end}}" onerror="this.onerror=null;this.src='/static/games/default/default-icon.svg'">
       <div class="flex-1 min-w-0">
         <p class="font-display font-semibold text-white text-sm">{{if .Game}}{{.Game.Name}}{{else}}{{.Gameserver.GameID}}{{end}}</p>
         <p class="text-xs text-surface-500">Game cannot be changed</p>
@@ -53,11 +51,7 @@
         {{range .Games}}
         <button type="button" @click="selectGame('{{.ID}}')"
                 class="group relative aspect-[2/3] rounded-xl overflow-hidden border border-surface-800/60 card-glow text-left">
-          {{if .GridPath}}
-          <img src="{{.GridPath}}" alt="{{.Name}}" class="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105">
-          {{else}}
-          <div class="absolute inset-0 bg-gradient-to-br from-surface-700 to-surface-800"></div>
-          {{end}}
+          <img src="{{if .GridPath}}{{.GridPath}}{{else}}/static/games/default/default-grid.svg{{end}}" alt="{{.Name}}" class="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" onerror="this.onerror=null;this.src='/static/games/default/default-grid.svg'">
           <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
           <div class="absolute bottom-0 left-0 right-0 p-3">
             <span class="font-display font-semibold text-sm text-white">{{.Name}}</span>
