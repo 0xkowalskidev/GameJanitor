@@ -59,6 +59,7 @@
             }
           } catch (_) {}
           this._fetchStats();
+          window.dispatchEvent(new CustomEvent('gs-status-changed', { detail: { id: id, status: this.status } }));
         },
         destroy() {
           if (this.eventSource) this.eventSource.close();
