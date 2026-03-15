@@ -15,6 +15,7 @@ import (
 	"github.com/0xkowalskidev/gamejanitor/internal/games"
 	"github.com/0xkowalskidev/gamejanitor/internal/netinfo"
 	"github.com/0xkowalskidev/gamejanitor/internal/service"
+	gjsftp "github.com/0xkowalskidev/gamejanitor/internal/sftp"
 	"github.com/0xkowalskidev/gamejanitor/internal/web"
 	"github.com/0xkowalskidev/gamejanitor/internal/worker"
 	"github.com/spf13/cobra"
@@ -28,6 +29,7 @@ var serveCmd = &cobra.Command{
 
 func init() {
 	serveCmd.Flags().IntP("port", "p", 8080, "Port to listen on")
+	serveCmd.Flags().Int("sftp-port", 0, "SFTP server port (0 to disable)")
 	serveCmd.Flags().StringP("data-dir", "d", "/var/lib/gamejanitor", "Data directory for database and backups")
 }
 
@@ -35,6 +37,10 @@ func runServe(cmd *cobra.Command, args []string) error {
 	port, err := cmd.Flags().GetInt("port")
 	if err != nil {
 		return fmt.Errorf("invalid port flag: %w", err)
+	}
+	sftpPort, err := cmd.Flags().GetInt("sftp-port")
+	if err != nil {
+		return fmt.Errorf("invalid sftp-port flag: %w", err)
 	}
 	dataDir, err := cmd.Flags().GetString("data-dir")
 	if err != nil {
@@ -137,8 +143,25 @@ func runServe(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to initialize router: %w", err)
 	}
 
+	// Start SFTP server if enabled
+	if sftpPort > 0 {
+		hostKeyPath := filepath.Join(cfg.DataDir, "sftp_host_key")
+		sftpServer, err := gjsftp.NewServer(fileSvc, authSvc, settingsSvc, hostKeyPath, logger)
+		if err != nil {
+			return fmt.Errorf("failed to initialize sftp server: %w", err)
+		}
+		defer sftpServer.Close()
+
+		go func() {
+			sftpAddr := fmt.Sprintf(":%d", sftpPort)
+			if err := sftpServer.ListenAndServe(sftpAddr); err != nil {
+				logger.Error("sftp server stopped", "error", err)
+			}
+		}()
+	}
+
 	addr := fmt.Sprintf(":%d", cfg.Port)
-	logger.Info("starting gamejanitor", "port", cfg.Port, "data_dir", cfg.DataDir, "db_path", cfg.DBPath)
+	logger.Info("starting gamejanitor", "port", cfg.Port, "sftp_port", sftpPort, "data_dir", cfg.DataDir, "db_path", cfg.DBPath)
 
 	return http.ListenAndServe(addr, router)
 }
