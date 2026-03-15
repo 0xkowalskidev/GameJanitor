@@ -1,0 +1,247 @@
+syntax = "proto3";
+
+package worker;
+
+option go_package = "github.com/0xkowalskidev/gamejanitor/internal/worker/pb";
+
+// WorkerService is the gRPC interface between controller and worker agents.
+// Maps 1:1 to the Go Worker interface in internal/worker/worker.go.
+service WorkerService {
+    // Container lifecycle
+    rpc PullImage(PullImageRequest) returns (PullImageResponse);
+    rpc CreateContainer(CreateContainerRequest) returns (CreateContainerResponse);
+    rpc StartContainer(StartContainerRequest) returns (StartContainerResponse);
+    rpc StopContainer(StopContainerRequest) returns (StopContainerResponse);
+    rpc RemoveContainer(RemoveContainerRequest) returns (RemoveContainerResponse);
+    rpc InspectContainer(InspectContainerRequest) returns (InspectContainerResponse);
+    rpc Exec(ExecRequest) returns (ExecResponse);
+    rpc ContainerLogs(ContainerLogsRequest) returns (stream DataChunk);
+    rpc ContainerStats(ContainerStatsRequest) returns (ContainerStatsResponse);
+
+    // Volumes
+    rpc CreateVolume(CreateVolumeRequest) returns (CreateVolumeResponse);
+    rpc RemoveVolume(RemoveVolumeRequest) returns (RemoveVolumeResponse);
+
+    // File operations
+    rpc ListFiles(ListFilesRequest) returns (ListFilesResponse);
+    rpc ReadFile(ReadFileRequest) returns (ReadFileResponse);
+    rpc WriteFile(WriteFileRequest) returns (WriteFileResponse);
+    rpc DeletePath(DeletePathRequest) returns (DeletePathResponse);
+    rpc CreateDirectory(CreateDirectoryRequest) returns (CreateDirectoryResponse);
+    rpc RenamePath(RenamePathRequest) returns (RenamePathResponse);
+
+    // Copy operations (streaming for large data)
+    rpc CopyFromContainer(CopyFromContainerRequest) returns (CopyFromContainerResponse);
+    rpc CopyToContainer(CopyToContainerRequest) returns (CopyToContainerResponse);
+    rpc CopyDirFromContainer(CopyDirFromContainerRequest) returns (stream DataChunk);
+    rpc CopyTarToContainer(stream CopyTarToContainerRequest) returns (CopyTarToContainerResponse);
+
+    // Events — long-lived server stream of Docker container events
+    rpc WatchEvents(WatchEventsRequest) returns (stream ContainerEventMsg);
+
+    // Health
+    rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+}
+
+// Shared
+
+message DataChunk {
+    bytes data = 1;
+}
+
+// Container lifecycle
+
+message PullImageRequest {
+    string image = 1;
+}
+message PullImageResponse {}
+
+message PortBinding {
+    int32 host_port = 1;
+    int32 container_port = 2;
+    string protocol = 3;
+}
+
+message CreateContainerRequest {
+    string name = 1;
+    string image = 2;
+    repeated string env = 3;
+    repeated PortBinding ports = 4;
+    string volume_name = 5;
+    int32 memory_limit_mb = 6;
+    double cpu_limit = 7;
+    repeated string entrypoint = 8;
+    string user = 9;
+    repeated string binds = 10;
+}
+message CreateContainerResponse {
+    string container_id = 1;
+}
+
+message StartContainerRequest {
+    string container_id = 1;
+}
+message StartContainerResponse {}
+
+message StopContainerRequest {
+    string container_id = 1;
+    int32 timeout_seconds = 2;
+}
+message StopContainerResponse {}
+
+message RemoveContainerRequest {
+    string container_id = 1;
+}
+message RemoveContainerResponse {}
+
+message InspectContainerRequest {
+    string container_id = 1;
+}
+message InspectContainerResponse {
+    string id = 1;
+    string state = 2;
+    int64 started_at_unix = 3;
+    int32 exit_code = 4;
+}
+
+message ExecRequest {
+    string container_id = 1;
+    repeated string cmd = 2;
+}
+message ExecResponse {
+    int32 exit_code = 1;
+    string stdout = 2;
+    string stderr = 3;
+}
+
+message ContainerLogsRequest {
+    string container_id = 1;
+    int32 tail = 2;
+    bool follow = 3;
+}
+
+message ContainerStatsRequest {
+    string container_id = 1;
+}
+message ContainerStatsResponse {
+    int32 memory_usage_mb = 1;
+    int32 memory_limit_mb = 2;
+    double cpu_percent = 3;
+}
+
+// Volumes
+
+message CreateVolumeRequest {
+    string name = 1;
+}
+message CreateVolumeResponse {}
+
+message RemoveVolumeRequest {
+    string name = 1;
+}
+message RemoveVolumeResponse {}
+
+// File operations
+
+message ListFilesRequest {
+    string volume_name = 1;
+    string path = 2;
+}
+message FileEntryMsg {
+    string name = 1;
+    bool is_dir = 2;
+    int64 size = 3;
+    int64 mod_time_unix = 4;
+    string permissions = 5;
+}
+message ListFilesResponse {
+    repeated FileEntryMsg entries = 1;
+}
+
+message ReadFileRequest {
+    string volume_name = 1;
+    string path = 2;
+}
+message ReadFileResponse {
+    bytes content = 1;
+}
+
+message WriteFileRequest {
+    string volume_name = 1;
+    string path = 2;
+    bytes content = 3;
+    uint32 perm = 4;
+}
+message WriteFileResponse {}
+
+message DeletePathRequest {
+    string volume_name = 1;
+    string path = 2;
+}
+message DeletePathResponse {}
+
+message CreateDirectoryRequest {
+    string volume_name = 1;
+    string path = 2;
+}
+message CreateDirectoryResponse {}
+
+message RenamePathRequest {
+    string volume_name = 1;
+    string from = 2;
+    string to = 3;
+}
+message RenamePathResponse {}
+
+// Copy operations
+
+message CopyFromContainerRequest {
+    string container_id = 1;
+    string path = 2;
+}
+message CopyFromContainerResponse {
+    bytes content = 1;
+}
+
+message CopyToContainerRequest {
+    string container_id = 1;
+    string path = 2;
+    bytes content = 3;
+}
+message CopyToContainerResponse {}
+
+message CopyDirFromContainerRequest {
+    string container_id = 1;
+    string path = 2;
+}
+
+// First message carries metadata, all messages carry data
+message CopyTarToContainerRequest {
+    string container_id = 1;
+    string dest_path = 2;
+    bytes data = 3;
+}
+message CopyTarToContainerResponse {}
+
+// Events
+
+message WatchEventsRequest {}
+message ContainerEventMsg {
+    string container_id = 1;
+    string container_name = 2;
+    string action = 3;
+}
+
+// Health
+
+message HeartbeatRequest {
+    string worker_id = 1;
+    int64 cpu_cores = 2;
+    int64 memory_total_mb = 3;
+    int64 memory_available_mb = 4;
+    string lan_ip = 5;
+    string external_ip = 6;
+}
+message HeartbeatResponse {
+    bool accepted = 1;
+}

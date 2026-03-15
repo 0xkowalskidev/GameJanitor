@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -18,7 +19,9 @@ import (
 	gjsftp "github.com/0xkowalskidev/gamejanitor/internal/sftp"
 	"github.com/0xkowalskidev/gamejanitor/internal/web"
 	"github.com/0xkowalskidev/gamejanitor/internal/worker"
+	"github.com/0xkowalskidev/gamejanitor/internal/worker/pb"
 	"github.com/spf13/cobra"
+	"google.golang.org/grpc"
 )
 
 var serveCmd = &cobra.Command{
@@ -30,6 +33,8 @@ var serveCmd = &cobra.Command{
 func init() {
 	serveCmd.Flags().IntP("port", "p", 8080, "Port to listen on")
 	serveCmd.Flags().Int("sftp-port", 0, "SFTP server port (0 to disable)")
+	serveCmd.Flags().Int("grpc-port", 0, "gRPC agent port for worker mode (0 to disable)")
+	serveCmd.Flags().String("role", "standalone", "Server role: standalone, controller, worker, controller+worker")
 	serveCmd.Flags().StringP("data-dir", "d", "/var/lib/gamejanitor", "Data directory for database and backups")
 }
 
@@ -42,9 +47,24 @@ func runServe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("invalid sftp-port flag: %w", err)
 	}
+	grpcPort, err := cmd.Flags().GetInt("grpc-port")
+	if err != nil {
+		return fmt.Errorf("invalid grpc-port flag: %w", err)
+	}
+	role, err := cmd.Flags().GetString("role")
+	if err != nil {
+		return fmt.Errorf("invalid role flag: %w", err)
+	}
 	dataDir, err := cmd.Flags().GetString("data-dir")
 	if err != nil {
 		return fmt.Errorf("invalid data-dir flag: %w", err)
+	}
+
+	hasLocalWorker := role == "standalone" || role == "worker" || role == "controller+worker"
+	hasController := role == "standalone" || role == "controller" || role == "controller+worker"
+
+	if !hasLocalWorker && !hasController {
+		return fmt.Errorf("invalid role %q: must be standalone, controller, worker, or controller+worker", role)
 	}
 
 	cfg := config.Config{
@@ -69,10 +89,16 @@ func runServe(cmd *cobra.Command, args []string) error {
 	}
 	defer logFile.Close()
 
-	writer := io.MultiWriter(os.Stderr, logFile)
-	logger := slog.New(slog.NewJSONHandler(writer, &slog.HandlerOptions{Level: level}))
+	logWriter := io.MultiWriter(os.Stderr, logFile)
+	logger := slog.New(slog.NewJSONHandler(logWriter, &slog.HandlerOptions{Level: level}))
 	slog.SetDefault(logger)
 
+	// Worker-only mode: start gRPC agent and exit (no DB, no web UI)
+	if role == "worker" {
+		return runWorkerAgent(cfg, grpcPort, logger)
+	}
+
+	// Controller and standalone modes need a database
 	logger.Info("opening database", "path", cfg.DBPath)
 	database, err := db.Open(cfg.DBPath)
 	if err != nil {
@@ -85,11 +111,16 @@ func runServe(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to run migrations: %w", err)
 	}
 
-	dockerClient, err := docker.New(logger)
-	if err != nil {
-		return fmt.Errorf("failed to connect to docker: %w", err)
+	// Initialize local worker if this node runs containers
+	var localWorker worker.Worker
+	if hasLocalWorker {
+		dockerClient, err := docker.New(logger)
+		if err != nil {
+			return fmt.Errorf("failed to connect to docker: %w", err)
+		}
+		defer dockerClient.Close()
+		localWorker = worker.NewLocalWorker(dockerClient, logger)
 	}
-	defer dockerClient.Close()
 
 	// Initialize game store
 	gameStore, err := games.NewGameStore(filepath.Join(cfg.DataDir, "games"), logger)
@@ -97,9 +128,15 @@ func runServe(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to initialize game store: %w", err)
 	}
 
-	// Initialize worker layer
-	localWorker := worker.NewLocalWorker(dockerClient, logger)
-	dispatcher := worker.NewLocalDispatcher(localWorker)
+	// Initialize dispatcher
+	var dispatcher *worker.Dispatcher
+	var registry *worker.Registry
+	if role == "standalone" {
+		dispatcher = worker.NewLocalDispatcher(localWorker)
+	} else {
+		registry = worker.NewRegistry(logger)
+		dispatcher = worker.NewMultiNodeDispatcher(localWorker, registry, database, logger)
+	}
 
 	// Initialize services
 	broadcaster := service.NewEventBroadcaster()
@@ -116,25 +153,37 @@ func runServe(cmd *cobra.Command, args []string) error {
 	scheduler := service.NewScheduler(database, backupSvc, gameserverSvc, consoleSvc, logger)
 	scheduleSvc := service.NewScheduleService(database, scheduler, logger)
 	authSvc := service.NewAuthService(database, logger)
-	statusMgr := service.NewStatusManager(database, localWorker, broadcaster, querySvc, readyWatcher, logger)
 
-	// Crash recovery
-	ctx := context.Background()
-	if err := statusMgr.RecoverOnStartup(ctx); err != nil {
-		return fmt.Errorf("failed to recover gameserver status: %w", err)
+	// Status manager needs a local worker for Docker event watching
+	if localWorker != nil {
+		statusMgr := service.NewStatusManager(database, localWorker, broadcaster, querySvc, readyWatcher, logger)
+
+		ctx := context.Background()
+		if err := statusMgr.RecoverOnStartup(ctx); err != nil {
+			return fmt.Errorf("failed to recover gameserver status: %w", err)
+		}
+
+		statusMgr.Start(ctx)
+		defer statusMgr.Stop()
 	}
 
-	// Start status manager (Docker events watcher)
-	statusMgr.Start(ctx)
-	defer statusMgr.Stop()
-
 	// Start scheduler
+	ctx := context.Background()
 	if err := scheduler.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start scheduler: %w", err)
 	}
 	defer scheduler.Stop()
 	defer readyWatcher.StopAll()
 	defer querySvc.StopAll()
+
+	// Start gRPC agent if this node also runs containers (controller+worker mode)
+	if hasLocalWorker && grpcPort > 0 {
+		go func() {
+			if err := startGRPCAgent(localWorker, grpcPort, logger); err != nil {
+				logger.Error("grpc agent stopped", "error", err)
+			}
+		}()
+	}
 
 	netInfo := netinfo.Detect(logger)
 
@@ -161,7 +210,46 @@ func runServe(cmd *cobra.Command, args []string) error {
 	}
 
 	addr := fmt.Sprintf(":%d", cfg.Port)
-	logger.Info("starting gamejanitor", "port", cfg.Port, "sftp_port", sftpPort, "data_dir", cfg.DataDir, "db_path", cfg.DBPath)
+	logger.Info("starting gamejanitor",
+		"role", role,
+		"port", cfg.Port,
+		"sftp_port", sftpPort,
+		"grpc_port", grpcPort,
+		"data_dir", cfg.DataDir,
+		"db_path", cfg.DBPath,
+	)
 
 	return http.ListenAndServe(addr, router)
+}
+
+// runWorkerAgent starts a worker-only node: gRPC agent wrapping a local Docker worker.
+// No database, no web UI, no scheduler.
+func runWorkerAgent(cfg config.Config, grpcPort int, logger *slog.Logger) error {
+	if grpcPort == 0 {
+		grpcPort = 9090
+	}
+
+	dockerClient, err := docker.New(logger)
+	if err != nil {
+		return fmt.Errorf("failed to connect to docker: %w", err)
+	}
+	defer dockerClient.Close()
+
+	localWorker := worker.NewLocalWorker(dockerClient, logger)
+	logger.Info("starting worker agent", "grpc_port", grpcPort)
+	return startGRPCAgent(localWorker, grpcPort, logger)
+}
+
+func startGRPCAgent(w worker.Worker, port int, logger *slog.Logger) error {
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	if err != nil {
+		return fmt.Errorf("grpc listen: %w", err)
+	}
+
+	grpcServer := grpc.NewServer()
+	agent := worker.NewAgent(w, logger)
+	pb.RegisterWorkerServiceServer(grpcServer, agent)
+
+	logger.Info("grpc agent listening", "port", port)
+	return grpcServer.Serve(listener)
 }

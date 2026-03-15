@@ -11,6 +11,7 @@ CREATE TABLE gameservers (
     status TEXT NOT NULL DEFAULT 'stopped',
     error_reason TEXT NOT NULL DEFAULT '',
     port_mode TEXT NOT NULL DEFAULT 'auto',
+    node_id TEXT,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

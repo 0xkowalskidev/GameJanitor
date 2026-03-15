@@ -78,6 +78,12 @@
             done
           '';
 
+          gen-proto = pkgs.writeShellScriptBin "gen-proto" ''
+            protoc --go_out=. --go_opt=module=github.com/0xkowalskidev/gamejanitor \
+                   --go-grpc_out=. --go-grpc_opt=module=github.com/0xkowalskidev/gamejanitor \
+                   proto/worker.proto
+          '';
+
           cleanup = pkgs.writeShellScriptBin "cleanup" ''
             echo "Stopping and removing gamejanitor containers..."
             docker ps -a --filter "name=gamejanitor-" --format '{{.ID}}' | xargs -r docker rm -f
@@ -94,12 +100,16 @@
             pkgs.docker-client
             pkgs.tailwindcss
             pkgs.reflex
+            pkgs.protobuf
+            pkgs.protoc-gen-go
+            pkgs.protoc-gen-go-grpc
             dev
             cli
             build-css
             build-image
             push-image
             push-all-images
+            gen-proto
             cleanup
           ];
 
