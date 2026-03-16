@@ -79,3 +79,56 @@ func (h *AuthHandlers) DeleteToken(w http.ResponseWriter, r *http.Request) {
 	}
 	respondNoContent(w)
 }
+
+func (h *AuthHandlers) ListWorkerTokens(w http.ResponseWriter, r *http.Request) {
+	tokens, err := h.authSvc.ListTokens()
+	if err != nil {
+		h.log.Error("listing worker tokens", "error", err)
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	var workerTokens []models.Token
+	for _, t := range tokens {
+		if t.Scope == "worker" {
+			workerTokens = append(workerTokens, t)
+		}
+	}
+	if workerTokens == nil {
+		workerTokens = []models.Token{}
+	}
+	respondOK(w, workerTokens)
+}
+
+func (h *AuthHandlers) CreateWorkerToken(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+
+	rawToken, token, err := h.authSvc.CreateWorkerToken(req.Name)
+	if err != nil {
+		h.log.Error("creating worker token", "error", err)
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	respondCreated(w, map[string]any{
+		"token":    rawToken,
+		"token_id": token.ID,
+		"name":     token.Name,
+	})
+}
+
+func (h *AuthHandlers) DeleteWorkerToken(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "tokenId")
+	if err := h.authSvc.DeleteToken(id); err != nil {
+		h.log.Error("deleting worker token", "id", id, "error", err)
+		respondError(w, serviceErrorStatus(err), err.Error())
+		return
+	}
+	respondNoContent(w)
+}

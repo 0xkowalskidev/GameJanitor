@@ -26,6 +26,7 @@ func init() {
 	serveCmd.GroupID = "server"
 	settingsCmd.GroupID = "server"
 	tokensCmd.GroupID = "server"
+	workerTokensCmd.GroupID = "server"
 	workersCmd.GroupID = "server"
 	gamesCmd.GroupID = "resources"
 	gameserversCmd.GroupID = "resources"
@@ -36,6 +37,7 @@ func init() {
 	rootCmd.AddCommand(tokenCmd)
 	rootCmd.AddCommand(settingsCmd)
 	rootCmd.AddCommand(tokensCmd)
+	rootCmd.AddCommand(workerTokensCmd)
 	rootCmd.AddCommand(workersCmd)
 	rootCmd.AddCommand(gamesCmd)
 	rootCmd.AddCommand(gameserversCmd)

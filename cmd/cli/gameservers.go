@@ -135,6 +135,8 @@ var gameserversCreateCmd = &cobra.Command{
 
 		env := parseEnvFlags(envFlags)
 
+		nodeID, _ := cmd.Flags().GetString("node")
+
 		body := map[string]any{
 			"name":            name,
 			"game_id":         gameID,
@@ -142,6 +144,9 @@ var gameserversCreateCmd = &cobra.Command{
 			"env":             env,
 			"memory_limit_mb": memory,
 			"cpu_limit":       cpu,
+		}
+		if nodeID != "" {
+			body["node_id"] = nodeID
 		}
 
 		resp, err := apiPost("/api/gameservers", body)
@@ -303,6 +308,7 @@ func init() {
 	gameserversCreateCmd.Flags().StringSlice("env", nil, "Environment variable (KEY=VALUE)")
 	gameserversCreateCmd.Flags().Int("memory", 0, "Memory limit (MB)")
 	gameserversCreateCmd.Flags().Float64("cpu", 0, "CPU limit")
+	gameserversCreateCmd.Flags().String("node", "", "Worker node ID for placement (multi-node only)")
 
 	gameserversUpdateCmd.Flags().String("name", "", "Gameserver name")
 	gameserversUpdateCmd.Flags().StringSlice("port", nil, "Port mapping (name:host:container/proto)")

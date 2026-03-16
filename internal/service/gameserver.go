@@ -340,8 +340,26 @@ func (s *GameserverService) UpdateGameserver(gs *models.Gameserver) error {
 	if existing == nil {
 		return ErrNotFoundf("gameserver %s not found", gs.ID)
 	}
+
+	// Merge: only overwrite fields that were actually provided
+	if gs.Name != "" {
+		existing.Name = gs.Name
+	}
+	if gs.Ports != nil {
+		existing.Ports = gs.Ports
+	}
+	if gs.Env != nil {
+		existing.Env = gs.Env
+	}
+	if gs.MemoryLimitMB != 0 {
+		existing.MemoryLimitMB = gs.MemoryLimitMB
+	}
+	if gs.CPULimit != 0 {
+		existing.CPULimit = gs.CPULimit
+	}
+
 	s.log.Info("updating gameserver", "id", gs.ID)
-	return models.UpdateGameserver(s.db, gs)
+	return models.UpdateGameserver(s.db, existing)
 }
 
 func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) error {

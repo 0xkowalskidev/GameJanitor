@@ -154,7 +154,13 @@ func NewRouter(
 		r.Route("/workers", func(r chi.Router) {
 			r.Use(requireAdmin)
 			r.Get("/", workerHandlers.List)
-			r.Get("/{workerID}", workerHandlers.Get)
+			r.Route("/{workerID}", func(r chi.Router) {
+				r.Get("/", workerHandlers.Get)
+				r.Put("/port-range", workerHandlers.SetPortRange)
+				r.Delete("/port-range", workerHandlers.ClearPortRange)
+				r.Put("/limits", workerHandlers.SetLimits)
+				r.Delete("/limits", workerHandlers.ClearLimits)
+			})
 		})
 
 		r.Route("/settings", func(r chi.Router) {
@@ -168,6 +174,13 @@ func NewRouter(
 			r.Get("/", authHandlers.ListTokens)
 			r.Post("/", authHandlers.CreateToken)
 			r.Delete("/{tokenId}", authHandlers.DeleteToken)
+		})
+
+		r.Route("/worker-tokens", func(r chi.Router) {
+			r.Use(requireAdmin)
+			r.Get("/", authHandlers.ListWorkerTokens)
+			r.Post("/", authHandlers.CreateWorkerToken)
+			r.Delete("/{tokenId}", authHandlers.DeleteWorkerToken)
 		})
 	})
 

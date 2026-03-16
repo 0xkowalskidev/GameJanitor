@@ -130,6 +130,114 @@ var workersGetCmd = &cobra.Command{
 	},
 }
 
+var workersSetPortRangeCmd = &cobra.Command{
+	Use:   "set-port-range <worker-id>",
+	Short: "Set a custom port range for a worker",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		start, _ := cmd.Flags().GetInt("start")
+		end, _ := cmd.Flags().GetInt("end")
+		if start == 0 || end == 0 {
+			return exitError(fmt.Errorf("--start and --end are required"))
+		}
+
+		body := map[string]any{
+			"port_range_start": start,
+			"port_range_end":   end,
+		}
+
+		resp, err := apiPut("/api/workers/"+args[0]+"/port-range", body)
+		if err != nil {
+			return exitError(err)
+		}
+
+		if jsonOutput {
+			printJSONResponse(resp)
+			return nil
+		}
+
+		fmt.Printf("Port range set to %d-%d for worker %s.\n", start, end, args[0])
+		return nil
+	},
+}
+
+var workersClearPortRangeCmd = &cobra.Command{
+	Use:   "clear-port-range <worker-id>",
+	Short: "Clear custom port range (revert to global default)",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		_, err := apiDelete("/api/workers/" + args[0] + "/port-range")
+		if err != nil {
+			return exitError(err)
+		}
+		if !jsonOutput {
+			fmt.Printf("Port range cleared for worker %s.\n", args[0])
+		}
+		return nil
+	},
+}
+
+var workersSetLimitsCmd = &cobra.Command{
+	Use:   "set-limits <worker-id>",
+	Short: "Set resource limits for a worker",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		body := make(map[string]any)
+
+		if cmd.Flags().Changed("max-memory") {
+			v, _ := cmd.Flags().GetInt("max-memory")
+			body["max_memory_mb"] = v
+		}
+		if cmd.Flags().Changed("max-gameservers") {
+			v, _ := cmd.Flags().GetInt("max-gameservers")
+			body["max_gameservers"] = v
+		}
+
+		if len(body) == 0 {
+			return exitError(fmt.Errorf("at least one of --max-memory or --max-gameservers is required"))
+		}
+
+		resp, err := apiPut("/api/workers/"+args[0]+"/limits", body)
+		if err != nil {
+			return exitError(err)
+		}
+
+		if jsonOutput {
+			printJSONResponse(resp)
+			return nil
+		}
+
+		fmt.Printf("Limits updated for worker %s.\n", args[0])
+		return nil
+	},
+}
+
+var workersClearLimitsCmd = &cobra.Command{
+	Use:   "clear-limits <worker-id>",
+	Short: "Remove resource limits from a worker",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		_, err := apiDelete("/api/workers/" + args[0] + "/limits")
+		if err != nil {
+			return exitError(err)
+		}
+		if !jsonOutput {
+			fmt.Printf("Limits cleared for worker %s.\n", args[0])
+		}
+		return nil
+	},
+}
+
 func init() {
-	workersCmd.AddCommand(workersListCmd, workersGetCmd)
+	workersSetPortRangeCmd.Flags().Int("start", 0, "Port range start (required)")
+	workersSetPortRangeCmd.Flags().Int("end", 0, "Port range end (required)")
+
+	workersSetLimitsCmd.Flags().Int("max-memory", 0, "Max memory in MB (0 to clear)")
+	workersSetLimitsCmd.Flags().Int("max-gameservers", 0, "Max gameservers (0 to clear)")
+
+	workersCmd.AddCommand(
+		workersListCmd, workersGetCmd,
+		workersSetPortRangeCmd, workersClearPortRangeCmd,
+		workersSetLimitsCmd, workersClearLimitsCmd,
+	)
 }
