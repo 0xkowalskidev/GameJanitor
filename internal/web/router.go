@@ -83,6 +83,8 @@ func NewRouter(
 	logHandlers := handlers.NewLogHandlers(logPath, log)
 	statusHandlers := handlers.NewStatusHandlers(gameserverSvc, querySvc, log)
 	authHandlers := handlers.NewAuthHandlers(authSvc, log)
+	workerHandlers := handlers.NewWorkerHandlers(registry, settingsSvc, gameserverSvc, log)
+	settingsAPIHandlers := handlers.NewSettingsAPIHandlers(settingsSvc, log)
 
 	requireAdmin := RequireAdmin(settingsSvc)
 	requireAccess := RequireGameserverAccess(settingsSvc)
@@ -148,6 +150,18 @@ func NewRouter(
 
 		r.Get("/logs", logHandlers.Get)
 		r.Get("/events", eventHandlers.SSE)
+
+		r.Route("/workers", func(r chi.Router) {
+			r.Use(requireAdmin)
+			r.Get("/", workerHandlers.List)
+			r.Get("/{workerID}", workerHandlers.Get)
+		})
+
+		r.Route("/settings", func(r chi.Router) {
+			r.Use(requireAdmin)
+			r.Get("/", settingsAPIHandlers.Get)
+			r.Put("/", settingsAPIHandlers.Update)
+		})
 
 		r.Route("/tokens", func(r chi.Router) {
 			r.Use(requireAdmin)

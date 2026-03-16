@@ -24,6 +24,9 @@ func init() {
 	rootCmd.AddGroup(&cobra.Group{ID: "resources", Title: "Resource Commands:"})
 
 	serveCmd.GroupID = "server"
+	settingsCmd.GroupID = "server"
+	tokensCmd.GroupID = "server"
+	workersCmd.GroupID = "server"
 	gamesCmd.GroupID = "resources"
 	gameserversCmd.GroupID = "resources"
 	schedulesCmd.GroupID = "resources"
@@ -31,6 +34,9 @@ func init() {
 
 	rootCmd.AddCommand(serveCmd)
 	rootCmd.AddCommand(tokenCmd)
+	rootCmd.AddCommand(settingsCmd)
+	rootCmd.AddCommand(tokensCmd)
+	rootCmd.AddCommand(workersCmd)
 	rootCmd.AddCommand(gamesCmd)
 	rootCmd.AddCommand(gameserversCmd)
 	rootCmd.AddCommand(schedulesCmd)
