@@ -279,8 +279,8 @@
               Manual
             </button>
           </div>
-          <p class="text-xs text-surface-500 mt-1.5" x-show="portMode === 'auto'">Ports will be automatically allocated from the configured range.</p>
-          <p class="text-xs text-surface-500 mt-1.5" x-show="portMode === 'manual'">Configure host ports manually below.</p>
+          <p class="text-xs text-surface-500 mt-1.5" x-show="portMode === 'auto'">Ports are automatically assigned from the {{.PortRangeStart}}-{{.PortRangeEnd}} range. Recommended for most users.</p>
+          <p class="text-xs text-surface-500 mt-1.5" x-show="portMode === 'manual'">Choose specific host ports for each connection. Useful if you need fixed ports for port forwarding or firewall rules.</p>
         </div>
 
         <!-- Port Mapping (manual mode) -->

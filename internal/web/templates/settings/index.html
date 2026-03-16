@@ -151,7 +151,7 @@
     <!-- Preferred Port Mode -->
     <div class="border-t border-surface-800/40 pt-4">
       <label class="block text-sm font-medium text-surface-300">Port Allocation Mode</label>
-      <p class="text-xs text-surface-500">How ports are assigned when creating a new gameserver.</p>
+      <p class="text-xs text-surface-500">Default port mode for new gameservers. Auto picks free ports from the range below. Manual lets you choose specific ports.</p>
       {{if .PortModeFromEnv}}
       <div class="flex items-center gap-2 mt-2">
         <span class="text-sm text-white capitalize">{{.PreferredPortMode}}</span>

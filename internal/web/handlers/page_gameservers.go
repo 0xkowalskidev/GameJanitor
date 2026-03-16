@@ -151,6 +151,8 @@ func (h *PageGameserverHandlers) New(w http.ResponseWriter, r *http.Request) {
 		"UsedPortsJSON":     string(usedPortsJSON),
 		"PreferredPortMode": h.settingsSvc.GetPreferredPortMode(),
 		"CurrentPortMode":   "",
+		"PortRangeStart":    h.settingsSvc.GetPortRangeStart(),
+		"PortRangeEnd":      h.settingsSvc.GetPortRangeEnd(),
 	}
 
 	if h.registry != nil {
@@ -414,6 +416,8 @@ func (h *PageGameserverHandlers) Edit(w http.ResponseWriter, r *http.Request) {
 		"UsedPortsJSON":     string(usedPortsJSON),
 		"PreferredPortMode": h.settingsSvc.GetPreferredPortMode(),
 		"CurrentPortMode":   gs.PortMode,
+		"PortRangeStart":    h.settingsSvc.GetPortRangeStart(),
+		"PortRangeEnd":      h.settingsSvc.GetPortRangeEnd(),
 	})
 }
 
