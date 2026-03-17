@@ -828,18 +828,23 @@ func mergeEnv(game *games.Game, gs *models.Gameserver) ([]string, error) {
 		return nil, fmt.Errorf("parsing gameserver ports: %w", err)
 	}
 
-	// Build port name → container_port map for system env var overrides
-	// System env keys that end with _PORT get their value from the matching container port
+	// Map game definition ports to their allocated host ports
+	// System env vars whose default matches a game port get overridden with the host port
+	gamePortToHost := make(map[string]int)
+	for _, gp := range game.DefaultPorts {
+		for _, p := range ports {
+			if p.Name == gp.Name {
+				gamePortToHost[strconv.Itoa(gp.Port)] = int(p.HostPort)
+				break
+			}
+		}
+	}
 	for _, d := range game.DefaultEnv {
 		if !d.System {
 			continue
 		}
-		// Find matching port: system env var default value matches a container port
-		for _, p := range ports {
-			if d.Default == strconv.Itoa(int(p.ContainerPort)) {
-				env[d.Key] = strconv.Itoa(int(p.ContainerPort))
-				break
-			}
+		if hp, ok := gamePortToHost[d.Default]; ok {
+			env[d.Key] = strconv.Itoa(hp)
 		}
 	}
 
