@@ -91,7 +91,7 @@ func (h *GameserverHandlers) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	gs.ID = id
 
-	if err := h.svc.UpdateGameserver(&gs); err != nil {
+	if err := h.svc.UpdateGameserver(r.Context(), &gs); err != nil {
 		h.log.Error("updating gameserver", "id", id, "error", err)
 		respondError(w, serviceErrorStatus(err), err.Error())
 		return

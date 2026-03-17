@@ -490,7 +490,7 @@ func (h *PageGameserverHandlers) Update(w http.ResponseWriter, r *http.Request) 
 		CreatedAt:     existing.CreatedAt,
 	}
 
-	if err := h.gameserverSvc.UpdateGameserver(gs); err != nil {
+	if err := h.gameserverSvc.UpdateGameserver(r.Context(), gs); err != nil {
 		h.log.Error("updating gameserver from web form", "id", id, "error", err)
 		http.Error(w, "Failed to update gameserver: "+err.Error(), http.StatusInternalServerError)
 		return

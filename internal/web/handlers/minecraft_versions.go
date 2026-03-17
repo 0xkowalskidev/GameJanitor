@@ -12,8 +12,8 @@ import (
 const (
 	mojangManifestURL = "https://launchermeta.mojang.com/mc/game/version_manifest_v2.json"
 	manifestCacheTTL  = 1 * time.Hour
-	// 1.2.5 is the first release with a server download
-	minReleaseVersion = "1.2.5"
+	// 1.7.2 is the start of the Netty era (modern query protocol)
+	minReleaseVersion = "1.7.2"
 )
 
 type MinecraftVersionsHandler struct {

@@ -25,8 +25,9 @@ type EnvVar struct {
 	Options      []string `yaml:"options,omitempty" json:"options,omitempty"`
 	Required     bool     `yaml:"required,omitempty" json:"required,omitempty"`
 	Notice       string   `yaml:"notice,omitempty" json:"notice,omitempty"`
-	Autogenerate string   `yaml:"autogenerate,omitempty" json:"autogenerate,omitempty"`
-	System       bool     `yaml:"system,omitempty" json:"system,omitempty"`
+	Autogenerate    string   `yaml:"autogenerate,omitempty" json:"autogenerate,omitempty"`
+	System          bool     `yaml:"system,omitempty" json:"system,omitempty"`
+	TriggersInstall bool     `yaml:"triggers_install,omitempty" json:"triggers_install,omitempty"`
 }
 
 type Assets struct {

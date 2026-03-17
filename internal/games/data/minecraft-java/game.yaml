@@ -25,11 +25,13 @@ env:
     default: "latest"
     label: "Version"
     type: version-select
+    triggers_install: true
   - key: MODLOADER
     default: "vanilla"
     label: "Mod Loader"
     type: select
     options: ["vanilla", "paper", "forge", "fabric"]
+    triggers_install: true
   - key: GAMEMODE
     default: "survival"
     label: "Game Mode"

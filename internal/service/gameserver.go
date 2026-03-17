@@ -332,13 +332,19 @@ func generatePassword(length int) (string, error) {
 	return hex.EncodeToString(b)[:length], nil
 }
 
-func (s *GameserverService) UpdateGameserver(gs *models.Gameserver) error {
+func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *models.Gameserver) error {
 	existing, err := models.GetGameserver(s.db, gs.ID)
 	if err != nil {
 		return err
 	}
 	if existing == nil {
 		return ErrNotFoundf("gameserver %s not found", gs.ID)
+	}
+
+	// Check if install-triggering env vars changed before merging
+	installTriggered := false
+	if gs.Env != nil {
+		installTriggered = s.installTriggeringEnvChanged(existing, gs)
 	}
 
 	// Merge: only overwrite fields that were actually provided
@@ -359,7 +365,57 @@ func (s *GameserverService) UpdateGameserver(gs *models.Gameserver) error {
 	}
 
 	s.log.Info("updating gameserver", "id", gs.ID)
-	return models.UpdateGameserver(s.db, existing)
+	if err := models.UpdateGameserver(s.db, existing); err != nil {
+		return err
+	}
+
+	if installTriggered {
+		w := s.dispatcher.WorkerFor(gs.ID)
+		if err := w.DeletePath(ctx, existing.VolumeName, ".installed"); err != nil {
+			s.log.Warn("failed to clear install marker after env change", "id", gs.ID, "error", err)
+		} else {
+			s.log.Info("install-triggering env var changed, cleared install marker", "id", gs.ID)
+		}
+	}
+
+	return nil
+}
+
+// installTriggeringEnvChanged checks if any env var marked with triggers_install
+// has changed between the existing and updated gameserver.
+func (s *GameserverService) installTriggeringEnvChanged(existing, updated *models.Gameserver) bool {
+	game := s.gameStore.GetGame(existing.GameID)
+	if game == nil {
+		return false
+	}
+
+	// Build set of keys that trigger install
+	triggerKeys := make(map[string]bool)
+	for _, env := range game.DefaultEnv {
+		if env.TriggersInstall {
+			triggerKeys[env.Key] = true
+		}
+	}
+	if len(triggerKeys) == 0 {
+		return false
+	}
+
+	// Parse old and new env
+	var oldEnv, newEnv map[string]string
+	if err := json.Unmarshal(existing.Env, &oldEnv); err != nil {
+		return false
+	}
+	if err := json.Unmarshal(updated.Env, &newEnv); err != nil {
+		return false
+	}
+
+	for key := range triggerKeys {
+		if oldEnv[key] != newEnv[key] {
+			s.log.Info("install-triggering env var changed", "key", key, "old", oldEnv[key], "new", newEnv[key])
+			return true
+		}
+	}
+	return false
 }
 
 func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) error {
@@ -686,12 +742,7 @@ func (s *GameserverService) Reinstall(ctx context.Context, id string) error {
 		return ErrNotFoundf("gameserver %s not found", id)
 	}
 
-	game := s.gameStore.GetGame(gs.GameID)
-	if game == nil {
-		return ErrNotFoundf("game %s not found", gs.GameID)
-	}
-
-	s.log.Info("reinstalling gameserver", "id", id)
+	s.log.Info("reinstalling gameserver (full wipe)", "id", id)
 
 	if gs.Status != StatusStopped {
 		if err := s.Stop(ctx, id); err != nil {
@@ -701,47 +752,15 @@ func (s *GameserverService) Reinstall(ctx context.Context, id string) error {
 
 	w := s.dispatcher.WorkerFor(id)
 
-	if err := w.PullImage(ctx, game.BaseImage); err != nil {
-		return fmt.Errorf("pulling image for reinstall: %w", err)
+	// Wipe all data by removing and recreating the volume
+	if err := w.RemoveVolume(ctx, gs.VolumeName); err != nil {
+		return fmt.Errorf("removing volume for reinstall: %w", err)
+	}
+	if err := w.CreateVolume(ctx, gs.VolumeName); err != nil {
+		return fmt.Errorf("recreating volume for reinstall: %w", err)
 	}
 
-	// Prepare scripts on the target worker for reinstall container
-	scriptDir, _, err := w.PrepareGameScripts(ctx, gs.GameID, id)
-	if err != nil {
-		return fmt.Errorf("preparing scripts for reinstall: %w", err)
-	}
-
-	// Remove .installed marker via temp container
-	tempName := "gamejanitor-reinstall-" + id
-	tempID, err := w.CreateContainer(ctx, worker.ContainerOptions{
-		Name:       tempName,
-		Image:      game.BaseImage,
-		Env:        []string{},
-		VolumeName: gs.VolumeName,
-		Binds:      []string{scriptDir + ":/scripts:ro"},
-	})
-	if err != nil {
-		return fmt.Errorf("creating temp container for reinstall: %w", err)
-	}
-	defer w.RemoveContainer(ctx, tempID)
-
-	if err := w.StartContainer(ctx, tempID); err != nil {
-		return fmt.Errorf("starting temp container for reinstall: %w", err)
-	}
-
-	exitCode, _, stderr, err := w.Exec(ctx, tempID, []string{"rm", "-f", "/data/.installed"})
-	if err != nil {
-		return fmt.Errorf("removing install marker: %w", err)
-	}
-	if exitCode != 0 {
-		return fmt.Errorf("removing install marker failed (exit %d): %s", exitCode, stderr)
-	}
-
-	if err := w.StopContainer(ctx, tempID, 10); err != nil {
-		s.log.Warn("failed to stop temp reinstall container", "id", id, "error", err)
-	}
-
-	s.log.Info("install marker removed, restarting gameserver", "id", id)
+	s.log.Info("volume wiped, starting fresh install", "id", id)
 	return s.Start(ctx, id)
 }
 
