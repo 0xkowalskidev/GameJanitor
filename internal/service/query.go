@@ -10,7 +10,7 @@ import (
 
 	"github.com/0xkowalskidev/gamejanitor/internal/games"
 	"github.com/0xkowalskidev/gamejanitor/internal/models"
-	"github.com/0xkowalskidev/gsq"
+	"github.com/0xkowalskidev/gjq"
 )
 
 const (
@@ -57,7 +57,7 @@ func (s *QueryService) GetQueryData(gameserverID string) *QueryData {
 	return s.cache[gameserverID]
 }
 
-// StartPolling begins GSQ polling for a gameserver.
+// StartPolling begins GJQ polling for a gameserver.
 // Only collects player/map/version data — does not promote status.
 // No-op for games without query support.
 func (s *QueryService) StartPolling(gameserverID string) {
@@ -95,8 +95,8 @@ func (s *QueryService) StartPolling(gameserverID string) {
 	s.mu.Unlock()
 
 	slug := game.ID
-	if game.GSQSlug != "" {
-		slug = game.GSQSlug
+	if game.GJQSlug != "" {
+		slug = game.GJQSlug
 	}
 	go s.pollLoop(ctx, gameserverID, slug, hostPort)
 }
@@ -127,7 +127,7 @@ func (s *QueryService) StopAll() {
 // pollLoop collects query data at a steady interval.
 // Does not manage gameserver status — that's ReadyWatcher's job.
 func (s *QueryService) pollLoop(ctx context.Context, gameserverID, gameSlug string, port uint16) {
-	s.log.Debug("starting GSQ poll loop", "id", gameserverID, "game", gameSlug, "port", port)
+	s.log.Debug("starting GJQ poll loop", "id", gameserverID, "game", gameSlug, "port", port)
 
 	ticker := time.NewTicker(queryPollInterval)
 	defer ticker.Stop()
@@ -143,7 +143,7 @@ func (s *QueryService) pollLoop(ctx context.Context, gameserverID, gameSlug stri
 			return
 		}
 
-		info, err := gsq.Query(ctx, "localhost", port, gsq.QueryOptions{
+		info, err := gjq.Query(ctx, "localhost", port, gjq.QueryOptions{
 			Game:    gameSlug,
 			Players: true,
 			Direct:  true,
@@ -151,7 +151,7 @@ func (s *QueryService) pollLoop(ctx context.Context, gameserverID, gameSlug stri
 		})
 
 		if err != nil {
-			s.log.Debug("GSQ poll failed", "id", gameserverID, "error", err)
+			s.log.Debug("GJQ poll failed", "id", gameserverID, "error", err)
 		} else {
 			data := &QueryData{
 				PlayersOnline: info.Players,
@@ -171,7 +171,7 @@ func (s *QueryService) pollLoop(ctx context.Context, gameserverID, gameSlug stri
 			s.mu.Unlock()
 
 			if changed {
-				s.log.Debug("GSQ data changed", "id", gameserverID, "players", info.Players)
+				s.log.Debug("GJQ data changed", "id", gameserverID, "players", info.Players)
 				s.broadcaster.Publish(StatusEvent{
 					GameserverID: gameserverID,
 					OldStatus:    StatusRunning,

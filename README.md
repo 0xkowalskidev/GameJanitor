@@ -14,7 +14,7 @@ Pterodactyl is business-first and painful to install. LinuxGSM is CLI-only. Game
 ## Ecosystem
 
 - **Gamejanitor** (this repo) — core server manager, always open source
-- **GSQ** — game server query library + CLI ([github.com/0xkowalskidev/gsq](https://github.com/0xkowalskidev/gsq))
+- **GJQ** — game janitor query library + CLI ([github.com/0xkowalskidev/gjq](https://github.com/0xkowalskidev/gjq))
 - **Server browser** — Battlemetrics-style public server browser (future, separate repo)
 
 ## Architecture
@@ -54,7 +54,7 @@ Hosting businesses don't need gamejanitor to manage users. They create scoped to
 - **Backend:** Go, SQLite, Docker
 - **Frontend:** HTMX, Alpine.js, Tailwind CSS
 - **CLI:** Cobra (HTTP client to API)
-- **Query:** GSQ for live player counts and server info
+- **Query:** GJQ for live player counts and server info
 - **SFTP:** Embedded Go SSH/SFTP server
 - **Packaging:** Nix flake + NixOS module (Docker Compose and binary install planned)
 

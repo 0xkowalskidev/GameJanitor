@@ -37,7 +37,7 @@ id: minecraft-java
 name: "Minecraft: Java Edition"
 base_image: registry.0xkowalski.dev/gamejanitor/java    # Docker image to use
 recommended_memory_mb: 2048
-gsq_slug: minecraft-java                  # GSQ query slug (optional, defaults to id)
+gjq_slug: minecraft-java                  # GJQ query slug (optional, defaults to id)
 disabled_capabilities: []                 # e.g. ["query", "command", "save"]
 
 ports:
