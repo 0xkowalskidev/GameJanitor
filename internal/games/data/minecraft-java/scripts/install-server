@@ -24,9 +24,31 @@ if [ -z "$VERSION_URL" ] || [ "$VERSION_URL" = "null" ]; then
     exit 1
 fi
 
+# Resolve required Java version from Mojang metadata
+VERSION_META=$(curl -fsSL "$VERSION_URL")
+JAVA_MAJOR=$(echo "$VERSION_META" | jq -r '.javaVersion.majorVersion // empty')
+if [ -z "$JAVA_MAJOR" ]; then
+    JAVA_MAJOR=8
+    echo "[install-server] no javaVersion in manifest, defaulting to Java $JAVA_MAJOR"
+else
+    echo "[install-server] Minecraft $MINECRAFT_VERSION requires Java $JAVA_MAJOR"
+fi
+echo "$JAVA_MAJOR" > /data/.java_version
+
+# Map major version to the closest installed JRE (8, 17, 21, 25)
+if [ "$JAVA_MAJOR" -le 8 ]; then
+    JAVA_USE=8
+elif [ "$JAVA_MAJOR" -le 17 ]; then
+    JAVA_USE=17
+elif [ "$JAVA_MAJOR" -le 21 ]; then
+    JAVA_USE=21
+else
+    JAVA_USE=25
+fi
+JAVA_BIN="/usr/lib/jvm/java-${JAVA_USE}-openjdk-amd64/bin/java"
+echo "[install-server] using Java $JAVA_USE ($JAVA_BIN)"
+
 install_vanilla() {
-    echo "[install-server] fetching version metadata from $VERSION_URL"
-    VERSION_META=$(curl -fsSL "$VERSION_URL")
     SERVER_URL=$(echo "$VERSION_META" | jq -r '.downloads.server.url')
     SERVER_SHA1=$(echo "$VERSION_META" | jq -r '.downloads.server.sha1')
 
@@ -123,7 +145,7 @@ install_forge() {
 
     echo "[install-server] running Forge installer"
     cd /data
-    java -jar /tmp/forge-installer.jar --installServer
+    "$JAVA_BIN" -jar /tmp/forge-installer.jar --installServer
     rm -f /tmp/forge-installer.jar
 
     echo "[install-server] Forge $FORGE_FULL installed"
