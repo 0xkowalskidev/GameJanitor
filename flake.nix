@@ -16,7 +16,7 @@
         pname = "gamejanitor";
         version = "0.1.0";
         src = ./.;
-        vendorHash = "sha256-ks0AFpolmErL2+pRTbHeoQ4dyav7HTSAZTOTiUzTj4Y=";
+        vendorHash = "sha256-gQgVaBuFxSlH3pGDmmKJ/K88Xe40W608yCc/3BiKh5g=";
         env.CGO_ENABLED = "0";
         nativeBuildInputs = [ pkgs.tailwindcss ];
         preBuild = ''
