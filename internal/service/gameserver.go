@@ -614,7 +614,7 @@ func (s *GameserverService) Stop(ctx context.Context, id string) error {
 
 	if gs.ContainerID != nil {
 		w := s.dispatcher.WorkerFor(id)
-		if err := w.StopContainer(ctx, *gs.ContainerID, 30); err != nil {
+		if err := w.StopContainer(ctx, *gs.ContainerID, 10); err != nil {
 			s.log.Warn("failed to stop container gracefully", "id", id, "error", err)
 		}
 		if err := w.RemoveContainer(ctx, *gs.ContainerID); err != nil {

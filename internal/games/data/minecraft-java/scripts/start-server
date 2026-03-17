@@ -73,11 +73,7 @@ case "$MODLOADER" in
             echo "-Xms${HEAP}m" >> /data/user_jvm_args.txt
             echo "[start-server] starting Forge server (modloader=forge, args=$FORGE_ARGS)"
             cd /data
-            tail -f "$FIFO" | "$JAVA_BIN" @user_jvm_args.txt @"$FORGE_ARGS" nogui &
-            SERVER_PID=$!
-            trap "kill -TERM $SERVER_PID 2>/dev/null; wait $SERVER_PID" SIGTERM SIGINT
-            wait "$SERVER_PID"
-            exit 0
+            exec "$JAVA_BIN" @user_jvm_args.txt @"$FORGE_ARGS" nogui < <(tail -f "$FIFO")
         fi
         # Fallback for older Forge versions
         SERVER_JAR=$(find /data -maxdepth 1 -name "forge-*.jar" ! -name "*-installer.jar" ! -name "*-shim.jar" | head -1)
@@ -91,7 +87,4 @@ case "$MODLOADER" in
 esac
 
 echo "[start-server] starting Minecraft server (modloader=$MODLOADER, jar=$SERVER_JAR)"
-tail -f "$FIFO" | "$JAVA_BIN" -Xmx${HEAP}m -Xms${HEAP}m -jar "$SERVER_JAR" nogui &
-SERVER_PID=$!
-trap "kill -TERM $SERVER_PID 2>/dev/null; wait $SERVER_PID" SIGTERM SIGINT
-wait "$SERVER_PID"
+exec "$JAVA_BIN" -Xmx${HEAP}m -Xms${HEAP}m -jar "$SERVER_JAR" nogui < <(tail -f "$FIFO")

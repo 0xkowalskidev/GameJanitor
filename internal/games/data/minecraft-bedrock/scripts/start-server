@@ -32,7 +32,4 @@ export LD_LIBRARY_PATH=/data/server
 cd /data/server
 
 echo "[start-server] starting Bedrock server"
-tail -f "$FIFO" | ./bedrock_server &
-SERVER_PID=$!
-trap "kill -TERM $SERVER_PID 2>/dev/null; wait $SERVER_PID" SIGTERM SIGINT
-wait "$SERVER_PID"
+exec ./bedrock_server < <(tail -f "$FIFO")

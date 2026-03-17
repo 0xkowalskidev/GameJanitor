@@ -31,7 +31,10 @@ echo "[start-server] starting Garry's Mod dedicated server"
 cd /data/server
 
 # srcds_linux doesn't write to stdout on Linux, -condebug writes to console.log
-./srcds_linux -game garrysmod \
+# Tail console.log to stdout in background so Docker captures it
+(while [ ! -f "$CONSOLE_LOG" ]; do sleep 0.5; done; tail -f "$CONSOLE_LOG") &
+
+exec ./srcds_linux -game garrysmod \
     -ip 0.0.0.0 \
     -port "$GAME_PORT" \
     -norestart \
@@ -40,13 +43,4 @@ cd /data/server
     +hostname "$HOSTNAME" \
     +gamemode "$GAMEMODE" \
     +map "$MAP" \
-    +rcon_password "$RCON_PASSWORD" &
-
-SERVER_PID=$!
-
-# Tail console.log to stdout so Docker captures it
-while [ ! -f "$CONSOLE_LOG" ]; do sleep 0.5; done
-tail -f "$CONSOLE_LOG" &
-
-trap "kill -TERM $SERVER_PID 2>/dev/null; wait $SERVER_PID" SIGTERM SIGINT
-wait "$SERVER_PID"
+    +rcon_password "$RCON_PASSWORD"

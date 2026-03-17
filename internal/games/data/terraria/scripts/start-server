@@ -48,7 +48,4 @@ if [ -n "$PASSWORD" ]; then
 fi
 
 echo "[start-server] starting TShock server"
-tail -f "$FIFO" | /data/TShock.Server "${ARGS[@]}" &
-SERVER_PID=$!
-trap "kill -TERM $SERVER_PID 2>/dev/null; wait $SERVER_PID" SIGTERM SIGINT
-wait "$SERVER_PID"
+exec /data/TShock.Server "${ARGS[@]}" < <(tail -f "$FIFO")
