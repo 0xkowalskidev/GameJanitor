@@ -4,7 +4,6 @@ base_image: ghcr.io/0xkowalskidev/gamejanitor/steamcmd
 recommended_memory_mb: 8192
 disabled_capabilities: ["query", "command", "save"]
 ready_pattern: 'Server Start Completed'
-ready_timeout: 600
 assets:
   icon: satisfactory-icon.ico
   grid: satisfactory-grid.png

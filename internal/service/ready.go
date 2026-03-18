@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"regexp"
 	"sync"
-	"time"
 
 	"github.com/0xkowalskidev/gamejanitor/internal/games"
 	"github.com/0xkowalskidev/gamejanitor/internal/models"
@@ -68,7 +67,7 @@ func (w *ReadyWatcher) Watch(gameserverID string, wkr worker.Worker, containerID
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(game.ReadyTimeout)*time.Second)
+	ctx, cancel := context.WithCancel(context.Background())
 
 	w.mu.Lock()
 	if oldCancel, exists := w.watchers[gameserverID]; exists {
@@ -126,10 +125,6 @@ func (w *ReadyWatcher) watchLogs(ctx context.Context, gameserverID string, wkr w
 	for {
 		select {
 		case <-ctx.Done():
-			if ctx.Err() == context.DeadlineExceeded {
-				w.log.Warn("ready timeout exceeded, setting error", "id", gameserverID)
-				setGameserverStatus(w.db, w.log, w.broadcaster, gameserverID, StatusError, "Gameserver did not become ready in time.")
-			}
 			return
 
 		case line, ok := <-lines:
