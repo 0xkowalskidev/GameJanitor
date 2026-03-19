@@ -12,6 +12,8 @@ CREATE TABLE gameservers (
     error_reason TEXT NOT NULL DEFAULT '',
     port_mode TEXT NOT NULL DEFAULT 'auto',
     node_id TEXT,
+    sftp_username TEXT NOT NULL DEFAULT '',
+    sftp_password TEXT NOT NULL DEFAULT '',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -63,11 +65,13 @@ CREATE TABLE worker_nodes (
     port_range_end INTEGER,
     max_memory_mb INTEGER,
     max_gameservers INTEGER,
+    sftp_port INTEGER NOT NULL DEFAULT 0,
     last_seen DATETIME,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_gameservers_game_id ON gameservers(game_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_gameservers_sftp_username ON gameservers(sftp_username) WHERE sftp_username != '';
 CREATE INDEX IF NOT EXISTS idx_schedules_gameserver_id ON schedules(gameserver_id);
 CREATE INDEX IF NOT EXISTS idx_backups_gameserver_id ON backups(gameserver_id);

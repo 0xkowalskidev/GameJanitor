@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.0
 // - protoc             v6.33.5
-// source: worker.proto
+// source: proto/worker.proto
 
 package pb
 
@@ -1086,12 +1086,13 @@ var WorkerService_ServiceDesc = grpc.ServiceDesc{
 			ServerStreams: true,
 		},
 	},
-	Metadata: "worker.proto",
+	Metadata: "proto/worker.proto",
 }
 
 const (
-	ControllerService_Register_FullMethodName  = "/worker.ControllerService/Register"
-	ControllerService_Heartbeat_FullMethodName = "/worker.ControllerService/Heartbeat"
+	ControllerService_Register_FullMethodName          = "/worker.ControllerService/Register"
+	ControllerService_Heartbeat_FullMethodName         = "/worker.ControllerService/Heartbeat"
+	ControllerService_ValidateSFTPLogin_FullMethodName = "/worker.ControllerService/ValidateSFTPLogin"
 )
 
 // ControllerServiceClient is the client API for ControllerService service.
@@ -1102,6 +1103,7 @@ const (
 type ControllerServiceClient interface {
 	Register(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*RegisterResponse, error)
 	Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatResponse, error)
+	ValidateSFTPLogin(ctx context.Context, in *SFTPLoginRequest, opts ...grpc.CallOption) (*SFTPLoginResponse, error)
 }
 
 type controllerServiceClient struct {
@@ -1132,6 +1134,16 @@ func (c *controllerServiceClient) Heartbeat(ctx context.Context, in *HeartbeatRe
 	return out, nil
 }
 
+func (c *controllerServiceClient) ValidateSFTPLogin(ctx context.Context, in *SFTPLoginRequest, opts ...grpc.CallOption) (*SFTPLoginResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SFTPLoginResponse)
+	err := c.cc.Invoke(ctx, ControllerService_ValidateSFTPLogin_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ControllerServiceServer is the server API for ControllerService service.
 // All implementations must embed UnimplementedControllerServiceServer
 // for forward compatibility.
@@ -1140,6 +1152,7 @@ func (c *controllerServiceClient) Heartbeat(ctx context.Context, in *HeartbeatRe
 type ControllerServiceServer interface {
 	Register(context.Context, *RegisterRequest) (*RegisterResponse, error)
 	Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error)
+	ValidateSFTPLogin(context.Context, *SFTPLoginRequest) (*SFTPLoginResponse, error)
 	mustEmbedUnimplementedControllerServiceServer()
 }
 
@@ -1155,6 +1168,9 @@ func (UnimplementedControllerServiceServer) Register(context.Context, *RegisterR
 }
 func (UnimplementedControllerServiceServer) Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Heartbeat not implemented")
+}
+func (UnimplementedControllerServiceServer) ValidateSFTPLogin(context.Context, *SFTPLoginRequest) (*SFTPLoginResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ValidateSFTPLogin not implemented")
 }
 func (UnimplementedControllerServiceServer) mustEmbedUnimplementedControllerServiceServer() {}
 func (UnimplementedControllerServiceServer) testEmbeddedByValue()                           {}
@@ -1213,6 +1229,24 @@ func _ControllerService_Heartbeat_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControllerService_ValidateSFTPLogin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SFTPLoginRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControllerServiceServer).ValidateSFTPLogin(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControllerService_ValidateSFTPLogin_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControllerServiceServer).ValidateSFTPLogin(ctx, req.(*SFTPLoginRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ControllerService_ServiceDesc is the grpc.ServiceDesc for ControllerService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1228,7 +1262,11 @@ var ControllerService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "Heartbeat",
 			Handler:    _ControllerService_Heartbeat_Handler,
 		},
+		{
+			MethodName: "ValidateSFTPLogin",
+			Handler:    _ControllerService_ValidateSFTPLogin_Handler,
+		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "worker.proto",
+	Metadata: "proto/worker.proto",
 }

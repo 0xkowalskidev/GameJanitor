@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"crypto/subtle"
 	"database/sql"
 	"fmt"
 	"log/slog"
@@ -86,6 +87,13 @@ func (c *ControllerGRPC) Register(ctx context.Context, req *pb.RegisterRequest) 
 		c.log.Error("failed to persist worker node on register", "worker_id", req.WorkerId, "error", err)
 	}
 
+	// Persist worker-reported SFTP port if provided
+	if req.SftpPort > 0 {
+		if err := models.SetWorkerNodeSFTPPort(c.db, req.WorkerId, int(req.SftpPort)); err != nil {
+			c.log.Error("failed to set worker sftp port on register", "worker_id", req.WorkerId, "error", err)
+		}
+	}
+
 	// Persist worker-reported port range if provided
 	if req.PortRangeStart > 0 && req.PortRangeEnd > 0 {
 		start, end := int(req.PortRangeStart), int(req.PortRangeEnd)
@@ -128,6 +136,22 @@ func (c *ControllerGRPC) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest
 
 	c.log.Debug("heartbeat received", "worker_id", req.WorkerId, "memory_available_mb", req.MemoryAvailableMb)
 	return &pb.HeartbeatResponse{Accepted: true}, nil
+}
+
+func (c *ControllerGRPC) ValidateSFTPLogin(ctx context.Context, req *pb.SFTPLoginRequest) (*pb.SFTPLoginResponse, error) {
+	gs, err := models.GetGameserverBySFTPUsername(c.db, req.Username)
+	if err != nil {
+		c.log.Error("sftp login lookup failed", "username", req.Username, "error", err)
+		return &pb.SFTPLoginResponse{Valid: false}, nil
+	}
+	if gs == nil || subtle.ConstantTimeCompare([]byte(gs.SFTPPassword), []byte(req.Password)) != 1 {
+		return &pb.SFTPLoginResponse{Valid: false}, nil
+	}
+	return &pb.SFTPLoginResponse{
+		Valid:        true,
+		GameserverId: gs.ID,
+		VolumeName:   gs.VolumeName,
+	}, nil
 }
 
 // DialController connects to a controller's gRPC address and returns the ControllerService client.

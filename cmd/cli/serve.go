@@ -214,7 +214,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 	netInfo := netinfo.Detect(logger)
 
-	router, err := web.NewRouter(gameStore, gameserverSvc, consoleSvc, fileSvc, scheduleSvc, backupSvc, querySvc, settingsSvc, authSvc, broadcaster, netInfo, registry, logPath, cfg.DataDir, sftpPort, role, logger)
+	router, err := web.NewRouter(gameStore, gameserverSvc, consoleSvc, fileSvc, scheduleSvc, backupSvc, querySvc, settingsSvc, authSvc, broadcaster, netInfo, registry, database, logPath, cfg.DataDir, sftpPort, role, logger)
 	if err != nil {
 		return fmt.Errorf("failed to initialize router: %w", err)
 	}
@@ -222,7 +222,11 @@ func runServe(cmd *cobra.Command, args []string) error {
 	// Start SFTP server if enabled
 	if sftpPort > 0 {
 		hostKeyPath := filepath.Join(cfg.DataDir, "sftp_host_key")
-		sftpServer, err := gjsftp.NewServer(fileSvc, authSvc, settingsSvc, hostKeyPath, logger)
+		sftpAuth := gjsftp.NewLocalAuth(database)
+		fileOpFactory := func(gameserverID string) gjsftp.FileOperator {
+			return gjsftp.NewDispatcherFileOperator(dispatcher, gameserverID)
+		}
+		sftpServer, err := gjsftp.NewServer(sftpAuth, fileOpFactory, hostKeyPath, logger)
 		if err != nil {
 			return fmt.Errorf("failed to initialize sftp server: %w", err)
 		}
@@ -276,6 +280,39 @@ func runWorkerAgent(cfg config.Config, grpcPort int, controllerAddr string, work
 		}
 	}()
 
+	// Start SFTP on worker if port is configured
+	workerSFTPPort := 0
+	if v := os.Getenv("GJ_SFTP_PORT"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			workerSFTPPort = n
+		}
+	}
+	if workerSFTPPort > 0 && controllerAddr != "" {
+		// Connect to controller for SFTP auth validation
+		sftpClient, sftpConn, err := worker.DialController(controllerAddr, workerToken)
+		if err != nil {
+			logger.Warn("failed to connect to controller for sftp auth, sftp disabled", "error", err)
+		} else {
+			defer sftpConn.Close()
+			sftpAuth := gjsftp.NewRemoteAuth(sftpClient)
+			fileOp := gjsftp.NewWorkerFileOperator(localWorker)
+			fileOpFactory := func(_ string) gjsftp.FileOperator { return fileOp }
+			hostKeyPath := filepath.Join(cfg.DataDir, "sftp_host_key")
+			sftpServer, err := gjsftp.NewServer(sftpAuth, fileOpFactory, hostKeyPath, logger)
+			if err != nil {
+				logger.Error("failed to initialize sftp server", "error", err)
+			} else {
+				defer sftpServer.Close()
+				go func() {
+					sftpAddr := fmt.Sprintf(":%d", workerSFTPPort)
+					if err := sftpServer.ListenAndServe(sftpAddr); err != nil {
+						logger.Error("sftp server stopped", "error", err)
+					}
+				}()
+			}
+		}
+	}
+
 	// If controller address is provided, register with it and start heartbeat loop
 	if controllerAddr != "" {
 		if workerID == "" {
@@ -299,7 +336,7 @@ func runWorkerAgent(cfg config.Config, grpcPort int, controllerAddr string, work
 			"has_token", workerToken != "",
 		)
 
-		runRegistrationLoop(controllerAddr, workerID, ownAddr, workerToken, netInfo, logger)
+		runRegistrationLoop(controllerAddr, workerID, ownAddr, workerToken, workerSFTPPort, netInfo, logger)
 		// runRegistrationLoop blocks forever
 	}
 
@@ -310,7 +347,7 @@ func runWorkerAgent(cfg config.Config, grpcPort int, controllerAddr string, work
 
 // runRegistrationLoop connects to the controller, registers, and sends heartbeats.
 // Reconnects with backoff on failure. Blocks forever.
-func runRegistrationLoop(controllerAddr, workerID, ownAddr, workerToken string, netInfo *netinfo.Info, logger *slog.Logger) {
+func runRegistrationLoop(controllerAddr, workerID, ownAddr, workerToken string, sftpPort int, netInfo *netinfo.Info, logger *slog.Logger) {
 	backoff := time.Second
 	maxBackoff := 30 * time.Second
 
@@ -340,6 +377,9 @@ func runRegistrationLoop(controllerAddr, workerID, ownAddr, workerToken string, 
 		}
 		if v, err := strconv.Atoi(os.Getenv("GJ_PORT_RANGE_END")); err == nil {
 			regReq.PortRangeEnd = int32(v)
+		}
+		if sftpPort > 0 {
+			regReq.SftpPort = int32(sftpPort)
 		}
 		regResp, err := client.Register(ctx, regReq)
 		if err != nil {

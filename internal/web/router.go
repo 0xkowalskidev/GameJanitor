@@ -2,6 +2,7 @@ package web
 
 import (
 	"crypto/rand"
+	"database/sql"
 	"fmt"
 	"io/fs"
 	"log/slog"
@@ -33,6 +34,7 @@ func NewRouter(
 	broadcaster *service.EventBroadcaster,
 	netInfo *netinfo.Info,
 	registry *worker.Registry,
+	db *sql.DB,
 	logPath string,
 	dataDir string,
 	sftpPort int,
@@ -218,7 +220,7 @@ func NewRouter(
 	// Page handlers (HTML)
 	pageDashboard := handlers.NewPageDashboardHandlers(gameStore, gameserverSvc, querySvc, settingsSvc, registry, renderer, log)
 	pageGames := handlers.NewPageGameHandlers(gameStore, gameserverSvc, renderer, log)
-	pageGameservers := handlers.NewPageGameserverHandlers(gameStore, gameserverSvc, querySvc, settingsSvc, registry, renderer, log)
+	pageGameservers := handlers.NewPageGameserverHandlers(gameStore, gameserverSvc, querySvc, settingsSvc, registry, renderer, db, log)
 	pageSettings := handlers.NewPageSettingsHandlers(settingsSvc, authSvc, registry, renderer, log)
 	pageActions := handlers.NewPageActionHandlers(gameStore, gameserverSvc, renderer, log)
 	pageConsole := handlers.NewPageConsoleHandlers(consoleSvc, gameStore, gameserverSvc, renderer, log)

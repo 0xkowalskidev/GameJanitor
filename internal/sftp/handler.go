@@ -2,7 +2,6 @@ package sftp
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"io"
 	"log/slog"
@@ -10,19 +9,17 @@ import (
 	"path"
 	"time"
 
-	"github.com/0xkowalskidev/gamejanitor/internal/service"
-	"github.com/0xkowalskidev/gamejanitor/internal/worker"
 	gosftp "github.com/pkg/sftp"
 )
 
 type handler struct {
-	fileSvc      *service.FileService
-	gameserverID string
-	log          *slog.Logger
+	fileOp     FileOperator
+	volumeName string
+	log        *slog.Logger
 }
 
-func newHandler(fileSvc *service.FileService, gameserverID string, log *slog.Logger) *handler {
-	return &handler{fileSvc: fileSvc, gameserverID: gameserverID, log: log}
+func newHandler(fileOp FileOperator, volumeName string, log *slog.Logger) *handler {
+	return &handler{fileOp: fileOp, volumeName: volumeName, log: log}
 }
 
 func (h *handler) Handlers() gosftp.Handlers {
@@ -34,42 +31,34 @@ func (h *handler) Handlers() gosftp.Handlers {
 	}
 }
 
-// toDataPath converts an SFTP path (rooted at /) to a FileService path (rooted at /data).
-func toDataPath(sftpPath string) string {
-	cleaned := path.Clean("/" + sftpPath)
-	return "/data" + cleaned
+func cleanPath(sftpPath string) string {
+	return path.Clean("/" + sftpPath)
 }
 
-// Fileread implements gosftp.FileReader — reads the entire file into memory.
 func (h *handler) Fileread(r *gosftp.Request) (io.ReaderAt, error) {
-	ctx := context.Background()
-	data, err := h.fileSvc.ReadFile(ctx, h.gameserverID, toDataPath(r.Filepath))
+	data, err := h.fileOp.ReadFile(h.volumeName, cleanPath(r.Filepath))
 	if err != nil {
 		return nil, err
 	}
 	return bytes.NewReader(data), nil
 }
 
-// Filewrite implements gosftp.FileWriter — buffers writes, flushes on Close.
 func (h *handler) Filewrite(r *gosftp.Request) (io.WriterAt, error) {
 	return &writeBuffer{
-		fileSvc:      h.fileSvc,
-		gameserverID: h.gameserverID,
-		path:         toDataPath(r.Filepath),
+		fileOp:     h.fileOp,
+		volumeName: h.volumeName,
+		path:       cleanPath(r.Filepath),
 	}, nil
 }
 
-// Filecmd implements gosftp.FileCmder.
 func (h *handler) Filecmd(r *gosftp.Request) error {
-	ctx := context.Background()
-
 	switch r.Method {
 	case "Rename":
-		return h.fileSvc.RenamePath(ctx, h.gameserverID, toDataPath(r.Filepath), toDataPath(r.Target))
+		return h.fileOp.RenamePath(h.volumeName, cleanPath(r.Filepath), cleanPath(r.Target))
 	case "Remove", "Rmdir":
-		return h.fileSvc.DeletePath(ctx, h.gameserverID, toDataPath(r.Filepath))
+		return h.fileOp.DeletePath(h.volumeName, cleanPath(r.Filepath))
 	case "Mkdir":
-		return h.fileSvc.CreateDirectory(ctx, h.gameserverID, toDataPath(r.Filepath))
+		return h.fileOp.CreateDirectory(h.volumeName, cleanPath(r.Filepath))
 	case "Setstat":
 		return nil
 	default:
@@ -77,14 +66,12 @@ func (h *handler) Filecmd(r *gosftp.Request) error {
 	}
 }
 
-// Filelist implements gosftp.FileLister.
 func (h *handler) Filelist(r *gosftp.Request) (gosftp.ListerAt, error) {
-	ctx := context.Background()
-	dataPath := toDataPath(r.Filepath)
+	p := cleanPath(r.Filepath)
 
 	switch r.Method {
 	case "List":
-		entries, err := h.fileSvc.ListDirectory(ctx, h.gameserverID, dataPath)
+		entries, err := h.fileOp.ListFiles(h.volumeName, p)
 		if err != nil {
 			return nil, err
 		}
@@ -95,14 +82,14 @@ func (h *handler) Filelist(r *gosftp.Request) (gosftp.ListerAt, error) {
 		return listAt(infos), nil
 
 	case "Stat":
-		if dataPath == "/data" || dataPath == "/data/" {
+		if p == "/" {
 			return listAt([]os.FileInfo{&syntheticFileInfo{
 				name: "/", isDir: true, mode: os.ModeDir | 0755,
 			}}), nil
 		}
-		dir := path.Dir(dataPath)
-		base := path.Base(dataPath)
-		entries, err := h.fileSvc.ListDirectory(ctx, h.gameserverID, dir)
+		dir := path.Dir(p)
+		base := path.Base(p)
+		entries, err := h.fileOp.ListFiles(h.volumeName, dir)
 		if err != nil {
 			return nil, err
 		}
@@ -118,13 +105,12 @@ func (h *handler) Filelist(r *gosftp.Request) (gosftp.ListerAt, error) {
 	}
 }
 
-// writeBuffer accumulates WriteAt calls and flushes to FileService on Close.
 type writeBuffer struct {
-	fileSvc      *service.FileService
-	gameserverID string
-	path         string
-	buf          []byte
-	maxOffset    int64
+	fileOp     FileOperator
+	volumeName string
+	path       string
+	buf        []byte
+	maxOffset  int64
 }
 
 func (w *writeBuffer) WriteAt(p []byte, off int64) (int, error) {
@@ -142,11 +128,9 @@ func (w *writeBuffer) WriteAt(p []byte, off int64) (int, error) {
 }
 
 func (w *writeBuffer) Close() error {
-	ctx := context.Background()
-	return w.fileSvc.WriteFile(ctx, w.gameserverID, w.path, w.buf[:w.maxOffset])
+	return w.fileOp.WriteFile(w.volumeName, w.path, w.buf[:w.maxOffset], 0644)
 }
 
-// listAt implements gosftp.ListerAt over a slice of os.FileInfo.
 type listAt []os.FileInfo
 
 func (l listAt) ListAt(ls []os.FileInfo, offset int64) (int, error) {
@@ -160,13 +144,17 @@ func (l listAt) ListAt(ls []os.FileInfo, offset int64) (int, error) {
 	return n, nil
 }
 
-func fileEntryInfo(e worker.FileEntry) os.FileInfo {
+func fileEntryInfo(e FileEntry) os.FileInfo {
 	mode := os.FileMode(0644)
 	if e.IsDir {
 		mode = os.ModeDir | 0755
 	}
+	var modTime time.Time
+	if e.ModTime > 0 {
+		modTime = time.Unix(e.ModTime, 0)
+	}
 	return &syntheticFileInfo{
-		name: e.Name, size: e.Size, mode: mode, modTime: e.ModTime, isDir: e.IsDir,
+		name: e.Name, size: e.Size, mode: mode, modTime: modTime, isDir: e.IsDir,
 	}
 }
 

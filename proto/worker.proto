@@ -52,6 +52,7 @@ service WorkerService {
 service ControllerService {
     rpc Register(RegisterRequest) returns (RegisterResponse);
     rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+    rpc ValidateSFTPLogin(SFTPLoginRequest) returns (SFTPLoginResponse);
 }
 
 // Shared
@@ -279,9 +280,22 @@ message RegisterRequest {
     string external_ip = 7;
     int32 port_range_start = 8;
     int32 port_range_end = 9;
+    int32 sftp_port = 10;
 }
 message RegisterResponse {
     bool accepted = 1;
+}
+
+// SFTP auth
+
+message SFTPLoginRequest {
+    string username = 1;
+    string password = 2;
+}
+message SFTPLoginResponse {
+    bool valid = 1;
+    string gameserver_id = 2;
+    string volume_name = 3;
 }
 
 // Game scripts

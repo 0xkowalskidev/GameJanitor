@@ -193,6 +193,8 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gam
 	gs.ID = uuid.New().String()
 	gs.VolumeName = "gamejanitor-" + gs.ID
 	gs.Status = StatusStopped
+	gs.SFTPUsername = generateSFTPUsername(gs.Name)
+	gs.SFTPPassword = generateRandomPassword(16)
 
 	game := s.gameStore.GetGame(gs.GameID)
 	if game == nil {
@@ -1019,4 +1021,42 @@ func (s *GameserverService) GetContainerLogs(ctx context.Context, gameserverID s
 		return nil, fmt.Errorf("gameserver %s has no container", gameserverID)
 	}
 	return s.dispatcher.WorkerFor(gameserverID).ContainerLogs(ctx, *gs.ContainerID, tail, false)
+}
+
+// generateSFTPUsername creates a URL-safe slug from the gameserver name with random suffix for uniqueness.
+func generateSFTPUsername(name string) string {
+	slug := strings.ToLower(name)
+	slug = strings.Map(func(r rune) rune {
+		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' {
+			return r
+		}
+		if r == ' ' || r == '-' || r == '_' {
+			return '-'
+		}
+		return -1
+	}, slug)
+	// Collapse multiple hyphens
+	for strings.Contains(slug, "--") {
+		slug = strings.ReplaceAll(slug, "--", "-")
+	}
+	slug = strings.Trim(slug, "-")
+	if len(slug) > 24 {
+		slug = slug[:24]
+	}
+	if slug == "" {
+		slug = "gs"
+	}
+	suffix := make([]byte, 3)
+	rand.Read(suffix)
+	return slug + "-" + hex.EncodeToString(suffix)
+}
+
+func generateRandomPassword(length int) string {
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	b := make([]byte, length)
+	rand.Read(b)
+	for i := range b {
+		b[i] = charset[int(b[i])%len(charset)]
+	}
+	return string(b)
 }

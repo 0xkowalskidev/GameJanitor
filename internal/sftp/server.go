@@ -13,35 +13,58 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/0xkowalskidev/gamejanitor/internal/service"
 	gosftp "github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 )
 
-type Server struct {
-	listener  net.Listener
-	sshConfig *ssh.ServerConfig
-	fileSvc   *service.FileService
-	authSvc   *service.AuthService
-	settings  *service.SettingsService
-	log       *slog.Logger
-	done      chan struct{}
+// SFTPAuth validates SFTP login credentials and returns the gameserver ID and volume name.
+type SFTPAuth interface {
+	ValidateLogin(username, password string) (gameserverID string, volumeName string, err error)
 }
 
-// NewServer creates an embedded SFTP server.
-// Username = gameserver ID, password = auth token (or anything if auth is disabled).
-func NewServer(fileSvc *service.FileService, authSvc *service.AuthService, settingsSvc *service.SettingsService, hostKeyPath string, log *slog.Logger) (*Server, error) {
+// FileOperator abstracts volume-level file operations for the SFTP handler.
+type FileOperator interface {
+	ListFiles(volumeName string, path string) ([]FileEntry, error)
+	ReadFile(volumeName string, path string) ([]byte, error)
+	WriteFile(volumeName string, path string, content []byte, perm os.FileMode) error
+	DeletePath(volumeName string, path string) error
+	CreateDirectory(volumeName string, path string) error
+	RenamePath(volumeName string, from string, to string) error
+}
+
+// FileEntry represents a file or directory in a volume.
+type FileEntry struct {
+	Name    string
+	IsDir   bool
+	Size    int64
+	ModTime int64
+}
+
+// FileOperatorFactory creates a FileOperator for a given session.
+// On workers, this returns the same WorkerFileOperator each time.
+// On controllers, this creates a DispatcherFileOperator scoped to the gameserver.
+type FileOperatorFactory func(gameserverID string) FileOperator
+
+type Server struct {
+	listener     net.Listener
+	sshConfig    *ssh.ServerConfig
+	auth         SFTPAuth
+	fileOpFactory FileOperatorFactory
+	log          *slog.Logger
+	done         chan struct{}
+}
+
+func NewServer(auth SFTPAuth, fileOpFactory FileOperatorFactory, hostKeyPath string, log *slog.Logger) (*Server, error) {
 	hostKey, err := loadOrCreateHostKey(hostKeyPath)
 	if err != nil {
 		return nil, fmt.Errorf("loading sftp host key: %w", err)
 	}
 
 	s := &Server{
-		fileSvc:  fileSvc,
-		authSvc:  authSvc,
-		settings: settingsSvc,
-		log:      log,
-		done:     make(chan struct{}),
+		auth:          auth,
+		fileOpFactory: fileOpFactory,
+		log:           log,
+		done:          make(chan struct{}),
 	}
 
 	config := &ssh.ServerConfig{
@@ -54,25 +77,16 @@ func NewServer(fileSvc *service.FileService, authSvc *service.AuthService, setti
 }
 
 func (s *Server) passwordCallback(conn ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
-	gameserverID := conn.User()
-
-	if !s.settings.GetAuthEnabled() {
-		return &ssh.Permissions{
-			Extensions: map[string]string{"gameserver_id": gameserverID},
-		}, nil
-	}
-
-	token := s.authSvc.ValidateToken(string(password))
-	if token == nil {
-		return nil, fmt.Errorf("invalid token")
-	}
-
-	if !service.IsAdmin(token) && !service.HasPermission(token, gameserverID, "files") {
-		return nil, fmt.Errorf("no files permission on gameserver %s", gameserverID)
+	gameserverID, volumeName, err := s.auth.ValidateLogin(conn.User(), string(password))
+	if err != nil {
+		return nil, err
 	}
 
 	return &ssh.Permissions{
-		Extensions: map[string]string{"gameserver_id": gameserverID},
+		Extensions: map[string]string{
+			"gameserver_id": gameserverID,
+			"volume_name":   volumeName,
+		},
 	}, nil
 }
 
@@ -117,6 +131,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 	defer sshConn.Close()
 
 	gameserverID := sshConn.Permissions.Extensions["gameserver_id"]
+	volumeName := sshConn.Permissions.Extensions["volume_name"]
 	s.log.Info("sftp session started", "remote", sshConn.RemoteAddr(), "gameserver_id", gameserverID)
 
 	go ssh.DiscardRequests(reqs)
@@ -133,11 +148,12 @@ func (s *Server) handleConnection(conn net.Conn) {
 			continue
 		}
 
-		go s.handleChannel(channel, requests, gameserverID)
+		fileOp := s.fileOpFactory(gameserverID)
+		go s.handleChannel(channel, requests, gameserverID, volumeName, fileOp)
 	}
 }
 
-func (s *Server) handleChannel(channel ssh.Channel, requests <-chan *ssh.Request, gameserverID string) {
+func (s *Server) handleChannel(channel ssh.Channel, requests <-chan *ssh.Request, gameserverID, volumeName string, fileOp FileOperator) {
 	defer channel.Close()
 
 	for req := range requests {
@@ -149,7 +165,7 @@ func (s *Server) handleChannel(channel ssh.Channel, requests <-chan *ssh.Request
 		}
 		req.Reply(true, nil)
 
-		h := newHandler(s.fileSvc, gameserverID, s.log)
+		h := newHandler(fileOp, volumeName, s.log)
 		server := gosftp.NewRequestServer(channel, h.Handlers())
 		if err := server.Serve(); err != nil && err != io.EOF {
 			s.log.Error("sftp session error", "gameserver_id", gameserverID, "error", err)

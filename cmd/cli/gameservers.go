@@ -96,6 +96,8 @@ var gameserversGetCmd = &cobra.Command{
 			VolumeName    string          `json:"volume_name"`
 			Ports         json.RawMessage `json:"ports"`
 			Env           json.RawMessage `json:"env"`
+			SFTPUsername  string          `json:"sftp_username"`
+			SFTPPassword  string          `json:"sftp_password"`
 		}
 		if err := json.Unmarshal(resp.Data, &gs); err != nil {
 			return fmt.Errorf("parsing response: %w", err)
@@ -114,6 +116,10 @@ var gameserversGetCmd = &cobra.Command{
 		fmt.Printf("Volume:     %s\n", gs.VolumeName)
 		fmt.Printf("Ports:      %s\n", string(gs.Ports))
 		fmt.Printf("Env:        %s\n", string(gs.Env))
+		if gs.SFTPUsername != "" {
+			fmt.Printf("SFTP User:  %s\n", gs.SFTPUsername)
+			fmt.Printf("SFTP Pass:  %s\n", gs.SFTPPassword)
+		}
 		return nil
 	},
 }

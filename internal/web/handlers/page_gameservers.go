@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -22,11 +23,12 @@ type PageGameserverHandlers struct {
 	settingsSvc   *service.SettingsService
 	registry      *worker.Registry
 	renderer      *Renderer
+	db            *sql.DB
 	log           *slog.Logger
 }
 
-func NewPageGameserverHandlers(gameStore *games.GameStore, gameserverSvc *service.GameserverService, querySvc *service.QueryService, settingsSvc *service.SettingsService, registry *worker.Registry, renderer *Renderer, log *slog.Logger) *PageGameserverHandlers {
-	return &PageGameserverHandlers{gameStore: gameStore, gameserverSvc: gameserverSvc, querySvc: querySvc, settingsSvc: settingsSvc, registry: registry, renderer: renderer, log: log}
+func NewPageGameserverHandlers(gameStore *games.GameStore, gameserverSvc *service.GameserverService, querySvc *service.QueryService, settingsSvc *service.SettingsService, registry *worker.Registry, renderer *Renderer, db *sql.DB, log *slog.Logger) *PageGameserverHandlers {
+	return &PageGameserverHandlers{gameStore: gameStore, gameserverSvc: gameserverSvc, querySvc: querySvc, settingsSvc: settingsSvc, registry: registry, renderer: renderer, db: db, log: log}
 }
 
 type gameserverFormData struct {
@@ -321,6 +323,14 @@ func (h *PageGameserverHandlers) Detail(w http.ResponseWriter, r *http.Request) 
 	if connectIP == "" {
 		connectIP = "127.0.0.1"
 	}
+
+	sftpPort := 0
+	if gs.NodeID != nil && *gs.NodeID != "" {
+		if node, err := models.GetWorkerNode(h.db, *gs.NodeID); err == nil && node != nil && node.SFTPPort > 0 {
+			sftpPort = node.SFTPPort
+		}
+	}
+
 	h.renderer.Render(w, r, "gameservers/detail", map[string]any{
 		"Gameserver":                 gs,
 		"Game":                       game,
@@ -330,6 +340,7 @@ func (h *PageGameserverHandlers) Detail(w http.ResponseWriter, r *http.Request) 
 		"Ports":                      parsePorts(gs.Ports),
 		"ConnectionAddress":          connectIP,
 		"ConnectionAddressConfigured": connectionConfigured,
+		"SFTPPort":                   sftpPort,
 	})
 }
 
