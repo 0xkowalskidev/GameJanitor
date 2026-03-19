@@ -19,6 +19,7 @@ import (
 	"github.com/0xkowalskidev/gamejanitor/internal/db"
 	"github.com/0xkowalskidev/gamejanitor/internal/docker"
 	"github.com/0xkowalskidev/gamejanitor/internal/games"
+	"github.com/0xkowalskidev/gamejanitor/internal/models"
 	"github.com/0xkowalskidev/gamejanitor/internal/netinfo"
 	"github.com/0xkowalskidev/gamejanitor/internal/service"
 	gjsftp "github.com/0xkowalskidev/gamejanitor/internal/sftp"
@@ -218,6 +219,31 @@ func runServe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize router: %w", err)
 	}
+
+	// Prune old audit log entries on startup, then daily
+	go func() {
+		retentionDays := settingsSvc.GetAuditRetentionDays()
+		if retentionDays > 0 {
+			pruned, err := models.PruneAuditLogs(database, retentionDays)
+			if err != nil {
+				logger.Error("failed to prune audit logs on startup", "error", err)
+			} else if pruned > 0 {
+				logger.Info("pruned old audit log entries", "count", pruned, "retention_days", retentionDays)
+			}
+		}
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
+			days := settingsSvc.GetAuditRetentionDays()
+			if days > 0 {
+				if pruned, err := models.PruneAuditLogs(database, days); err != nil {
+					logger.Error("failed to prune audit logs", "error", err)
+				} else if pruned > 0 {
+					logger.Info("pruned old audit log entries", "count", pruned, "retention_days", days)
+				}
+			}
+		}
+	}()
 
 	// Start SFTP server if enabled
 	if sftpPort > 0 {

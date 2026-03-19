@@ -1,0 +1,108 @@
+{{define "title"}}Audit Log - Gamejanitor{{end}}
+
+{{define "content"}}
+<div class="max-w-6xl mx-auto px-4 sm:px-6 py-6" x-data="{
+  search: '',
+  actionFilter: '',
+  get filteredEntries() {
+    return this.$refs.rows ? Array.from(this.$refs.rows.children).filter(row => {
+      const text = row.textContent.toLowerCase();
+      const matchSearch = !this.search || text.includes(this.search.toLowerCase());
+      const matchAction = !this.actionFilter || row.dataset.action === this.actionFilter;
+      return matchSearch && matchAction;
+    }) : [];
+  }
+}">
+  <div class="flex items-center justify-between mb-6">
+    <div class="flex items-center gap-3">
+      <a href="/settings" class="text-surface-400 hover:text-white transition-colors">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+      </a>
+      <h1 class="font-display font-bold text-2xl text-white">Audit Log</h1>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="flex flex-col sm:flex-row gap-3 mb-4">
+    <input type="text" x-model="search" placeholder="Search..."
+           class="flex-1 px-3 py-2 bg-surface-900/60 border border-surface-700/50 rounded-lg text-white placeholder-surface-500 focus:border-accent-500/50 focus:ring-1 focus:ring-accent-500/50 focus:outline-none text-sm">
+    <select x-model="actionFilter"
+            class="px-3 py-2 bg-surface-900/60 border border-surface-700/50 rounded-lg text-white text-sm focus:border-accent-500/50 focus:outline-none">
+      <option value="">All actions</option>
+      {{range .UniqueActions}}
+      <option value="{{.}}">{{.}}</option>
+      {{end}}
+    </select>
+  </div>
+
+  <!-- Table -->
+  <div class="bg-surface-900/40 border border-surface-800/60 rounded-xl overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-surface-800/40">
+            <th class="text-left px-4 py-3 text-surface-400 font-medium text-xs uppercase tracking-wider">Time</th>
+            <th class="text-left px-4 py-3 text-surface-400 font-medium text-xs uppercase tracking-wider">Action</th>
+            <th class="text-left px-4 py-3 text-surface-400 font-medium text-xs uppercase tracking-wider">Resource</th>
+            <th class="text-left px-4 py-3 text-surface-400 font-medium text-xs uppercase tracking-wider">Token</th>
+            <th class="text-left px-4 py-3 text-surface-400 font-medium text-xs uppercase tracking-wider">IP</th>
+            <th class="text-left px-4 py-3 text-surface-400 font-medium text-xs uppercase tracking-wider">Status</th>
+          </tr>
+        </thead>
+        <tbody x-ref="rows" class="divide-y divide-surface-800/30"
+               x-init="$watch('search + actionFilter', () => {
+                 Array.from($refs.rows.children).forEach(row => {
+                   const text = row.textContent.toLowerCase();
+                   const matchSearch = !search || text.includes(search.toLowerCase());
+                   const matchAction = !actionFilter || row.dataset.action === actionFilter;
+                   row.style.display = (matchSearch && matchAction) ? '' : 'none';
+                 });
+               })">
+          {{range .Entries}}
+          <tr class="hover:bg-surface-800/20 transition-colors" data-action="{{.Action}}">
+            <td class="px-4 py-3 text-surface-300 whitespace-nowrap text-xs font-mono">{{formatTime .Timestamp}}</td>
+            <td class="px-4 py-3 whitespace-nowrap">
+              <span class="px-2 py-0.5 bg-surface-800/60 text-surface-200 text-xs rounded font-medium">{{.Action}}</span>
+            </td>
+            <td class="px-4 py-3 text-surface-300 whitespace-nowrap text-xs">
+              <span class="text-surface-400">{{.ResourceType}}</span>
+              {{if .ResourceID}}
+                <span class="text-surface-500">/</span>
+                <span class="font-mono">{{if gt (len .ResourceID) 8}}{{slice .ResourceID 0 8}}{{else}}{{.ResourceID}}{{end}}</span>
+              {{end}}
+            </td>
+            <td class="px-4 py-3 text-surface-300 whitespace-nowrap text-xs">
+              {{if .TokenName}}
+                {{.TokenName}}
+              {{else if .TokenID}}
+                <span class="font-mono">{{if gt (len .TokenID) 8}}{{slice .TokenID 0 8}}{{else}}{{.TokenID}}{{end}}</span>
+              {{else}}
+                <span class="text-surface-500">-</span>
+              {{end}}
+            </td>
+            <td class="px-4 py-3 text-surface-400 whitespace-nowrap text-xs font-mono">{{.IPAddress}}</td>
+            <td class="px-4 py-3 whitespace-nowrap">
+              {{if and (ge .StatusCode 200) (lt .StatusCode 300)}}
+                <span class="px-1.5 py-0.5 bg-emerald-900/40 border border-emerald-800/40 text-emerald-400 text-[10px] rounded font-medium">{{.StatusCode}}</span>
+              {{else if and (ge .StatusCode 400) (lt .StatusCode 500)}}
+                <span class="px-1.5 py-0.5 bg-amber-900/40 border border-amber-800/40 text-amber-400 text-[10px] rounded font-medium">{{.StatusCode}}</span>
+              {{else if ge .StatusCode 500}}
+                <span class="px-1.5 py-0.5 bg-red-900/40 border border-red-800/40 text-red-400 text-[10px] rounded font-medium">{{.StatusCode}}</span>
+              {{else}}
+                <span class="px-1.5 py-0.5 bg-surface-800/60 text-surface-300 text-[10px] rounded font-medium">{{.StatusCode}}</span>
+              {{end}}
+            </td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+
+    {{if not .Entries}}
+    <div class="p-8 text-center text-surface-400 text-sm">
+      No audit log entries yet. Actions will appear here as they are performed.
+    </div>
+    {{end}}
+  </div>
+</div>
+{{end}}

@@ -57,6 +57,9 @@ const (
 	SettingMaxBackups        = "max_backups"
 	SettingAuthEnabled       = "auth_enabled"
 	SettingLocalhostBypass   = "localhost_bypass"
+	SettingAuditRetention   = "audit_retention_days"
+
+	DefaultAuditRetention = 30
 
 	DefaultPortRangeStart    = 27000
 	DefaultPortRangeEnd      = 28999
@@ -266,4 +269,29 @@ func (s *SettingsService) SetLocalhostBypass(enabled bool) error {
 	}
 	s.log.Info("setting localhost_bypass", "enabled", enabled)
 	return models.SetSetting(s.db, SettingLocalhostBypass, v)
+}
+
+func (s *SettingsService) GetAuditRetentionDays() int {
+	if v := os.Getenv("GJ_AUDIT_RETENTION_DAYS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
+	v, err := models.GetSetting(s.db, SettingAuditRetention)
+	if err != nil || v == "" {
+		return DefaultAuditRetention
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return DefaultAuditRetention
+	}
+	return n
+}
+
+func (s *SettingsService) IsAuditRetentionFromEnv() bool {
+	return os.Getenv("GJ_AUDIT_RETENTION_DAYS") != ""
+}
+
+func (s *SettingsService) SetAuditRetentionDays(v int) error {
+	return models.SetSetting(s.db, SettingAuditRetention, strconv.Itoa(v))
 }

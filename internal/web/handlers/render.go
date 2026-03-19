@@ -65,6 +65,7 @@ func NewRenderer(netInfo *netinfo.Info, settingsSvc *service.SettingsService, sf
 		"auth/tokens.html",
 		"auth/token_created.html",
 		"settings/index.html",
+		"audit/index.html",
 	}
 
 	for _, page := range pages {

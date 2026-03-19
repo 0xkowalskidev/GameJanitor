@@ -40,6 +40,8 @@ func (h *PageSettingsHandlers) SettingsPage(w http.ResponseWriter, r *http.Reque
 		"AuthFromEnv":            h.settingsSvc.IsAuthEnabledFromEnv(),
 		"LocalhostBypass":        h.settingsSvc.GetLocalhostBypass(),
 		"LocalhostBypassFromEnv": h.settingsSvc.IsLocalhostBypassFromEnv(),
+		"AuditRetentionDays":     h.settingsSvc.GetAuditRetentionDays(),
+		"AuditRetentionFromEnv":  h.settingsSvc.IsAuditRetentionFromEnv(),
 	}
 
 	if h.registry != nil {
@@ -420,6 +422,35 @@ func (h *PageSettingsHandlers) SaveMaxBackups(w http.ResponseWriter, r *http.Req
 	}
 
 	h.log.Info("max backups updated", "value", v)
+	w.Header().Set("HX-Redirect", "/settings")
+	w.WriteHeader(http.StatusOK)
+}
+
+// SaveAuditRetention handles the audit retention days form submission.
+func (h *PageSettingsHandlers) SaveAuditRetention(w http.ResponseWriter, r *http.Request) {
+	if h.settingsSvc.IsAuditRetentionFromEnv() {
+		http.Error(w, "Audit retention is controlled by environment variable", http.StatusBadRequest)
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid form data", http.StatusBadRequest)
+		return
+	}
+
+	v, err := strconv.Atoi(r.FormValue("audit_retention_days"))
+	if err != nil || v < 0 {
+		http.Error(w, "Invalid audit retention value", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.settingsSvc.SetAuditRetentionDays(v); err != nil {
+		h.log.Error("setting audit retention", "error", err)
+		http.Error(w, "Failed to save audit retention", http.StatusInternalServerError)
+		return
+	}
+
+	h.log.Info("audit retention updated", "days", v)
 	w.Header().Set("HX-Redirect", "/settings")
 	w.WriteHeader(http.StatusOK)
 }

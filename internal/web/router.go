@@ -87,6 +87,7 @@ func NewRouter(
 	authHandlers := handlers.NewAuthHandlers(authSvc, log)
 	workerHandlers := handlers.NewWorkerHandlers(registry, settingsSvc, gameserverSvc, log)
 	settingsAPIHandlers := handlers.NewSettingsAPIHandlers(settingsSvc, log)
+	auditHandlers := handlers.NewAuditHandlers(db, log)
 
 	requireAdmin := RequireAdmin(settingsSvc)
 	requireAccess := RequireGameserverAccess(settingsSvc)
@@ -98,9 +99,12 @@ func NewRouter(
 	requireBackups := RequirePermission(settingsSvc, "backups")
 	requireSettings := RequirePermission(settingsSvc, "settings")
 
+	auditMiddleware := AuditMiddleware(db, log)
+
 	r.Route("/api", func(r chi.Router) {
 		r.Use(jsonContentType)
 		r.Use(authMiddleware)
+		r.Use(auditMiddleware)
 
 		r.Get("/status", statusHandlers.Get)
 
@@ -180,6 +184,11 @@ func NewRouter(
 			r.Delete("/{tokenId}", authHandlers.DeleteToken)
 		})
 
+		r.Route("/audit", func(r chi.Router) {
+			r.Use(requireAdmin)
+			r.Get("/", auditHandlers.List)
+		})
+
 		r.Route("/worker-tokens", func(r chi.Router) {
 			r.Use(requireAdmin)
 			r.Get("/", authHandlers.ListWorkerTokens)
@@ -222,6 +231,7 @@ func NewRouter(
 	pageGames := handlers.NewPageGameHandlers(gameStore, gameserverSvc, renderer, log)
 	pageGameservers := handlers.NewPageGameserverHandlers(gameStore, gameserverSvc, querySvc, settingsSvc, registry, renderer, db, log)
 	pageSettings := handlers.NewPageSettingsHandlers(settingsSvc, authSvc, registry, renderer, log)
+	pageAudit := handlers.NewPageAuditHandlers(db, renderer, log)
 	pageActions := handlers.NewPageActionHandlers(gameStore, gameserverSvc, renderer, log)
 	pageConsole := handlers.NewPageConsoleHandlers(consoleSvc, gameStore, gameserverSvc, renderer, log)
 	pageFiles := handlers.NewPageFileHandlers(fileSvc, gameStore, gameserverSvc, renderer, log)
@@ -232,6 +242,7 @@ func NewRouter(
 		r.Use(plaintextMiddleware)
 		r.Use(csrfMiddleware)
 		r.Use(authMiddleware)
+		r.Use(auditMiddleware)
 
 		r.Get("/", pageDashboard.Dashboard)
 		r.Get("/dashboard/workers", pageDashboard.WorkersPartial)
@@ -251,6 +262,8 @@ func NewRouter(
 			r.Post("/port-range", pageSettings.SavePortRange)
 			r.Post("/port-mode", pageSettings.SavePortMode)
 			r.Post("/max-backups", pageSettings.SaveMaxBackups)
+			r.Get("/audit", pageAudit.List)
+			r.Post("/audit-retention", pageSettings.SaveAuditRetention)
 			r.Post("/localhost-bypass/enable", pageSettings.SetLocalhostBypass(true))
 			r.Post("/localhost-bypass/disable", pageSettings.SetLocalhostBypass(false))
 			r.Post("/workers/{workerID}/port-range", pageSettings.SaveWorkerPortRange)
