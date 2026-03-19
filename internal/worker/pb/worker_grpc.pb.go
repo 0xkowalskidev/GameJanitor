@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.0
 // - protoc             v6.33.5
-// source: proto/worker.proto
+// source: worker.proto
 
 package pb
 
@@ -30,6 +30,8 @@ const (
 	WorkerService_ContainerStats_FullMethodName       = "/worker.WorkerService/ContainerStats"
 	WorkerService_CreateVolume_FullMethodName         = "/worker.WorkerService/CreateVolume"
 	WorkerService_RemoveVolume_FullMethodName         = "/worker.WorkerService/RemoveVolume"
+	WorkerService_BackupVolume_FullMethodName         = "/worker.WorkerService/BackupVolume"
+	WorkerService_RestoreVolume_FullMethodName        = "/worker.WorkerService/RestoreVolume"
 	WorkerService_ListFiles_FullMethodName            = "/worker.WorkerService/ListFiles"
 	WorkerService_ReadFile_FullMethodName             = "/worker.WorkerService/ReadFile"
 	WorkerService_WriteFile_FullMethodName            = "/worker.WorkerService/WriteFile"
@@ -65,6 +67,8 @@ type WorkerServiceClient interface {
 	// Volumes
 	CreateVolume(ctx context.Context, in *CreateVolumeRequest, opts ...grpc.CallOption) (*CreateVolumeResponse, error)
 	RemoveVolume(ctx context.Context, in *RemoveVolumeRequest, opts ...grpc.CallOption) (*RemoveVolumeResponse, error)
+	BackupVolume(ctx context.Context, in *BackupVolumeRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DataChunk], error)
+	RestoreVolume(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[RestoreVolumeRequest, RestoreVolumeResponse], error)
 	// File operations
 	ListFiles(ctx context.Context, in *ListFilesRequest, opts ...grpc.CallOption) (*ListFilesResponse, error)
 	ReadFile(ctx context.Context, in *ReadFileRequest, opts ...grpc.CallOption) (*ReadFileResponse, error)
@@ -212,6 +216,38 @@ func (c *workerServiceClient) RemoveVolume(ctx context.Context, in *RemoveVolume
 	return out, nil
 }
 
+func (c *workerServiceClient) BackupVolume(ctx context.Context, in *BackupVolumeRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DataChunk], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[1], WorkerService_BackupVolume_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[BackupVolumeRequest, DataChunk]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type WorkerService_BackupVolumeClient = grpc.ServerStreamingClient[DataChunk]
+
+func (c *workerServiceClient) RestoreVolume(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[RestoreVolumeRequest, RestoreVolumeResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[2], WorkerService_RestoreVolume_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[RestoreVolumeRequest, RestoreVolumeResponse]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type WorkerService_RestoreVolumeClient = grpc.ClientStreamingClient[RestoreVolumeRequest, RestoreVolumeResponse]
+
 func (c *workerServiceClient) ListFiles(ctx context.Context, in *ListFilesRequest, opts ...grpc.CallOption) (*ListFilesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListFilesResponse)
@@ -294,7 +330,7 @@ func (c *workerServiceClient) CopyToContainer(ctx context.Context, in *CopyToCon
 
 func (c *workerServiceClient) CopyDirFromContainer(ctx context.Context, in *CopyDirFromContainerRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DataChunk], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[1], WorkerService_CopyDirFromContainer_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[3], WorkerService_CopyDirFromContainer_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -313,7 +349,7 @@ type WorkerService_CopyDirFromContainerClient = grpc.ServerStreamingClient[DataC
 
 func (c *workerServiceClient) CopyTarToContainer(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[CopyTarToContainerRequest, CopyTarToContainerResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[2], WorkerService_CopyTarToContainer_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[4], WorkerService_CopyTarToContainer_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -326,7 +362,7 @@ type WorkerService_CopyTarToContainerClient = grpc.ClientStreamingClient[CopyTar
 
 func (c *workerServiceClient) WatchEvents(ctx context.Context, in *WatchEventsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ContainerEventMsg], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[3], WorkerService_WatchEvents_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[5], WorkerService_WatchEvents_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -383,6 +419,8 @@ type WorkerServiceServer interface {
 	// Volumes
 	CreateVolume(context.Context, *CreateVolumeRequest) (*CreateVolumeResponse, error)
 	RemoveVolume(context.Context, *RemoveVolumeRequest) (*RemoveVolumeResponse, error)
+	BackupVolume(*BackupVolumeRequest, grpc.ServerStreamingServer[DataChunk]) error
+	RestoreVolume(grpc.ClientStreamingServer[RestoreVolumeRequest, RestoreVolumeResponse]) error
 	// File operations
 	ListFiles(context.Context, *ListFilesRequest) (*ListFilesResponse, error)
 	ReadFile(context.Context, *ReadFileRequest) (*ReadFileResponse, error)
@@ -443,6 +481,12 @@ func (UnimplementedWorkerServiceServer) CreateVolume(context.Context, *CreateVol
 }
 func (UnimplementedWorkerServiceServer) RemoveVolume(context.Context, *RemoveVolumeRequest) (*RemoveVolumeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RemoveVolume not implemented")
+}
+func (UnimplementedWorkerServiceServer) BackupVolume(*BackupVolumeRequest, grpc.ServerStreamingServer[DataChunk]) error {
+	return status.Error(codes.Unimplemented, "method BackupVolume not implemented")
+}
+func (UnimplementedWorkerServiceServer) RestoreVolume(grpc.ClientStreamingServer[RestoreVolumeRequest, RestoreVolumeResponse]) error {
+	return status.Error(codes.Unimplemented, "method RestoreVolume not implemented")
 }
 func (UnimplementedWorkerServiceServer) ListFiles(context.Context, *ListFilesRequest) (*ListFilesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListFiles not implemented")
@@ -694,6 +738,24 @@ func _WorkerService_RemoveVolume_Handler(srv interface{}, ctx context.Context, d
 	}
 	return interceptor(ctx, in, info, handler)
 }
+
+func _WorkerService_BackupVolume_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(BackupVolumeRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(WorkerServiceServer).BackupVolume(m, &grpc.GenericServerStream[BackupVolumeRequest, DataChunk]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type WorkerService_BackupVolumeServer = grpc.ServerStreamingServer[DataChunk]
+
+func _WorkerService_RestoreVolume_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(WorkerServiceServer).RestoreVolume(&grpc.GenericServerStream[RestoreVolumeRequest, RestoreVolumeResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type WorkerService_RestoreVolumeServer = grpc.ClientStreamingServer[RestoreVolumeRequest, RestoreVolumeResponse]
 
 func _WorkerService_ListFiles_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListFilesRequest)
@@ -999,6 +1061,16 @@ var WorkerService_ServiceDesc = grpc.ServiceDesc{
 			ServerStreams: true,
 		},
 		{
+			StreamName:    "BackupVolume",
+			Handler:       _WorkerService_BackupVolume_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "RestoreVolume",
+			Handler:       _WorkerService_RestoreVolume_Handler,
+			ClientStreams: true,
+		},
+		{
 			StreamName:    "CopyDirFromContainer",
 			Handler:       _WorkerService_CopyDirFromContainer_Handler,
 			ServerStreams: true,
@@ -1014,7 +1086,7 @@ var WorkerService_ServiceDesc = grpc.ServiceDesc{
 			ServerStreams: true,
 		},
 	},
-	Metadata: "proto/worker.proto",
+	Metadata: "worker.proto",
 }
 
 const (
@@ -1158,5 +1230,5 @@ var ControllerService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "proto/worker.proto",
+	Metadata: "worker.proto",
 }

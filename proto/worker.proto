@@ -21,6 +21,8 @@ service WorkerService {
     // Volumes
     rpc CreateVolume(CreateVolumeRequest) returns (CreateVolumeResponse);
     rpc RemoveVolume(RemoveVolumeRequest) returns (RemoveVolumeResponse);
+    rpc BackupVolume(BackupVolumeRequest) returns (stream DataChunk);
+    rpc RestoreVolume(stream RestoreVolumeRequest) returns (RestoreVolumeResponse);
 
     // File operations
     rpc ListFiles(ListFilesRequest) returns (ListFilesResponse);
@@ -149,6 +151,16 @@ message RemoveVolumeRequest {
     string name = 1;
 }
 message RemoveVolumeResponse {}
+
+message BackupVolumeRequest {
+    string volume_name = 1;
+}
+
+message RestoreVolumeRequest {
+    string volume_name = 1;
+    bytes data = 2;
+}
+message RestoreVolumeResponse {}
 
 // File operations
 

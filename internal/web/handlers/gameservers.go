@@ -129,6 +129,35 @@ func (h *GameserverHandlers) Reinstall(w http.ResponseWriter, r *http.Request) {
 	h.doAction(w, r, func(id string) error { return h.svc.Reinstall(r.Context(), id) })
 }
 
+func (h *GameserverHandlers) Migrate(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var body struct {
+		NodeID string `json:"node_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+	if body.NodeID == "" {
+		respondError(w, http.StatusBadRequest, "node_id is required")
+		return
+	}
+
+	if err := h.svc.MigrateGameserver(r.Context(), id, body.NodeID); err != nil {
+		h.log.Error("migrating gameserver", "id", id, "target_node", body.NodeID, "error", err)
+		respondError(w, serviceErrorStatus(err), err.Error())
+		return
+	}
+
+	gs, err := h.svc.GetGameserver(id)
+	if err != nil {
+		h.log.Error("getting gameserver after migration", "id", id, "error", err)
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	respondOK(w, gs)
+}
+
 // doAction runs a lifecycle action, then fetches and returns the updated gameserver.
 func (h *GameserverHandlers) doAction(w http.ResponseWriter, r *http.Request, action func(string) error) {
 	id := chi.URLParam(r, "id")

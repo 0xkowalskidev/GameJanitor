@@ -4,6 +4,9 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
+	"math"
+
+	"github.com/0xkowalskidev/gamejanitor/internal/models"
 )
 
 // Dispatcher routes operations to the correct Worker for a given gameserver.
@@ -63,28 +66,68 @@ func (d *Dispatcher) WorkerFor(gameserverID string) Worker {
 	return w
 }
 
-// SelectWorkerForPlacement atomically picks both the Worker and its node ID for new gameserver creation.
-// In standalone mode, returns the local worker with empty node ID.
-// In multi-node mode, picks the worker with the most available resources.
+// SelectWorkerForPlacement picks the best worker for new gameserver creation.
+// Ranks by least allocated memory (sum of memory_limit_mb for assigned gameservers),
+// not live free memory, to avoid overcommit when stopped servers are started.
 func (d *Dispatcher) SelectWorkerForPlacement() (Worker, string) {
 	if d.registry == nil {
 		return d.local, ""
 	}
 
-	if d.registry.Count() > 0 {
-		w, nodeID, err := d.registry.BestWorker()
-		if err == nil {
-			return w, nodeID
+	workers := d.registry.ListWorkers()
+	if len(workers) == 0 {
+		if d.local == nil {
+			d.log.Error("no workers available for gameserver placement")
+			return nil, ""
 		}
-		d.log.Warn("failed to pick best worker, falling back to local", "error", err)
+		return d.local, ""
 	}
 
-	if d.local == nil {
-		d.log.Error("no workers available for gameserver placement")
-		return nil, ""
+	var bestNodeID string
+	bestHeadroom := math.MinInt64
+
+	for _, info := range workers {
+		allocated, err := models.AllocatedMemoryByNode(d.db, info.ID)
+		if err != nil {
+			d.log.Warn("failed to query allocated memory for worker", "worker_id", info.ID, "error", err)
+			continue
+		}
+
+		// If MaxMemoryMB is set, headroom = limit - allocated. Otherwise use negative allocated
+		// so the worker with least allocation wins.
+		node, _ := models.GetWorkerNode(d.db, info.ID)
+		var headroom int
+		if node != nil && node.MaxMemoryMB != nil {
+			headroom = *node.MaxMemoryMB - allocated
+		} else {
+			headroom = -allocated
+		}
+
+		if headroom > bestHeadroom {
+			bestHeadroom = headroom
+			bestNodeID = info.ID
+		}
 	}
 
-	return d.local, ""
+	if bestNodeID == "" {
+		d.log.Warn("no suitable worker found, falling back to local")
+		if d.local == nil {
+			return nil, ""
+		}
+		return d.local, ""
+	}
+
+	w, ok := d.registry.Get(bestNodeID)
+	if !ok {
+		d.log.Warn("best worker disappeared from registry, falling back to local", "worker_id", bestNodeID)
+		if d.local == nil {
+			return nil, ""
+		}
+		return d.local, ""
+	}
+
+	d.log.Debug("selected worker for placement", "worker_id", bestNodeID, "headroom_mb", bestHeadroom)
+	return w, bestNodeID
 }
 
 // SelectWorkerByNodeID returns the Worker for a specific node ID.

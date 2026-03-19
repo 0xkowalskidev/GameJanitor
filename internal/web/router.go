@@ -120,6 +120,7 @@ func NewRouter(
 				r.With(requireRestart).Post("/restart", gameserverHandlers.Restart)
 				r.With(requireSettings).Post("/update-game", gameserverHandlers.UpdateServerGame)
 				r.With(requireSettings).Post("/reinstall", gameserverHandlers.Reinstall)
+				r.With(requireAdmin).Post("/migrate", gameserverHandlers.Migrate)
 				r.With(requireAccess).Get("/status", gameserverHandlers.Status)
 				r.With(requireAccess).Get("/stats", gameserverHandlers.Stats)
 				r.With(requireConsole).Get("/logs", gameserverHandlers.Logs)

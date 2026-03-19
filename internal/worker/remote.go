@@ -366,9 +366,41 @@ func (w *RemoteWorker) String() string {
 }
 
 func (w *RemoteWorker) BackupVolume(ctx context.Context, volumeName string) (io.ReadCloser, error) {
-	return nil, fmt.Errorf("BackupVolume not yet implemented for remote workers")
+	stream, err := w.client.BackupVolume(ctx, &pb.BackupVolumeRequest{VolumeName: volumeName})
+	if err != nil {
+		return nil, err
+	}
+	return &grpcStreamReader{stream: stream}, nil
 }
 
 func (w *RemoteWorker) RestoreVolume(ctx context.Context, volumeName string, tarStream io.Reader) error {
-	return fmt.Errorf("RestoreVolume not yet implemented for remote workers")
+	stream, err := w.client.RestoreVolume(ctx)
+	if err != nil {
+		return err
+	}
+
+	buf := make([]byte, 64*1024)
+	first := true
+	for {
+		n, readErr := tarStream.Read(buf)
+		if n > 0 {
+			msg := &pb.RestoreVolumeRequest{Data: buf[:n]}
+			if first {
+				msg.VolumeName = volumeName
+				first = false
+			}
+			if err := stream.Send(msg); err != nil {
+				return err
+			}
+		}
+		if readErr == io.EOF {
+			break
+		}
+		if readErr != nil {
+			return readErr
+		}
+	}
+
+	_, err = stream.CloseAndRecv()
+	return err
 }

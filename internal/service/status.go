@@ -260,6 +260,15 @@ func (m *StatusManager) onWorkerRegistered(nodeID string, w worker.Worker) {
 
 // onWorkerUnregistered is called when a remote worker is unregistered (timeout or explicit).
 func (m *StatusManager) onWorkerUnregistered(nodeID string) {
+	// Log impact before tearing down
+	gameservers, err := models.ListGameservers(m.db, models.GameserverFilter{NodeID: &nodeID})
+	if err != nil {
+		m.log.Error("failed to query gameservers for disconnected worker", "worker_id", nodeID, "error", err)
+	} else if len(gameservers) > 0 {
+		m.log.Warn("worker disconnected, gameservers on node are now unreachable",
+			"worker_id", nodeID, "affected_gameservers", len(gameservers))
+	}
+
 	m.workerMu.Lock()
 	if cancel, ok := m.workerCancels[nodeID]; ok {
 		cancel()

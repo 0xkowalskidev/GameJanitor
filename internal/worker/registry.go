@@ -136,25 +136,6 @@ func (r *Registry) ListWorkers() []WorkerInfo {
 	return infos
 }
 
-// BestWorker returns the worker with the most available memory.
-// Used for placement decisions when creating new gameservers.
-func (r *Registry) BestWorker() (Worker, string, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	if len(r.workers) == 0 {
-		return nil, "", fmt.Errorf("no workers registered")
-	}
-
-	var best *registeredWorker
-	for _, rw := range r.workers {
-		if best == nil || rw.info.MemoryAvailableMB > best.info.MemoryAvailableMB {
-			best = rw
-		}
-	}
-	return best.worker, best.info.ID, nil
-}
-
 func (r *Registry) Count() int {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

@@ -285,6 +285,60 @@ func (a *Agent) CopyTarToContainer(stream pb.WorkerService_CopyTarToContainerSer
 	return stream.SendAndClose(&pb.CopyTarToContainerResponse{})
 }
 
+func (a *Agent) BackupVolume(req *pb.BackupVolumeRequest, stream pb.WorkerService_BackupVolumeServer) error {
+	reader, err := a.worker.BackupVolume(stream.Context(), req.VolumeName)
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+
+	buf := make([]byte, 64*1024)
+	for {
+		n, readErr := reader.Read(buf)
+		if n > 0 {
+			chunk := make([]byte, n)
+			copy(chunk, buf[:n])
+			if err := stream.Send(&pb.DataChunk{Data: chunk}); err != nil {
+				return err
+			}
+		}
+		if readErr != nil {
+			if readErr == io.EOF {
+				return nil
+			}
+			return readErr
+		}
+	}
+}
+
+func (a *Agent) RestoreVolume(stream pb.WorkerService_RestoreVolumeServer) error {
+	var volumeName string
+	var buf bytes.Buffer
+
+	for {
+		msg, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		if volumeName == "" {
+			volumeName = msg.VolumeName
+		}
+		buf.Write(msg.Data)
+	}
+
+	if volumeName == "" {
+		return fmt.Errorf("no messages received")
+	}
+
+	if err := a.worker.RestoreVolume(stream.Context(), volumeName, &buf); err != nil {
+		return err
+	}
+	return stream.SendAndClose(&pb.RestoreVolumeResponse{})
+}
+
 func (a *Agent) WatchEvents(req *pb.WatchEventsRequest, stream pb.WorkerService_WatchEventsServer) error {
 	events, errs := a.worker.WatchEvents(stream.Context())
 

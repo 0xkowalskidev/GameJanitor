@@ -132,6 +132,16 @@ func UpdateGameserver(db *sql.DB, gs *Gameserver) error {
 	return nil
 }
 
+// AllocatedMemoryByNode returns the total memory_limit_mb allocated to gameservers on a node.
+func AllocatedMemoryByNode(db *sql.DB, nodeID string) (int, error) {
+	var total int
+	err := db.QueryRow("SELECT COALESCE(SUM(memory_limit_mb), 0) FROM gameservers WHERE node_id = ?", nodeID).Scan(&total)
+	if err != nil {
+		return 0, fmt.Errorf("querying allocated memory for node %s: %w", nodeID, err)
+	}
+	return total, nil
+}
+
 func DeleteGameserver(db *sql.DB, id string) error {
 	result, err := db.Exec("DELETE FROM gameservers WHERE id = ?", id)
 	if err != nil {

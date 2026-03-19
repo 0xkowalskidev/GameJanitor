@@ -223,8 +223,49 @@ var commandCmd = &cobra.Command{
 	},
 }
 
+var migrateCmd = &cobra.Command{
+	Use:   "migrate <gameserver> --node <target-node>",
+	Short: "Migrate a gameserver to a different worker node",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		gsID, err := resolveGameserverID(args[0])
+		if err != nil {
+			return exitError(err)
+		}
+
+		nodeID, _ := cmd.Flags().GetString("node")
+		if nodeID == "" {
+			return exitError(fmt.Errorf("--node is required"))
+		}
+
+		if !confirmAction(fmt.Sprintf("Migrate gameserver %s to node %s?", gsID[:8], nodeID)) {
+			fmt.Println("Aborted.")
+			return nil
+		}
+
+		if !jsonOutput {
+			fmt.Printf("Migrating gameserver %s to node %s...\n", gsID[:8], nodeID)
+		}
+
+		body := map[string]string{"node_id": nodeID}
+		resp, err := apiPost("/api/gameservers/"+gsID+"/migrate", body)
+		if err != nil {
+			return exitError(err)
+		}
+
+		if jsonOutput {
+			printJSONResponse(resp)
+			return nil
+		}
+
+		fmt.Printf("Gameserver %s migrated to node %s.\n", gsID[:8], nodeID)
+		return nil
+	},
+}
+
 func init() {
 	logsCmd.Flags().Int("tail", 100, "Number of lines to show")
+	migrateCmd.Flags().String("node", "", "Target worker node ID")
 
-	gameserversCmd.AddCommand(startCmd, stopCmd, restartCmd, updateGameCmd, reinstallCmd, statusCmd, logsCmd, commandCmd)
+	gameserversCmd.AddCommand(startCmd, stopCmd, restartCmd, updateGameCmd, reinstallCmd, statusCmd, logsCmd, commandCmd, migrateCmd)
 }
