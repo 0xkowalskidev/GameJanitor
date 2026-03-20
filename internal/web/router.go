@@ -255,7 +255,7 @@ func NewRouter(
 	// Page handlers (HTML)
 	pageDashboard := handlers.NewPageDashboardHandlers(gameStore, gameserverSvc, querySvc, settingsSvc, registry, renderer, log)
 	pageGames := handlers.NewPageGameHandlers(gameStore, gameserverSvc, renderer, log)
-	pageGameservers := handlers.NewPageGameserverHandlers(gameStore, gameserverSvc, querySvc, settingsSvc, registry, renderer, db, log)
+	pageGameservers := handlers.NewPageGameserverHandlers(gameStore, gameserverSvc, scheduleSvc, querySvc, settingsSvc, registry, renderer, db, log)
 	pageSettings := handlers.NewPageSettingsHandlers(settingsSvc, authSvc, registry, renderer, dataDir, log)
 	pageAudit := handlers.NewPageAuditHandlers(db, renderer, log)
 	pageActions := handlers.NewPageActionHandlers(gameStore, gameserverSvc, renderer, log)

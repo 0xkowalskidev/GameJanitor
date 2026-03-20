@@ -19,6 +19,7 @@ import (
 type PageGameserverHandlers struct {
 	gameStore     *games.GameStore
 	gameserverSvc *service.GameserverService
+	scheduleSvc   *service.ScheduleService
 	querySvc      *service.QueryService
 	settingsSvc   *service.SettingsService
 	registry      *worker.Registry
@@ -27,8 +28,8 @@ type PageGameserverHandlers struct {
 	log           *slog.Logger
 }
 
-func NewPageGameserverHandlers(gameStore *games.GameStore, gameserverSvc *service.GameserverService, querySvc *service.QueryService, settingsSvc *service.SettingsService, registry *worker.Registry, renderer *Renderer, db *sql.DB, log *slog.Logger) *PageGameserverHandlers {
-	return &PageGameserverHandlers{gameStore: gameStore, gameserverSvc: gameserverSvc, querySvc: querySvc, settingsSvc: settingsSvc, registry: registry, renderer: renderer, db: db, log: log}
+func NewPageGameserverHandlers(gameStore *games.GameStore, gameserverSvc *service.GameserverService, scheduleSvc *service.ScheduleService, querySvc *service.QueryService, settingsSvc *service.SettingsService, registry *worker.Registry, renderer *Renderer, db *sql.DB, log *slog.Logger) *PageGameserverHandlers {
+	return &PageGameserverHandlers{gameStore: gameStore, gameserverSvc: gameserverSvc, scheduleSvc: scheduleSvc, querySvc: querySvc, settingsSvc: settingsSvc, registry: registry, renderer: renderer, db: db, log: log}
 }
 
 type gameserverFormData struct {
@@ -223,6 +224,19 @@ func (h *PageGameserverHandlers) Create(w http.ResponseWriter, r *http.Request) 
 		h.log.Error("creating gameserver from web form", "error", err)
 		http.Error(w, "Failed to create gameserver: "+err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	// Create a default daily backup schedule for new gameservers
+	defaultBackup := &models.Schedule{
+		GameserverID: gs.ID,
+		Name:         "Daily Backup",
+		Type:         "backup",
+		CronExpr:     "0 4 * * *",
+		Payload:      json.RawMessage(`{}`),
+		Enabled:      true,
+	}
+	if err := h.scheduleSvc.CreateSchedule(defaultBackup); err != nil {
+		h.log.Error("failed to create default backup schedule", "gameserver_id", gs.ID, "error", err)
 	}
 
 	h.renderer.Render(w, r, "gameservers/sftp_password", map[string]any{
