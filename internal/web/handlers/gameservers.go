@@ -261,7 +261,6 @@ type statusResponse struct {
 	Status      string         `json:"status"`
 	ErrorReason string         `json:"error_reason,omitempty"`
 	Container   *containerInfo `json:"container"`
-	Query       *queryInfo     `json:"query"`
 }
 
 type queryInfo struct {
@@ -295,20 +294,6 @@ func (h *GameserverHandlers) Status(w http.ResponseWriter, r *http.Request) {
 		ErrorReason: gs.ErrorReason,
 	}
 
-	if qd := h.querySvc.GetQueryData(id); qd != nil {
-		players := make([]string, len(qd.Players))
-		for i, p := range qd.Players {
-			players[i] = p.Name
-		}
-		resp.Query = &queryInfo{
-			PlayersOnline: qd.PlayersOnline,
-			MaxPlayers:    qd.MaxPlayers,
-			Players:       players,
-			Map:           qd.Map,
-			Version:       qd.Version,
-		}
-	}
-
 	if gs.ContainerID != nil {
 		info, err := h.svc.GetContainerInfo(r.Context(), id)
 		if err != nil {
@@ -322,6 +307,29 @@ func (h *GameserverHandlers) Status(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondOK(w, resp)
+}
+
+func (h *GameserverHandlers) Query(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	qd := h.querySvc.GetQueryData(id)
+	if qd == nil {
+		respondOK(w, nil)
+		return
+	}
+
+	players := make([]string, len(qd.Players))
+	for i, p := range qd.Players {
+		players[i] = p.Name
+	}
+
+	respondOK(w, queryInfo{
+		PlayersOnline: qd.PlayersOnline,
+		MaxPlayers:    qd.MaxPlayers,
+		Players:       players,
+		Map:           qd.Map,
+		Version:       qd.Version,
+	})
 }
 
 func (h *GameserverHandlers) Stats(w http.ResponseWriter, r *http.Request) {

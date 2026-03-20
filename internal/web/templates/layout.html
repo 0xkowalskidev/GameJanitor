@@ -63,14 +63,18 @@
         },
         async refreshStatus() {
           try {
-            const resp = await fetch('/api/gameservers/' + id + '/status');
-            const json = await resp.json();
-            if (json.data) {
-              this.status = json.data.status;
-              this.errorReason = json.data.error_reason || '';
-              this.query = json.data.query || null;
-              this.container = json.data.container || null;
+            const [statusResp, queryResp] = await Promise.all([
+              fetch('/api/gameservers/' + id + '/status'),
+              fetch('/api/gameservers/' + id + '/query'),
+            ]);
+            const statusJson = await statusResp.json();
+            if (statusJson.data) {
+              this.status = statusJson.data.status;
+              this.errorReason = statusJson.data.error_reason || '';
+              this.container = statusJson.data.container || null;
             }
+            const queryJson = await queryResp.json();
+            this.query = queryJson.data || null;
           } catch (_) {}
           this._fetchStats();
           window.dispatchEvent(new CustomEvent('gs-status-changed', { detail: { id: id, status: this.status } }));
