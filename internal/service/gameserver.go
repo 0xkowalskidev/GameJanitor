@@ -434,11 +434,11 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *models.Gam
 	}
 
 	if installTriggered {
-		w := s.dispatcher.WorkerFor(gs.ID)
-		if err := w.DeletePath(ctx, existing.VolumeName, ".installed"); err != nil {
-			s.log.Warn("failed to clear install marker after env change", "id", gs.ID, "error", err)
+		existing.Installed = false
+		if err := models.UpdateGameserver(s.db, existing); err != nil {
+			s.log.Error("failed to clear installed flag after env change", "id", gs.ID, "error", err)
 		} else {
-			s.log.Info("install-triggering env var changed, cleared install marker", "id", gs.ID)
+			s.log.Info("install-triggering env var changed, cleared installed flag", "id", gs.ID)
 		}
 	}
 
@@ -819,6 +819,11 @@ func (s *GameserverService) Reinstall(ctx context.Context, id string) error {
 	}
 
 	w := s.dispatcher.WorkerFor(id)
+
+	gs.Installed = false
+	if err := models.UpdateGameserver(s.db, gs); err != nil {
+		return fmt.Errorf("clearing installed flag for reinstall: %w", err)
+	}
 
 	// Wipe all data by removing and recreating the volume
 	if err := w.RemoveVolume(ctx, gs.VolumeName); err != nil {

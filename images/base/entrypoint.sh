@@ -14,10 +14,10 @@ done
 
 exec > >(tee "$SESSION_LOG") 2>&1
 
-if [ ! -f /data/.installed ]; then
+if [ "$SKIP_INSTALL" != "1" ]; then
     echo "[entrypoint] running install-server"
     /scripts/install-server
-    touch /data/.installed
+    echo "[gamejanitor:installed]"
 fi
 
 if [ -d /defaults ]; then
