@@ -153,6 +153,7 @@ func (h *PageGameserverHandlers) New(w http.ResponseWriter, r *http.Request) {
 		"UsedPortsJSON":     string(usedPortsJSON),
 		"PreferredPortMode": h.settingsSvc.GetPreferredPortMode(),
 		"CurrentPortMode":   "",
+		"IsAdmin":           true,
 		"PortRangeStart":    h.settingsSvc.GetPortRangeStart(),
 		"PortRangeEnd":      h.settingsSvc.GetPortRangeEnd(),
 	}
@@ -416,6 +417,9 @@ func (h *PageGameserverHandlers) Edit(w http.ResponseWriter, r *http.Request) {
 		gamesForTemplate = []games.Game{*game}
 	}
 
+	token := service.TokenFromContext(r.Context())
+	isAdmin := token == nil || service.IsAdmin(token)
+
 	h.renderer.Render(w, r, "gameservers/form", map[string]any{
 		"Mode":              "edit",
 		"Gameserver":        gs,
@@ -429,6 +433,7 @@ func (h *PageGameserverHandlers) Edit(w http.ResponseWriter, r *http.Request) {
 		"CurrentPortMode":   gs.PortMode,
 		"PortRangeStart":    h.settingsSvc.GetPortRangeStart(),
 		"PortRangeEnd":      h.settingsSvc.GetPortRangeEnd(),
+		"IsAdmin":           isAdmin,
 	})
 }
 
@@ -485,6 +490,26 @@ func (h *PageGameserverHandlers) Update(w http.ResponseWriter, r *http.Request) 
 		ports = allocatedPorts
 	}
 
+	// Parse resource cap fields (admin-only, service layer strips for non-admins)
+	var maxMemoryMB *int
+	if v := r.FormValue("max_memory_mb"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			maxMemoryMB = &n
+		}
+	}
+	var maxCPU *float64
+	if v := r.FormValue("max_cpu"); v != "" {
+		if n, err := strconv.ParseFloat(v, 64); err == nil {
+			maxCPU = &n
+		}
+	}
+	var maxBackups *int
+	if v := r.FormValue("max_backups"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			maxBackups = &n
+		}
+	}
+
 	// Preserve immutable fields from existing record
 	gs := &models.Gameserver{
 		ID:            existing.ID,
@@ -498,6 +523,9 @@ func (h *PageGameserverHandlers) Update(w http.ResponseWriter, r *http.Request) 
 		VolumeName:    existing.VolumeName,
 		Status:        existing.Status,
 		PortMode:      form.PortMode,
+		MaxMemoryMB:   maxMemoryMB,
+		MaxCPU:        maxCPU,
+		MaxBackups:    maxBackups,
 		CreatedAt:     existing.CreatedAt,
 	}
 

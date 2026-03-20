@@ -367,6 +367,30 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *models.Gam
 		existing.CPULimit = gs.CPULimit
 	}
 
+	// Cap fields: only admins (or no-auth mode) can set/change caps
+	token := TokenFromContext(ctx)
+	isAdmin := token == nil || IsAdmin(token)
+
+	if isAdmin {
+		if gs.MaxMemoryMB != nil {
+			existing.MaxMemoryMB = gs.MaxMemoryMB
+		}
+		if gs.MaxCPU != nil {
+			existing.MaxCPU = gs.MaxCPU
+		}
+		if gs.MaxBackups != nil {
+			existing.MaxBackups = gs.MaxBackups
+		}
+	} else {
+		// Enforce resource caps for scoped tokens
+		if existing.MaxMemoryMB != nil && existing.MemoryLimitMB > *existing.MaxMemoryMB {
+			return fmt.Errorf("memory_limit_mb (%d) exceeds cap (%d MB)", existing.MemoryLimitMB, *existing.MaxMemoryMB)
+		}
+		if existing.MaxCPU != nil && existing.CPULimit > *existing.MaxCPU {
+			return fmt.Errorf("cpu_limit (%.1f) exceeds cap (%.1f cores)", existing.CPULimit, *existing.MaxCPU)
+		}
+	}
+
 	s.log.Info("updating gameserver", "id", gs.ID)
 	if err := models.UpdateGameserver(s.db, existing); err != nil {
 		return err

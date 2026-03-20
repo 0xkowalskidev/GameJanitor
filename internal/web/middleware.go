@@ -1,26 +1,18 @@
 package web
 
 import (
-	"context"
 	"encoding/json"
 	"net"
 	"net/http"
 	"strings"
 
-	"github.com/0xkowalskidev/gamejanitor/internal/models"
 	"github.com/0xkowalskidev/gamejanitor/internal/service"
 	"github.com/go-chi/chi/v5"
 )
 
-type contextKey string
-
-const tokenContextKey contextKey = "auth_token"
-
 // TokenFromContext returns the authenticated token from the request context, or nil.
-func TokenFromContext(ctx context.Context) *models.Token {
-	t, _ := ctx.Value(tokenContextKey).(*models.Token)
-	return t
-}
+// Delegates to service.TokenFromContext.
+var TokenFromContext = service.TokenFromContext
 
 // AuthMiddleware checks for a valid token on every request when auth is enabled.
 // Extracts from Bearer header (API) or _token cookie (web UI).
@@ -49,7 +41,7 @@ func AuthMiddleware(authSvc *service.AuthService, settingsSvc *service.SettingsS
 				return
 			}
 
-			ctx := context.WithValue(r.Context(), tokenContextKey, token)
+			ctx := service.SetTokenInContext(r.Context(), token)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

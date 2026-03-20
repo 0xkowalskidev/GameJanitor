@@ -14,6 +14,9 @@ CREATE TABLE gameservers (
     node_id TEXT,
     sftp_username TEXT NOT NULL DEFAULT '',
     sftp_password TEXT NOT NULL DEFAULT '',
+    max_memory_mb INTEGER,
+    max_cpu REAL,
+    max_backups INTEGER,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

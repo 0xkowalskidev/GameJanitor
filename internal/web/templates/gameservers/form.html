@@ -108,25 +108,30 @@
         <div>
           <div class="flex items-center justify-between mb-1.5">
             <label class="text-sm font-medium text-surface-300">Memory Limit</label>
-            <span class="text-sm font-semibold"
-                  :class="memoryLimitMB == 0 ? 'text-surface-400' : 'text-white'"
-                  x-text="memoryLimitMB == 0 ? 'Unbounded' : (memoryLimitMB >= 1024 ? (memoryLimitMB / 1024) + ' GB' : memoryLimitMB + ' MB')"></span>
+            <div class="flex items-center gap-2">
+              <span class="text-sm font-semibold"
+                    :class="memoryLimitMB == 0 ? 'text-surface-400' : 'text-white'"
+                    x-text="memoryLimitMB == 0 ? 'Unbounded' : (memoryLimitMB >= 1024 ? (memoryLimitMB / 1024) + ' GB' : memoryLimitMB + ' MB')"></span>
+              <template x-if="maxMemoryMB > 0 && !isAdmin">
+                <span class="text-xs text-surface-500" x-text="'/ ' + (maxMemoryMB >= 1024 ? (maxMemoryMB / 1024) + ' GB' : maxMemoryMB + ' MB') + ' cap'"></span>
+              </template>
+            </div>
           </div>
-          <input type="range" name="memory_limit_mb" min="0" max="16384" step="512"
+          <input type="range" name="memory_limit_mb" :min="maxMemoryMB > 0 && !isAdmin ? 512 : 0" :max="maxMemoryMB > 0 && !isAdmin ? maxMemoryMB : 16384" step="512"
                  x-model.number="memoryLimitMB"
                  class="w-full h-2 rounded-full appearance-none cursor-pointer bg-surface-700 accent-accent-500
                         [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-accent-500 [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:shadow-accent-500/30
                         [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-accent-500 [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:shadow-lg [&::-moz-range-thumb]:shadow-accent-500/30
                         [&::-moz-range-progress]:bg-accent-600 [&::-moz-range-progress]:rounded-full">
           <div class="flex items-center justify-between mt-1.5">
-            <span class="text-xs text-surface-500">0 (unbounded)</span>
+            <span class="text-xs text-surface-500" x-text="maxMemoryMB > 0 && !isAdmin ? '512 MB' : '0 (unbounded)'"></span>
             <template x-if="selectedGameData && selectedGameData.recommended_memory_mb">
               <button type="button" @click="memoryLimitMB = selectedGameData.recommended_memory_mb"
                       class="text-xs text-accent-400 hover:text-accent-300 transition-colors">
                 Reset to recommended (<span x-text="selectedGameData.recommended_memory_mb >= 1024 ? (selectedGameData.recommended_memory_mb / 1024) + ' GB' : selectedGameData.recommended_memory_mb + ' MB'"></span>)
               </button>
             </template>
-            <span class="text-xs text-surface-500">16 GB</span>
+            <span class="text-xs text-surface-500" x-text="maxMemoryMB > 0 && !isAdmin ? (maxMemoryMB >= 1024 ? (maxMemoryMB / 1024) + ' GB' : maxMemoryMB + ' MB') : '16 GB'"></span>
           </div>
         </div>
 
@@ -335,8 +340,13 @@
           <div x-show="showAdvanced" x-cloak x-transition class="mt-4 space-y-5 p-4 rounded-xl bg-surface-900/40 border border-surface-800/60">
             <!-- CPU Limit -->
             <div>
-              <label for="cpu_limit" class="block text-sm font-medium text-surface-300 mb-1.5">CPU Limit</label>
-              <input type="number" name="cpu_limit" id="cpu_limit" min="0" step="0.1"
+              <div class="flex items-center justify-between mb-1.5">
+                <label for="cpu_limit" class="text-sm font-medium text-surface-300">CPU Limit</label>
+                <template x-if="maxCPU > 0 && !isAdmin">
+                  <span class="text-xs text-surface-500" x-text="'Cap: ' + maxCPU + ' cores'"></span>
+                </template>
+              </div>
+              <input type="number" name="cpu_limit" id="cpu_limit" min="0" :max="maxCPU > 0 && !isAdmin ? maxCPU : ''" step="0.1"
                      x-model="cpuLimit"
                      placeholder="0"
                      class="w-full rounded-lg bg-surface-900/80 border border-surface-700 px-3 py-2.5 text-white placeholder-surface-500 focus:border-accent-500 focus:ring-1 focus:ring-accent-500 transition-colors">
@@ -360,6 +370,44 @@
             </div>
           </div>
         </div>
+
+        {{if and (eq .Mode "edit") .IsAdmin}}
+        <!-- Resource Caps (admin only) -->
+        <div x-data="{ showCaps: false }">
+          <button type="button" @click="showCaps = !showCaps"
+                  class="flex items-center gap-2 text-sm text-amber-400/80 hover:text-amber-400 transition-colors">
+            <svg :class="showCaps && 'rotate-180'" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+            Resource Caps
+          </button>
+
+          <div x-show="showCaps" x-cloak x-transition class="mt-4 space-y-4 p-4 rounded-xl bg-amber-900/10 border border-amber-800/30">
+            <p class="text-xs text-amber-400/70">Set caps to limit what scoped token holders can configure. Leave empty for no cap.</p>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-surface-300 mb-1.5">Max Memory (MB)</label>
+                <input type="number" name="max_memory_mb" min="0" step="512"
+                       value="{{if .Gameserver.MaxMemoryMB}}{{derefInt .Gameserver.MaxMemoryMB}}{{end}}"
+                       placeholder="No cap"
+                       class="w-full rounded-lg bg-surface-900/80 border border-surface-700 px-3 py-2.5 text-white placeholder-surface-500 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors">
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-surface-300 mb-1.5">Max CPU (cores)</label>
+                <input type="number" name="max_cpu" min="0" step="0.1"
+                       value="{{if .Gameserver.MaxCPU}}{{derefFloat .Gameserver.MaxCPU}}{{end}}"
+                       placeholder="No cap"
+                       class="w-full rounded-lg bg-surface-900/80 border border-surface-700 px-3 py-2.5 text-white placeholder-surface-500 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors">
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-surface-300 mb-1.5">Max Backups</label>
+                <input type="number" name="max_backups" min="0" step="1"
+                       value="{{if .Gameserver.MaxBackups}}{{derefInt .Gameserver.MaxBackups}}{{end}}"
+                       placeholder="Global default"
+                       class="w-full rounded-lg bg-surface-900/80 border border-surface-700 px-3 py-2.5 text-white placeholder-surface-500 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors">
+              </div>
+            </div>
+          </div>
+        </div>
+        {{end}}
 
         <!-- Hidden JSON fields for form submission -->
         <input type="hidden" name="ports_json" :value="portMode === 'auto' ? '[]' : JSON.stringify(ports.map(p => ({...p, host_port: Number(p.host_port), container_port: Number(p.container_port), port: p.port ? Number(p.port) : undefined})))">
@@ -400,6 +448,11 @@ function gameserverForm() {
   const existingCPU = '{{if eq .Mode "edit"}}{{.Gameserver.CPULimit}}{{end}}';
   const existingGameID = '{{if eq .Mode "edit"}}{{.Gameserver.GameID}}{{end}}';
   const usedPorts = {{rawJS (or .UsedPortsJSON "[]")}};
+
+  // Resource caps (0 = no cap)
+  const maxMemoryMB = {{if and (eq .Mode "edit") .Gameserver.MaxMemoryMB}}{{derefInt .Gameserver.MaxMemoryMB}}{{else}}0{{end}};
+  const maxCPU = {{if and (eq .Mode "edit") .Gameserver.MaxCPU}}{{derefFloat .Gameserver.MaxCPU}}{{else}}0{{end}};
+  const isAdmin = {{if .IsAdmin}}true{{else}}false{{end}};
 
   // Parse ports
   let ports = [];
@@ -469,6 +522,9 @@ function gameserverForm() {
     games: games,
     memoryLimitMB: parseInt(existingMemory) || (initialGameData ? initialGameData.recommended_memory_mb || 0 : 0),
     cpuLimit: existingCPU || '',
+    maxMemoryMB: maxMemoryMB,
+    maxCPU: maxCPU,
+    isAdmin: isAdmin,
     selectedNode: '',
     workers: {{rawJS (or .WorkersJSON "[]")}},
 

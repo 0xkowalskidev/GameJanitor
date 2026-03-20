@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
@@ -14,6 +15,21 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+type authContextKey string
+
+const tokenContextKey authContextKey = "auth_token"
+
+// SetTokenInContext stores an authenticated token in the request context.
+func SetTokenInContext(ctx context.Context, token *models.Token) context.Context {
+	return context.WithValue(ctx, tokenContextKey, token)
+}
+
+// TokenFromContext returns the authenticated token from the request context, or nil.
+func TokenFromContext(ctx context.Context) *models.Token {
+	t, _ := ctx.Value(tokenContextKey).(*models.Token)
+	return t
+}
+
 const (
 	ScopeAdmin      = "admin"
 	ScopeGameserver = "gameserver"
@@ -21,7 +37,7 @@ const (
 )
 
 // All available permissions for scoped tokens.
-var AllPermissions = []string{"start", "stop", "restart", "console", "files", "backups", "settings"}
+var AllPermissions = []string{"start", "stop", "restart", "console", "files", "backups", "settings", "delete"}
 
 type AuthService struct {
 	db  *sql.DB

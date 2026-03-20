@@ -33,6 +33,7 @@ func NewRenderer(netInfo *netinfo.Info, settingsSvc *service.SettingsService, sf
 		"join":        strings.Join,
 		"deref":       func(s *string) string { if s != nil { return *s }; return "" },
 		"derefInt":    func(n *int) int { if n != nil { return *n }; return 0 },
+		"derefFloat":  func(n *float64) float64 { if n != nil { return *n }; return 0 },
 		"derefTime":   func(t *time.Time) time.Time { if t != nil { return *t }; return time.Time{} },
 		"formatBytes": formatBytes,
 		"queryJSON":   queryJSON,

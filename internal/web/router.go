@@ -98,6 +98,7 @@ func NewRouter(
 	requireFiles := RequirePermission(settingsSvc, "files")
 	requireBackups := RequirePermission(settingsSvc, "backups")
 	requireSettings := RequirePermission(settingsSvc, "settings")
+	requireDelete := RequirePermission(settingsSvc, "delete")
 
 	auditMiddleware := AuditMiddleware(db, log)
 
@@ -121,7 +122,7 @@ func NewRouter(
 			r.Route("/{id}", func(r chi.Router) {
 				r.With(requireAccess).Get("/", gameserverHandlers.Get)
 				r.With(requireSettings).Put("/", gameserverHandlers.Update)
-				r.With(requireSettings).Delete("/", gameserverHandlers.Delete)
+				r.With(requireDelete).Delete("/", gameserverHandlers.Delete)
 				r.With(requireStart).Post("/start", gameserverHandlers.Start)
 				r.With(requireStop).Post("/stop", gameserverHandlers.Stop)
 				r.With(requireRestart).Post("/restart", gameserverHandlers.Restart)
@@ -290,7 +291,7 @@ func NewRouter(
 				// Settings permission
 				r.With(requireSettings).Get("/edit", pageGameservers.Edit)
 				r.With(requireSettings).Put("/", pageGameservers.Update)
-				r.With(requireSettings).Delete("/", pageGameservers.Delete)
+				r.With(requireDelete).Delete("/", pageGameservers.Delete)
 
 				// Lifecycle actions
 				r.With(requireStart).Post("/start", pageActions.Start)
