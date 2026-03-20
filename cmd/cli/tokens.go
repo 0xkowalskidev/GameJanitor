@@ -189,7 +189,7 @@ var tokensDeleteCmd = &cobra.Command{
 func init() {
 	tokensCreateCmd.Flags().String("name", "", "Token name (required)")
 	tokensCreateCmd.Flags().StringSlice("gameserver", nil, "Gameserver to scope token to (repeatable, name or ID)")
-	tokensCreateCmd.Flags().StringSlice("permission", nil, "Permission to grant (repeatable: start, stop, restart, console, files, backups, settings)")
+	tokensCreateCmd.Flags().StringSlice("permission", nil, "Permission to grant (repeatable: start, stop, restart, logs, commands, files, backups, configure)")
 	tokensCreateCmd.Flags().String("expires-in", "", "Token expiry duration (e.g. 720h, 30d)")
 
 	tokensCreateAdminCmd.Flags().String("name", "", "Token name (required)")

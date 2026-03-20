@@ -37,7 +37,7 @@ const (
 )
 
 // All available permissions for scoped tokens.
-var AllPermissions = []string{"start", "stop", "restart", "console", "files", "backups", "settings", "delete"}
+var AllPermissions = []string{"start", "stop", "restart", "logs", "commands", "files", "backups", "configure", "delete"}
 
 type AuthService struct {
 	db  *sql.DB

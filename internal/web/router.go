@@ -101,10 +101,11 @@ func NewRouter(
 	requireStart := RequirePermission(settingsSvc, "start")
 	requireStop := RequirePermission(settingsSvc, "stop")
 	requireRestart := RequirePermission(settingsSvc, "restart")
-	requireConsole := RequirePermission(settingsSvc, "console")
+	requireLogs := RequirePermission(settingsSvc, "logs")
+	requireCommands := RequirePermission(settingsSvc, "commands")
 	requireFiles := RequirePermission(settingsSvc, "files")
 	requireBackups := RequirePermission(settingsSvc, "backups")
-	requireSettings := RequirePermission(settingsSvc, "settings")
+	requireConfigure := RequirePermission(settingsSvc, "configure")
 	requireDelete := RequirePermission(settingsSvc, "delete")
 
 	auditMiddleware := AuditMiddleware(db, log)
@@ -129,23 +130,23 @@ func NewRouter(
 			r.With(requireAdmin).Post("/bulk", gameserverHandlers.BulkAction)
 			r.Route("/{id}", func(r chi.Router) {
 				r.With(requireAccess).Get("/", gameserverHandlers.Get)
-				r.With(requireSettings).Put("/", gameserverHandlers.Update)
+				r.With(requireConfigure).Put("/", gameserverHandlers.Update)
 				r.With(requireDelete).Delete("/", gameserverHandlers.Delete)
 				r.With(requireStart).Post("/start", gameserverHandlers.Start)
 				r.With(requireStop).Post("/stop", gameserverHandlers.Stop)
 				r.With(requireRestart).Post("/restart", gameserverHandlers.Restart)
-				r.With(requireSettings).Post("/update-game", gameserverHandlers.UpdateServerGame)
-				r.With(requireSettings).Post("/reinstall", gameserverHandlers.Reinstall)
+				r.With(requireConfigure).Post("/update-game", gameserverHandlers.UpdateServerGame)
+				r.With(requireConfigure).Post("/reinstall", gameserverHandlers.Reinstall)
 				r.With(requireAdmin).Post("/migrate", gameserverHandlers.Migrate)
 				r.With(requireAdmin).Post("/regenerate-sftp-password", gameserverHandlers.RegenerateSFTPPassword)
 				r.With(requireAccess).Get("/status", gameserverHandlers.Status)
 				r.With(requireAccess).Get("/query", gameserverHandlers.Query)
 				r.With(requireAccess).Get("/stats", gameserverHandlers.Stats)
-				r.With(requireConsole).Get("/logs", gameserverHandlers.Logs)
-				r.With(requireConsole).Post("/command", gameserverHandlers.SendCommand)
+				r.With(requireLogs).Get("/logs", gameserverHandlers.Logs)
+				r.With(requireCommands).Post("/command", gameserverHandlers.SendCommand)
 
 				r.Route("/schedules", func(r chi.Router) {
-					r.Use(requireSettings)
+					r.Use(requireConfigure)
 					r.Get("/", scheduleHandlers.List)
 					r.Post("/", scheduleHandlers.Create)
 					r.Route("/{scheduleId}", func(r chi.Router) {
@@ -321,23 +322,23 @@ func NewRouter(
 				r.With(requireAccess).Get("/card", pageGameservers.Card)
 
 				// Settings permission
-				r.With(requireSettings).Get("/edit", pageGameservers.Edit)
-				r.With(requireSettings).Put("/", pageGameservers.Update)
+				r.With(requireConfigure).Get("/edit", pageGameservers.Edit)
+				r.With(requireConfigure).Put("/", pageGameservers.Update)
 				r.With(requireDelete).Delete("/", pageGameservers.Delete)
 
 				// Lifecycle actions
 				r.With(requireStart).Post("/start", pageActions.Start)
 				r.With(requireStop).Post("/stop", pageActions.Stop)
 				r.With(requireRestart).Post("/restart", pageActions.Restart)
-				r.With(requireSettings).Post("/update-game", pageActions.UpdateGame)
-				r.With(requireSettings).Post("/reinstall", pageActions.Reinstall)
+				r.With(requireConfigure).Post("/update-game", pageActions.UpdateGame)
+				r.With(requireConfigure).Post("/reinstall", pageActions.Reinstall)
 				r.With(requireAdmin).Post("/regenerate-sftp-password", pageGameservers.RegenerateSFTPPassword)
 
 				// Console
-				r.With(requireConsole).Get("/console", pageConsole.Console)
-				r.With(requireConsole).Get("/console/stream", pageConsole.LogStream)
-				r.With(requireConsole).Get("/console/sessions", pageConsole.Sessions)
-				r.With(requireConsole).Post("/console/command", pageConsole.SendCommand)
+				r.With(requireLogs).Get("/console", pageConsole.Console)
+				r.With(requireLogs).Get("/console/stream", pageConsole.LogStream)
+				r.With(requireLogs).Get("/console/sessions", pageConsole.Sessions)
+				r.With(requireCommands).Post("/console/command", pageConsole.SendCommand)
 
 				// Files
 				r.With(requireFiles).Get("/files", pageFiles.List)
@@ -351,11 +352,11 @@ func NewRouter(
 				r.With(requireFiles).Post("/files/rename", pageFiles.RenamePath)
 
 				// Schedules
-				r.With(requireSettings).Get("/schedules", pageSchedules.List)
-				r.With(requireSettings).Post("/schedules", pageSchedules.Create)
-				r.With(requireSettings).Put("/schedules/{scheduleId}", pageSchedules.Update)
-				r.With(requireSettings).Delete("/schedules/{scheduleId}", pageSchedules.Delete)
-				r.With(requireSettings).Post("/schedules/{scheduleId}/toggle", pageSchedules.Toggle)
+				r.With(requireConfigure).Get("/schedules", pageSchedules.List)
+				r.With(requireConfigure).Post("/schedules", pageSchedules.Create)
+				r.With(requireConfigure).Put("/schedules/{scheduleId}", pageSchedules.Update)
+				r.With(requireConfigure).Delete("/schedules/{scheduleId}", pageSchedules.Delete)
+				r.With(requireConfigure).Post("/schedules/{scheduleId}/toggle", pageSchedules.Toggle)
 
 				// Backups
 				r.With(requireBackups).Get("/backups", pageBackups.List)
