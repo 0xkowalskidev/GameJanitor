@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"crypto/tls"
 	"database/sql"
 	"fmt"
 	"io"
@@ -23,6 +24,7 @@ import (
 	"github.com/0xkowalskidev/gamejanitor/internal/netinfo"
 	"github.com/0xkowalskidev/gamejanitor/internal/service"
 	gjsftp "github.com/0xkowalskidev/gamejanitor/internal/sftp"
+	"github.com/0xkowalskidev/gamejanitor/internal/tlsutil"
 	"github.com/0xkowalskidev/gamejanitor/internal/web"
 	"github.com/0xkowalskidev/gamejanitor/internal/worker"
 	"github.com/0xkowalskidev/gamejanitor/internal/worker/pb"
@@ -30,6 +32,7 @@ import (
 	"github.com/shirou/gopsutil/v4/mem"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
+	grpcCredentials "google.golang.org/grpc/credentials"
 )
 
 var serveCmd = &cobra.Command{
@@ -221,8 +224,30 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 	// Start gRPC server for controller and/or local worker agent
 	if grpcPort > 0 {
+		// Auto-generate TLS certs for controller roles
+		var serverTLS, dialBackTLS *tls.Config
+		if role != "standalone" {
+			caCert, caKey, err := tlsutil.LoadOrCreateCA(cfg.DataDir)
+			if err != nil {
+				return fmt.Errorf("failed to initialize gRPC CA: %w", err)
+			}
+			if _, err := tlsutil.LoadOrCreateServerCert(cfg.DataDir, caCert, caKey); err != nil {
+				return fmt.Errorf("failed to initialize gRPC server cert: %w", err)
+			}
+			serverTLS, err = tlsutil.ServerTLSConfig(cfg.DataDir)
+			if err != nil {
+				return fmt.Errorf("failed to load gRPC server TLS config: %w", err)
+			}
+			// Dial-back uses server cert as client cert to connect to workers
+			if serverTLS != nil {
+				dialBackTLS = &tls.Config{
+					Certificates: serverTLS.Certificates,
+					RootCAs:      serverTLS.ClientCAs,
+				}
+			}
+		}
 		go func() {
-			if err := startGRPCServer(localWorker, gameStore, cfg.DataDir, registry, authSvc, database, grpcPort, logger); err != nil {
+			if err := startGRPCServer(localWorker, gameStore, cfg.DataDir, registry, authSvc, database, grpcPort, serverTLS, dialBackTLS, logger); err != nil {
 				logger.Error("grpc server stopped", "error", err)
 			}
 		}()
@@ -325,9 +350,36 @@ func runWorkerAgent(cfg config.Config, grpcPort int, controllerAddr string, work
 
 	localWorker := worker.NewLocalWorker(dockerClient, gameStore, cfg.DataDir, logger)
 
-	// Start gRPC agent in background (no auth interceptor — worker's own agent doesn't need it)
+	// Load worker TLS config from env vars
+	var workerTLSConfig *tls.Config
+	if caPath := os.Getenv("GJ_GRPC_CA"); caPath != "" {
+		certPath := os.Getenv("GJ_GRPC_CERT")
+		keyPath := os.Getenv("GJ_GRPC_KEY")
+		if certPath == "" || keyPath == "" {
+			return fmt.Errorf("GJ_GRPC_CA is set but GJ_GRPC_CERT and GJ_GRPC_KEY are also required")
+		}
+		tlsCfg, err := tlsutil.ClientTLSConfig(caPath, certPath, keyPath)
+		if err != nil {
+			return fmt.Errorf("failed to load worker TLS config: %w", err)
+		}
+		workerTLSConfig = tlsCfg
+		logger.Info("worker gRPC using mTLS")
+	}
+
+	// Worker's own gRPC agent also needs TLS so controller can dial back securely
+	var workerServerTLS *tls.Config
+	if workerTLSConfig != nil {
+		caPool := workerTLSConfig.RootCAs
+		workerServerTLS = &tls.Config{
+			Certificates: workerTLSConfig.Certificates,
+			ClientCAs:    caPool,
+			ClientAuth:   tls.RequireAndVerifyClientCert,
+		}
+	}
+
+	// Start gRPC agent in background
 	go func() {
-		if err := startGRPCServer(localWorker, gameStore, cfg.DataDir, nil, nil, nil, grpcPort, logger); err != nil {
+		if err := startGRPCServer(localWorker, gameStore, cfg.DataDir, nil, nil, nil, grpcPort, workerServerTLS, nil, logger); err != nil {
 			logger.Error("grpc agent stopped", "error", err)
 		}
 	}()
@@ -341,7 +393,7 @@ func runWorkerAgent(cfg config.Config, grpcPort int, controllerAddr string, work
 	}
 	if workerSFTPPort > 0 && controllerAddr != "" {
 		// Connect to controller for SFTP auth validation
-		sftpClient, sftpConn, err := worker.DialController(controllerAddr, workerToken)
+		sftpClient, sftpConn, err := worker.DialController(controllerAddr, workerToken, workerTLSConfig)
 		if err != nil {
 			logger.Warn("failed to connect to controller for sftp auth, sftp disabled", "error", err)
 		} else {
@@ -388,7 +440,7 @@ func runWorkerAgent(cfg config.Config, grpcPort int, controllerAddr string, work
 			"has_token", workerToken != "",
 		)
 
-		runRegistrationLoop(controllerAddr, workerID, ownAddr, workerToken, workerSFTPPort, netInfo, logger)
+		runRegistrationLoop(controllerAddr, workerID, ownAddr, workerToken, workerSFTPPort, netInfo, workerTLSConfig, logger)
 		// runRegistrationLoop blocks forever
 	}
 
@@ -399,12 +451,12 @@ func runWorkerAgent(cfg config.Config, grpcPort int, controllerAddr string, work
 
 // runRegistrationLoop connects to the controller, registers, and sends heartbeats.
 // Reconnects with backoff on failure. Blocks forever.
-func runRegistrationLoop(controllerAddr, workerID, ownAddr, workerToken string, sftpPort int, netInfo *netinfo.Info, logger *slog.Logger) {
+func runRegistrationLoop(controllerAddr, workerID, ownAddr, workerToken string, sftpPort int, netInfo *netinfo.Info, tlsConfig *tls.Config, logger *slog.Logger) {
 	backoff := time.Second
 	maxBackoff := 30 * time.Second
 
 	for {
-		client, conn, err := worker.DialController(controllerAddr, workerToken)
+		client, conn, err := worker.DialController(controllerAddr, workerToken, tlsConfig)
 		if err != nil {
 			logger.Error("failed to connect to controller", "error", err, "retry_in", backoff)
 			time.Sleep(backoff)
@@ -504,13 +556,17 @@ func buildHeartbeatRequest(workerID string, netInfo *netinfo.Info) *pb.Heartbeat
 }
 
 // startGRPCServer starts a gRPC server with WorkerService and/or ControllerService.
-func startGRPCServer(w worker.Worker, gameStore *games.GameStore, dataDir string, registry *worker.Registry, authSvc *service.AuthService, database *sql.DB, port int, logger *slog.Logger) error {
+func startGRPCServer(w worker.Worker, gameStore *games.GameStore, dataDir string, registry *worker.Registry, authSvc *service.AuthService, database *sql.DB, port int, tlsConfig *tls.Config, dialBackTLS *tls.Config, logger *slog.Logger) error {
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		return fmt.Errorf("grpc listen: %w", err)
 	}
 
 	var opts []grpc.ServerOption
+	if tlsConfig != nil {
+		opts = append(opts, grpc.Creds(grpcCredentials.NewTLS(tlsConfig)))
+		logger.Info("grpc server using mTLS", "port", port)
+	}
 	// Add auth interceptor when running as controller (registry present)
 	if registry != nil {
 		opts = append(opts, grpc.UnaryInterceptor(worker.WorkerAuthInterceptor()))
@@ -525,7 +581,7 @@ func startGRPCServer(w worker.Worker, gameStore *games.GameStore, dataDir string
 
 	// Register ControllerService if we have a registry (controller or controller+worker mode)
 	if registry != nil {
-		controllerSvc := worker.NewControllerGRPC(registry, authSvc, database, logger)
+		controllerSvc := worker.NewControllerGRPC(registry, authSvc, database, dialBackTLS, logger)
 		pb.RegisterControllerServiceServer(grpcServer, controllerSvc)
 	}
 

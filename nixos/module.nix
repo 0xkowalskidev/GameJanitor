@@ -178,6 +178,26 @@ in {
       };
     };
 
+    grpcTLS = {
+      caFile = lib.mkOption {
+        type = lib.types.nullOr lib.types.path;
+        default = null;
+        description = "Path to CA certificate for gRPC mTLS. Required on worker nodes.";
+      };
+
+      certFile = lib.mkOption {
+        type = lib.types.nullOr lib.types.path;
+        default = null;
+        description = "Path to client/server certificate for gRPC mTLS. Required on worker nodes.";
+      };
+
+      keyFile = lib.mkOption {
+        type = lib.types.nullOr lib.types.path;
+        default = null;
+        description = "Path to private key for gRPC mTLS. Required on worker nodes.";
+      };
+    };
+
     environment = lib.mkOption {
       type = lib.types.attrsOf lib.types.str;
       default = {};
@@ -211,7 +231,10 @@ in {
       // lib.optionalAttrs (cfg.s3.endpoint != null) { GJ_S3_ENDPOINT = cfg.s3.endpoint; }
       // lib.optionalAttrs (cfg.s3.region != null) { GJ_S3_REGION = cfg.s3.region; }
       // lib.optionalAttrs (cfg.s3.pathStyle) { GJ_S3_PATH_STYLE = "true"; }
-      // lib.optionalAttrs (!cfg.s3.useSSL) { GJ_S3_USE_SSL = "false"; };
+      // lib.optionalAttrs (!cfg.s3.useSSL) { GJ_S3_USE_SSL = "false"; }
+      // lib.optionalAttrs (cfg.grpcTLS.caFile != null) { GJ_GRPC_CA = toString cfg.grpcTLS.caFile; }
+      // lib.optionalAttrs (cfg.grpcTLS.certFile != null) { GJ_GRPC_CERT = toString cfg.grpcTLS.certFile; }
+      // lib.optionalAttrs (cfg.grpcTLS.keyFile != null) { GJ_GRPC_KEY = toString cfg.grpcTLS.keyFile; };
   in {
     assertions = [
       {

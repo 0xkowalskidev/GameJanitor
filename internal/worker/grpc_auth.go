@@ -48,11 +48,12 @@ func TokenFromContext(ctx context.Context) string {
 // workerCredentials implements grpc.PerRPCCredentials to attach a Bearer token
 // to every outgoing gRPC call from a worker.
 type workerCredentials struct {
-	token string
+	token      string
+	requireTLS bool
 }
 
 func (c workerCredentials) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
 	return map[string]string{"authorization": "Bearer " + c.token}, nil
 }
 
-func (c workerCredentials) RequireTransportSecurity() bool { return false }
+func (c workerCredentials) RequireTransportSecurity() bool { return c.requireTLS }

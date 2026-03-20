@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"crypto/subtle"
+	"crypto/tls"
 	"database/sql"
 	"fmt"
 	"log/slog"
@@ -10,6 +11,7 @@ import (
 	"github.com/0xkowalskidev/gamejanitor/internal/models"
 	"github.com/0xkowalskidev/gamejanitor/internal/worker/pb"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
@@ -23,14 +25,15 @@ type TokenValidator interface {
 // Runs on the controller; accepts worker registrations and heartbeats.
 type ControllerGRPC struct {
 	pb.UnimplementedControllerServiceServer
-	registry  *Registry
-	tokenAuth TokenValidator
-	db        *sql.DB
-	log       *slog.Logger
+	registry    *Registry
+	tokenAuth   TokenValidator
+	db          *sql.DB
+	dialBackTLS *tls.Config
+	log         *slog.Logger
 }
 
-func NewControllerGRPC(registry *Registry, tokenAuth TokenValidator, db *sql.DB, log *slog.Logger) *ControllerGRPC {
-	return &ControllerGRPC{registry: registry, tokenAuth: tokenAuth, db: db, log: log}
+func NewControllerGRPC(registry *Registry, tokenAuth TokenValidator, db *sql.DB, dialBackTLS *tls.Config, log *slog.Logger) *ControllerGRPC {
+	return &ControllerGRPC{registry: registry, tokenAuth: tokenAuth, db: db, dialBackTLS: dialBackTLS, log: log}
 }
 
 func (c *ControllerGRPC) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.RegisterResponse, error) {
@@ -53,7 +56,13 @@ func (c *ControllerGRPC) Register(ctx context.Context, req *pb.RegisterRequest) 
 	}
 
 	// Dial back to the worker's gRPC address to create a RemoteWorker
-	conn, err := grpc.NewClient(req.GrpcAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	var dialOpt grpc.DialOption
+	if c.dialBackTLS != nil {
+		dialOpt = grpc.WithTransportCredentials(credentials.NewTLS(c.dialBackTLS))
+	} else {
+		dialOpt = grpc.WithTransportCredentials(insecure.NewCredentials())
+	}
+	conn, err := grpc.NewClient(req.GrpcAddress, dialOpt)
 	if err != nil {
 		c.log.Error("failed to dial worker", "worker_id", req.WorkerId, "address", req.GrpcAddress, "error", err)
 		return &pb.RegisterResponse{Accepted: false}, nil
@@ -160,10 +169,17 @@ func (c *ControllerGRPC) ValidateSFTPLogin(ctx context.Context, req *pb.SFTPLogi
 
 // DialController connects to a controller's gRPC address and returns the ControllerService client.
 // If token is non-empty, it is sent as Bearer auth metadata on every RPC.
-func DialController(address string, token string) (pb.ControllerServiceClient, *grpc.ClientConn, error) {
-	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
+// If tlsConfig is non-nil, the connection uses TLS; otherwise insecure.
+func DialController(address string, token string, tlsConfig *tls.Config) (pb.ControllerServiceClient, *grpc.ClientConn, error) {
+	var transportCreds grpc.DialOption
+	if tlsConfig != nil {
+		transportCreds = grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig))
+	} else {
+		transportCreds = grpc.WithTransportCredentials(insecure.NewCredentials())
+	}
+	opts := []grpc.DialOption{transportCreds}
 	if token != "" {
-		opts = append(opts, grpc.WithPerRPCCredentials(workerCredentials{token: token}))
+		opts = append(opts, grpc.WithPerRPCCredentials(workerCredentials{token: token, requireTLS: tlsConfig != nil}))
 	}
 	conn, err := grpc.NewClient(address, opts...)
 	if err != nil {
