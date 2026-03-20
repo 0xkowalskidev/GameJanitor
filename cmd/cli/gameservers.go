@@ -132,10 +132,14 @@ var gameserversCreateCmd = &cobra.Command{
 		gameID, _ := cmd.Flags().GetString("game")
 		portFlags, _ := cmd.Flags().GetStringSlice("port")
 		envFlags, _ := cmd.Flags().GetStringSlice("env")
-		memory, _ := cmd.Flags().GetInt("memory")
+		memoryStr, _ := cmd.Flags().GetString("memory")
 		cpu, _ := cmd.Flags().GetFloat64("cpu")
 		if name == "" || gameID == "" {
 			return exitError(fmt.Errorf("--name and --game are required"))
+		}
+		memory, err := parseMemory(memoryStr)
+		if err != nil {
+			return exitError(err)
 		}
 
 		ports, err := parsePorts(portFlags)
@@ -219,8 +223,12 @@ var gameserversUpdateCmd = &cobra.Command{
 			body["env"] = parseEnvFlags(envFlags)
 		}
 		if cmd.Flags().Changed("memory") {
-			v, _ := cmd.Flags().GetInt("memory")
-			body["memory_limit_mb"] = v
+			v, _ := cmd.Flags().GetString("memory")
+			mb, err := parseMemory(v)
+			if err != nil {
+				return exitError(err)
+			}
+			body["memory_limit_mb"] = mb
 		}
 		if cmd.Flags().Changed("cpu") {
 			v, _ := cmd.Flags().GetFloat64("cpu")
@@ -269,6 +277,43 @@ var gameserversDeleteCmd = &cobra.Command{
 		fmt.Printf("Gameserver %s deleted.\n", gsID[:8])
 		return nil
 	},
+}
+
+// parseMemory parses human-friendly memory strings like "4g", "512m", "2048" into MB.
+func parseMemory(s string) (int, error) {
+	if s == "" {
+		return 0, nil
+	}
+
+	s = strings.TrimSpace(strings.ToLower(s))
+
+	// Try plain number (assumed MB)
+	if mb, err := strconv.Atoi(s); err == nil {
+		return mb, nil
+	}
+
+	// Strip trailing "b" (e.g. "4gb" -> "4g", "512mb" -> "512m")
+	s = strings.TrimSuffix(s, "b")
+
+	if len(s) < 2 {
+		return 0, fmt.Errorf("invalid memory value: %q (use e.g. 512m, 4g, or 2048)", s)
+	}
+
+	unit := s[len(s)-1]
+	numStr := s[:len(s)-1]
+	num, err := strconv.ParseFloat(numStr, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid memory value: %q (use e.g. 512m, 4g, or 2048)", s)
+	}
+
+	switch unit {
+	case 'm':
+		return int(num), nil
+	case 'g':
+		return int(num * 1024), nil
+	default:
+		return 0, fmt.Errorf("unknown memory unit %q (use m or g)", string(unit))
+	}
 }
 
 // parsePorts parses --port flags in format "name:host_port:container_port/protocol"
@@ -325,14 +370,14 @@ func init() {
 	gameserversCreateCmd.Flags().String("game", "", "Game ID")
 	gameserversCreateCmd.Flags().StringSlice("port", nil, "Port mapping (name:host:container/proto)")
 	gameserversCreateCmd.Flags().StringSlice("env", nil, "Environment variable (KEY=VALUE)")
-	gameserversCreateCmd.Flags().Int("memory", 0, "Memory limit (MB)")
+	gameserversCreateCmd.Flags().String("memory", "", "Memory limit (e.g. 512m, 4g, 2048)")
 	gameserversCreateCmd.Flags().Float64("cpu", 0, "CPU limit")
 	gameserversCreateCmd.Flags().String("node", "", "Worker node ID for placement (multi-node only)")
 
 	gameserversUpdateCmd.Flags().String("name", "", "Gameserver name")
 	gameserversUpdateCmd.Flags().StringSlice("port", nil, "Port mapping (name:host:container/proto)")
 	gameserversUpdateCmd.Flags().StringSlice("env", nil, "Environment variable (KEY=VALUE)")
-	gameserversUpdateCmd.Flags().Int("memory", 0, "Memory limit (MB)")
+	gameserversUpdateCmd.Flags().String("memory", "", "Memory limit (e.g. 512m, 4g, 2048)")
 	gameserversUpdateCmd.Flags().Float64("cpu", 0, "CPU limit")
 
 	gameserversCmd.AddCommand(
