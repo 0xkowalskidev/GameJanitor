@@ -336,6 +336,13 @@ func runServe(cmd *cobra.Command, args []string) error {
 		"db_path", cfg.DBPath,
 	)
 
+	// Newbies running from a terminal may not realize that closing it kills gamejanitor,
+	// even though their gameservers keep running in Docker. Scheduled backups, restarts,
+	// and status monitoring all stop when gamejanitor exits.
+	if os.Getenv("INVOCATION_ID") == "" {
+		logger.Warn("running in foreground — closing this terminal will stop scheduled backups, restarts, and status monitoring. Your gameservers will keep running, but gamejanitor won't be managing them. Run as a systemd service to keep it running in the background.")
+	}
+
 	srv := &http.Server{
 		Addr:              addr,
 		Handler:           router,
