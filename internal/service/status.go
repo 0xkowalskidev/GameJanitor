@@ -216,8 +216,8 @@ func (m *StatusManager) handleEvent(event worker.ContainerEvent) {
 	case "die", "stop":
 		m.readyWatcher.Stop(gsID)
 		m.querySvc.StopPolling(gsID)
-		if gs.Status == StatusStopping {
-			m.log.Debug("docker event: expected container stop", "id", gsID)
+		if gs.Status == StatusStopping || gs.Status == StatusUpdating || gs.Status == StatusReinstalling || gs.Status == StatusMigrating || gs.Status == StatusRestoring {
+			m.log.Debug("docker event: expected container stop", "id", gsID, "status", gs.Status)
 		} else if gs.Status == StatusRunning || gs.Status == StatusStarted {
 			m.log.Warn("docker event: unexpected container death", "id", gsID, "status", gs.Status, "action", event.Action)
 			setGameserverStatus(m.db, m.log, m.broadcaster, gs.ID, StatusError, "Gameserver stopped unexpectedly.")

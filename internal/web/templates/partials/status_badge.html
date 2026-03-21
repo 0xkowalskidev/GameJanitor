@@ -12,6 +12,10 @@
 <span class="inline-flex items-center gap-1.5 text-xs font-medium text-orange-400">
   <span class="w-2 h-2 rounded-full bg-orange-400 shadow-sm shadow-orange-400/50 animate-glow-pulse"></span>{{.}}
 </span>
+{{- else if eq $color "blue" -}}
+<span class="inline-flex items-center gap-1.5 text-xs font-medium text-blue-400">
+  <span class="w-2 h-2 rounded-full bg-blue-400 shadow-sm shadow-blue-400/50 animate-glow-pulse"></span>{{.}}
+</span>
 {{- else if eq $color "red" -}}
 <span class="inline-flex items-center gap-1.5 text-xs font-medium text-red-400">
   <span class="w-2 h-2 rounded-full bg-red-400 shadow-sm shadow-red-400/50"></span>{{.}}

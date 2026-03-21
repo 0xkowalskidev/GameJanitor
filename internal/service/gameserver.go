@@ -676,8 +676,12 @@ func (s *GameserverService) Stop(ctx context.Context, id string) error {
 		return nil
 	}
 
-	if err := setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusStopping, ""); err != nil {
-		return err
+	// Don't overwrite operation statuses (updating, reinstalling, etc.)
+	// so the UI keeps showing the real operation in progress
+	if !isOperationStatus(gs.Status) {
+		if err := setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusStopping, ""); err != nil {
+			return err
+		}
 	}
 
 	if gs.ContainerID != nil {
@@ -697,6 +701,17 @@ func (s *GameserverService) Stop(ctx context.Context, id string) error {
 	}
 	if gs == nil {
 		return fmt.Errorf("gameserver %s not found after stop", id)
+	}
+
+	// Preserve operation status — the calling operation will transition
+	// to the next status (e.g. Start() sets pulling)
+	if isOperationStatus(gs.Status) {
+		gs.ContainerID = nil
+		if err := models.UpdateGameserver(s.db, gs); err != nil {
+			return err
+		}
+		s.log.Info("gameserver container stopped (operation in progress)", "id", id, "status", gs.Status)
+		return nil
 	}
 
 	oldStatus := gs.Status
@@ -745,6 +760,8 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) err
 	}
 
 	s.log.Info("updating game for gameserver", "id", id, "game", game.ID)
+
+	setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusUpdating, "")
 
 	if gs.Status != StatusStopped {
 		if err := s.Stop(ctx, id); err != nil {
@@ -811,6 +828,8 @@ func (s *GameserverService) Reinstall(ctx context.Context, id string) error {
 	}
 
 	s.log.Info("reinstalling gameserver (full wipe)", "id", id)
+
+	setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusReinstalling, "")
 
 	if gs.Status != StatusStopped {
 		if err := s.Stop(ctx, id); err != nil {
@@ -1051,6 +1070,8 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 
 	s.log.Info("migrating gameserver", "id", gameserverID, "from_node", currentNodeID, "to_node", targetNodeID)
 
+	setGameserverStatus(s.db, s.log, s.broadcaster, gameserverID, StatusMigrating, "")
+
 	// Stop if running
 	if gs.Status != StatusStopped {
 		s.log.Info("stopping gameserver for migration", "id", gameserverID)
@@ -1109,6 +1130,7 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 		s.log.Warn("failed to remove old volume from source worker", "volume", gs.VolumeName, "error", err)
 	}
 
+	setGameserverStatus(s.db, s.log, s.broadcaster, gameserverID, StatusStopped, "")
 	s.log.Info("gameserver migrated", "id", gameserverID, "from_node", currentNodeID, "to_node", targetNodeID)
 	return nil
 }

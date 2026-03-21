@@ -206,7 +206,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		backupStore = service.NewLocalStore(cfg.DataDir)
 		logger.Info("backup store: local", "path", cfg.DataDir)
 	}
-	backupSvc := service.NewBackupService(database, dispatcher, gameserverSvc, gameStore, backupStore, settingsSvc, logger)
+	backupSvc := service.NewBackupService(database, dispatcher, gameserverSvc, gameStore, backupStore, settingsSvc, broadcaster, logger)
 	scheduler := service.NewScheduler(database, backupSvc, gameserverSvc, consoleSvc, logger)
 	scheduleSvc := service.NewScheduleService(database, scheduler, logger)
 	authSvc := service.NewAuthService(database, logger)

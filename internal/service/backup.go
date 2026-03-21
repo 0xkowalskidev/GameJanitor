@@ -22,11 +22,12 @@ type BackupService struct {
 	gameStore     *games.GameStore
 	store         BackupStore
 	settingsSvc   *SettingsService
+	broadcaster   *EventBroadcaster
 	log           *slog.Logger
 }
 
-func NewBackupService(db *sql.DB, dispatcher *worker.Dispatcher, gameserverSvc *GameserverService, gameStore *games.GameStore, store BackupStore, settingsSvc *SettingsService, log *slog.Logger) *BackupService {
-	return &BackupService{db: db, dispatcher: dispatcher, gameserverSvc: gameserverSvc, gameStore: gameStore, store: store, settingsSvc: settingsSvc, log: log}
+func NewBackupService(db *sql.DB, dispatcher *worker.Dispatcher, gameserverSvc *GameserverService, gameStore *games.GameStore, store BackupStore, settingsSvc *SettingsService, broadcaster *EventBroadcaster, log *slog.Logger) *BackupService {
+	return &BackupService{db: db, dispatcher: dispatcher, gameserverSvc: gameserverSvc, gameStore: gameStore, store: store, settingsSvc: settingsSvc, broadcaster: broadcaster, log: log}
 }
 
 func (s *BackupService) ListBackups(gameserverID string) ([]models.Backup, error) {
@@ -177,6 +178,8 @@ func (s *BackupService) RestoreBackup(ctx context.Context, backupID string) erro
 
 	s.log.Info("restoring backup", "backup_id", backupID, "gameserver_id", gs.ID, "was_running", wasRunning)
 
+	setGameserverStatus(s.db, s.log, s.broadcaster, gs.ID, StatusRestoring, "")
+
 	// Stop gameserver if running
 	if gs.Status != StatusStopped {
 		if err := s.gameserverSvc.Stop(ctx, gs.ID); err != nil {
@@ -211,6 +214,8 @@ func (s *BackupService) RestoreBackup(ctx context.Context, backupID string) erro
 		if err := s.gameserverSvc.Start(ctx, gs.ID); err != nil {
 			return fmt.Errorf("restarting gameserver after restore: %w", err)
 		}
+	} else {
+		setGameserverStatus(s.db, s.log, s.broadcaster, gs.ID, StatusStopped, "")
 	}
 
 	return nil

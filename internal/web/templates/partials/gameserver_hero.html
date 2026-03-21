@@ -25,6 +25,7 @@
                         'bg-emerald-400 shadow-lg shadow-emerald-400/50': status === 'running',
                         'bg-amber-400 shadow-lg shadow-amber-400/50': status === 'started',
                         'bg-orange-400 shadow-lg shadow-orange-400/50': status === 'pulling' || status === 'starting' || status === 'stopping',
+                        'bg-blue-400 shadow-lg shadow-blue-400/50': status === 'updating' || status === 'reinstalling' || status === 'migrating' || status === 'restoring',
                         'bg-red-400 shadow-lg shadow-red-400/50': status === 'error',
                         'bg-surface-500': status === 'stopped'
                       }"></span>
@@ -32,6 +33,7 @@
                         'text-emerald-400': status === 'running',
                         'text-amber-400': status === 'started',
                         'text-orange-400': status === 'pulling' || status === 'starting' || status === 'stopping',
+                        'text-blue-400': status === 'updating' || status === 'reinstalling' || status === 'migrating' || status === 'restoring',
                         'text-red-400': status === 'error',
                         'text-surface-400': status === 'stopped'
                       }" x-text="status"></span>

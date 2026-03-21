@@ -11,15 +11,20 @@ import (
 
 // Gameserver status constants.
 // Lifecycle: Stopped → Pulling → Starting → Started → Running → Stopping → Stopped
+// Operations: Updating, Reinstalling, Migrating, Restoring (set before stop, cleared when Start() takes over)
 // Any state can transition to Error on unexpected failures.
 const (
-	StatusStopped  = "stopped"
-	StatusPulling  = "pulling"
-	StatusStarting = "starting"
-	StatusStarted  = "started"
-	StatusRunning  = "running"
-	StatusStopping = "stopping"
-	StatusError    = "error"
+	StatusStopped      = "stopped"
+	StatusPulling      = "pulling"
+	StatusStarting     = "starting"
+	StatusStarted      = "started"
+	StatusRunning      = "running"
+	StatusStopping     = "stopping"
+	StatusError        = "error"
+	StatusUpdating     = "updating"
+	StatusReinstalling = "reinstalling"
+	StatusMigrating    = "migrating"
+	StatusRestoring    = "restoring"
 )
 
 // setGameserverStatus updates a gameserver's status in the DB and logs the transition.
@@ -65,4 +70,11 @@ func needsRecovery(status string) bool {
 
 func isRunningStatus(status string) bool {
 	return status == StatusStarted || status == StatusRunning
+}
+
+// isOperationStatus returns true for statuses that represent a multi-step
+// operation in progress. Stop() preserves these so the UI shows what's
+// actually happening instead of a generic "stopping" → "stopped" flicker.
+func isOperationStatus(status string) bool {
+	return status == StatusUpdating || status == StatusReinstalling || status == StatusMigrating || status == StatusRestoring
 }

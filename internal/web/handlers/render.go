@@ -212,6 +212,8 @@ func statusColor(status string) string {
 		return "yellow"
 	case "stopping":
 		return "orange"
+	case "updating", "reinstalling", "migrating", "restoring":
+		return "blue"
 	case "stopped":
 		return "gray"
 	case "error":
