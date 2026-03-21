@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/0xkowalskidev/gamejanitor/internal/docker"
 	"github.com/0xkowalskidev/gamejanitor/internal/games"
@@ -215,7 +216,7 @@ func (s *GameserverService) Stop(ctx context.Context, id string) error {
 		return err
 	}
 
-	s.broadcaster.Publish(StatusEvent{GameserverID: id, OldStatus: oldStatus, NewStatus: StatusStopped})
+	s.broadcaster.Publish(StatusEvent{GameserverID: id, OldStatus: oldStatus, NewStatus: StatusStopped, Timestamp: time.Now()})
 	s.log.Info("gameserver stopped", "id", id)
 	return nil
 }

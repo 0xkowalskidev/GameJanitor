@@ -9,13 +9,12 @@ import (
 	"time"
 
 	"github.com/0xkowalskidev/gamejanitor/internal/models"
-	"github.com/0xkowalskidev/gamejanitor/internal/service"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
 
 // AuditMiddleware logs all mutating requests (POST/PUT/DELETE) to the audit_log table.
-func AuditMiddleware(db *sql.DB, webhookSender *service.WebhookSender, log *slog.Logger) func(http.Handler) http.Handler {
+func AuditMiddleware(db *sql.DB, log *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodOptions {
@@ -67,17 +66,6 @@ func AuditMiddleware(db *sql.DB, webhookSender *service.WebhookSender, log *slog
 
 			if err := models.CreateAuditLog(db, entry); err != nil {
 				log.Error("failed to write audit log", "action", action, "error", err)
-			}
-
-			if webhookSender != nil && sw.statusCode < 400 {
-				go webhookSender.Send(service.WebhookPayload{
-					ID:           entry.ID,
-					Timestamp:    entry.Timestamp,
-					Action:       action,
-					ResourceType: resourceType,
-					ResourceID:   resourceID,
-					StatusCode:   sw.statusCode,
-				})
 			}
 		})
 	}

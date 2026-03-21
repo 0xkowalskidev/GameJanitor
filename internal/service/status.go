@@ -79,9 +79,13 @@ func (m *StatusManager) Start(ctx context.Context) {
 				if !ok {
 					return
 				}
-				if ev.NewStatus == StatusRunning {
+				statusEv, isStatus := ev.(StatusEvent)
+				if !isStatus {
+					continue
+				}
+				if statusEv.NewStatus == StatusRunning {
 					m.crashMu.Lock()
-					delete(m.crashCounts, ev.GameserverID)
+					delete(m.crashCounts, statusEv.GameserverID)
 					m.crashMu.Unlock()
 				}
 			}
@@ -273,6 +277,12 @@ func (m *StatusManager) onWorkerRegistered(nodeID string, w worker.Worker) {
 	m.log.Info("starting event watcher for remote worker", "worker_id", nodeID)
 	m.watchWorkerEvents(ctx, nodeID, w)
 
+	m.broadcaster.Publish(WorkerEvent{
+		Type:      "worker.connected",
+		Timestamp: time.Now(),
+		WorkerID:  nodeID,
+	})
+
 	// Recover gameservers on this worker
 	go m.recoverWorkerGameservers(ctx, nodeID, w)
 }
@@ -294,6 +304,12 @@ func (m *StatusManager) onWorkerUnregistered(nodeID string) {
 		delete(m.workerCancels, nodeID)
 	}
 	m.workerMu.Unlock()
+
+	m.broadcaster.Publish(WorkerEvent{
+		Type:      "worker.disconnected",
+		Timestamp: time.Now(),
+		WorkerID:  nodeID,
+	})
 
 	m.log.Info("stopped event watcher for disconnected worker", "worker_id", nodeID)
 }

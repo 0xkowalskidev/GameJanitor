@@ -145,6 +145,15 @@ func (s *BackupService) CreateBackup(ctx context.Context, gameserverID string, n
 	}
 
 	s.log.Info("backup created", "gameserver_id", gameserverID, "backup_id", backupID, "size_bytes", sizeBytes)
+
+	s.broadcaster.Publish(BackupEvent{
+		Type:         "backup.created",
+		Timestamp:    time.Now(),
+		GameserverID: gameserverID,
+		BackupID:     backupID,
+		BackupName:   name,
+	})
+
 	return backup, nil
 }
 
@@ -172,6 +181,13 @@ func (s *BackupService) RestoreBackup(ctx context.Context, backupID string) (err
 	setGameserverStatus(s.db, s.log, s.broadcaster, gs.ID, StatusRestoring, "")
 	defer func() {
 		if err != nil {
+			s.broadcaster.Publish(BackupEvent{
+				Type:         "backup.restore_failed",
+				Timestamp:    time.Now(),
+				GameserverID: gs.ID,
+				BackupID:     backupID,
+				Error:        err.Error(),
+			})
 			if curr, e := models.GetGameserver(s.db, gs.ID); e == nil && curr != nil && curr.Status != StatusError {
 				setGameserverStatus(s.db, s.log, s.broadcaster, gs.ID, StatusError,
 					operationFailedReason("Backup restore failed", err))
@@ -208,6 +224,13 @@ func (s *BackupService) RestoreBackup(ctx context.Context, backupID string) (err
 
 	s.log.Info("backup restored", "backup_id", backupID, "gameserver_id", gs.ID)
 
+	s.broadcaster.Publish(BackupEvent{
+		Type:         "backup.restore_completed",
+		Timestamp:    time.Now(),
+		GameserverID: gs.ID,
+		BackupID:     backupID,
+	})
+
 	if wasRunning {
 		s.log.Info("restarting gameserver after restore", "gameserver_id", gs.ID)
 		if err := s.gameserverSvc.Start(ctx, gs.ID); err != nil {
@@ -235,7 +258,19 @@ func (s *BackupService) DeleteBackup(ctx context.Context, backupID string) error
 		return fmt.Errorf("removing backup from store: %w", err)
 	}
 
-	return models.DeleteBackup(s.db, backupID)
+	if err := models.DeleteBackup(s.db, backupID); err != nil {
+		return err
+	}
+
+	s.broadcaster.Publish(BackupEvent{
+		Type:         "backup.deleted",
+		Timestamp:    time.Now(),
+		GameserverID: backup.GameserverID,
+		BackupID:     backupID,
+		BackupName:   backup.Name,
+	})
+
+	return nil
 }
 
 // DeleteBackupsByGameserver removes all backups for a gameserver (DB records + store files).

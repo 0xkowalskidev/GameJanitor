@@ -19,18 +19,20 @@ type Scheduler struct {
 	backupSvc     *BackupService
 	gameserverSvc *GameserverService
 	consoleSvc    *ConsoleService
+	broadcaster   *EventBroadcaster
 	log           *slog.Logger
 	entries       map[string]cron.EntryID
 	mu            sync.Mutex
 }
 
-func NewScheduler(db *sql.DB, backupSvc *BackupService, gameserverSvc *GameserverService, consoleSvc *ConsoleService, log *slog.Logger) *Scheduler {
+func NewScheduler(db *sql.DB, backupSvc *BackupService, gameserverSvc *GameserverService, consoleSvc *ConsoleService, broadcaster *EventBroadcaster, log *slog.Logger) *Scheduler {
 	return &Scheduler{
 		cron:          cron.New(),
 		db:            db,
 		backupSvc:     backupSvc,
 		gameserverSvc: gameserverSvc,
 		consoleSvc:    consoleSvc,
+		broadcaster:   broadcaster,
 		log:           log,
 		entries:       make(map[string]cron.EntryID),
 	}
@@ -163,8 +165,23 @@ func (s *Scheduler) executeTask(scheduleID string) {
 
 	if taskErr != nil {
 		s.log.Error("scheduled task failed", "schedule_id", scheduleID, "type", schedule.Type, "error", taskErr)
+		s.broadcaster.Publish(ScheduledTaskEvent{
+			Type:         "schedule.task_failed",
+			Timestamp:    time.Now(),
+			GameserverID: schedule.GameserverID,
+			ScheduleID:   scheduleID,
+			TaskType:     schedule.Type,
+			Error:        taskErr.Error(),
+		})
 	} else {
 		s.log.Info("scheduled task completed", "schedule_id", scheduleID, "type", schedule.Type)
+		s.broadcaster.Publish(ScheduledTaskEvent{
+			Type:         "schedule.task_completed",
+			Timestamp:    time.Now(),
+			GameserverID: schedule.GameserverID,
+			ScheduleID:   scheduleID,
+			TaskType:     schedule.Type,
+		})
 	}
 
 	// Update last_run and next_run

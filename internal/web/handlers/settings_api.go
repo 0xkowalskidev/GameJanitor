@@ -10,12 +10,12 @@ import (
 
 type SettingsAPIHandlers struct {
 	settingsSvc   *service.SettingsService
-	webhookSender *service.WebhookSender
+	webhookWorker *service.WebhookWorker
 	log           *slog.Logger
 }
 
-func NewSettingsAPIHandlers(settingsSvc *service.SettingsService, webhookSender *service.WebhookSender, log *slog.Logger) *SettingsAPIHandlers {
-	return &SettingsAPIHandlers{settingsSvc: settingsSvc, webhookSender: webhookSender, log: log}
+func NewSettingsAPIHandlers(settingsSvc *service.SettingsService, webhookWorker *service.WebhookWorker, log *slog.Logger) *SettingsAPIHandlers {
+	return &SettingsAPIHandlers{settingsSvc: settingsSvc, webhookWorker: webhookWorker, log: log}
 }
 
 type settingsResponse struct {
@@ -208,12 +208,12 @@ func (h *SettingsAPIHandlers) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *SettingsAPIHandlers) TestWebhook(w http.ResponseWriter, r *http.Request) {
-	if h.webhookSender == nil {
+	if h.webhookWorker == nil {
 		respondError(w, http.StatusBadRequest, "webhooks not configured")
 		return
 	}
 
-	statusCode, err := h.webhookSender.SendTest()
+	statusCode, err := h.webhookWorker.SendTest()
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return

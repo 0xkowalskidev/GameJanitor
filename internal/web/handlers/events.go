@@ -48,7 +48,11 @@ func (h *EventHandlers) SSE(w http.ResponseWriter, r *http.Request) {
 			if !ok {
 				return
 			}
-			data, err := json.Marshal(event)
+			statusEvent, isStatus := event.(service.StatusEvent)
+			if !isStatus {
+				continue
+			}
+			data, err := json.Marshal(statusEvent)
 			if err != nil {
 				h.log.Error("marshaling SSE event", "error", err)
 				continue

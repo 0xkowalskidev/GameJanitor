@@ -32,6 +32,7 @@ func NewRouter(
 	settingsSvc *service.SettingsService,
 	authSvc *service.AuthService,
 	broadcaster *service.EventBroadcaster,
+	webhookWorker *service.WebhookWorker,
 	netInfo *netinfo.Info,
 	registry *worker.Registry,
 	db *sql.DB,
@@ -92,10 +93,9 @@ func NewRouter(
 	logHandlers := handlers.NewLogHandlers(logPath, log)
 	statusHandlers := handlers.NewStatusHandlers(gameserverSvc, querySvc, log)
 	authHandlers := handlers.NewAuthHandlers(authSvc, log)
-	webhookSender := service.NewWebhookSender(settingsSvc, log)
 	workerNodeSvc := service.NewWorkerNodeService(db, log)
 	workerHandlers := handlers.NewWorkerHandlers(registry, workerNodeSvc, gameserverSvc, log)
-	settingsAPIHandlers := handlers.NewSettingsAPIHandlers(settingsSvc, webhookSender, log)
+	settingsAPIHandlers := handlers.NewSettingsAPIHandlers(settingsSvc, webhookWorker, log)
 	auditHandlers := handlers.NewAuditHandlers(db, log)
 
 	requireAdmin := RequireAdmin(settingsSvc)
@@ -110,7 +110,7 @@ func NewRouter(
 	requireConfigure := RequirePermission(settingsSvc, "configure")
 	requireDelete := RequirePermission(settingsSvc, "delete")
 
-	auditMiddleware := AuditMiddleware(db, webhookSender, log)
+	auditMiddleware := AuditMiddleware(db, log)
 
 	r.Route("/api", func(r chi.Router) {
 		r.Use(jsonContentType)
@@ -261,7 +261,7 @@ func NewRouter(
 	pageDashboard := handlers.NewPageDashboardHandlers(gameStore, gameserverSvc, querySvc, settingsSvc, registry, renderer, log)
 	pageGames := handlers.NewPageGameHandlers(gameStore, gameserverSvc, renderer, log)
 	pageGameservers := handlers.NewPageGameserverHandlers(gameStore, gameserverSvc, scheduleSvc, querySvc, settingsSvc, registry, renderer, db, log)
-	pageSettings := handlers.NewPageSettingsHandlers(settingsSvc, workerNodeSvc, authSvc, webhookSender, registry, renderer, dataDir, log)
+	pageSettings := handlers.NewPageSettingsHandlers(settingsSvc, workerNodeSvc, authSvc, webhookWorker, registry, renderer, dataDir, log)
 	pageAudit := handlers.NewPageAuditHandlers(db, renderer, log)
 	pageActions := handlers.NewPageActionHandlers(gameStore, gameserverSvc, renderer, log)
 	pageConsole := handlers.NewPageConsoleHandlers(consoleSvc, gameStore, gameserverSvc, renderer, log)

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/0xkowalskidev/gamejanitor/internal/docker"
 	"github.com/0xkowalskidev/gamejanitor/internal/games"
@@ -139,6 +140,16 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gam
 		}
 		return "", err
 	}
+
+	s.broadcaster.Publish(GameserverEvent{
+		Type:          "gameserver.created",
+		Timestamp:     time.Now(),
+		GameserverID:  gs.ID,
+		Name:          gs.Name,
+		GameID:        gs.GameID,
+		NodeID:        gs.NodeID,
+		MemoryLimitMB: gs.MemoryLimitMB,
+	})
 
 	return rawPassword, nil
 }
@@ -321,6 +332,16 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *models.Gam
 		}
 	}
 
+	s.broadcaster.Publish(GameserverEvent{
+		Type:          "gameserver.updated",
+		Timestamp:     time.Now(),
+		GameserverID:  existing.ID,
+		Name:          existing.Name,
+		GameID:        existing.GameID,
+		NodeID:        existing.NodeID,
+		MemoryLimitMB: existing.MemoryLimitMB,
+	})
+
 	return nil
 }
 
@@ -410,7 +431,21 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 		s.log.Warn("failed to delete backups during gameserver delete", "id", id, "error", err)
 	}
 
-	return models.DeleteGameserver(s.db, id)
+	if err := models.DeleteGameserver(s.db, id); err != nil {
+		return err
+	}
+
+	s.broadcaster.Publish(GameserverEvent{
+		Type:          "gameserver.deleted",
+		Timestamp:     time.Now(),
+		GameserverID:  gs.ID,
+		Name:          gs.Name,
+		GameID:        gs.GameID,
+		NodeID:        gs.NodeID,
+		MemoryLimitMB: gs.MemoryLimitMB,
+	})
+
+	return nil
 }
 
 // generateSFTPUsername creates a URL-safe slug from the gameserver name with random suffix for uniqueness.

@@ -19,15 +19,15 @@ type PageSettingsHandlers struct {
 	settingsSvc    *service.SettingsService
 	workerNodeSvc  *service.WorkerNodeService
 	authSvc        *service.AuthService
-	webhookSender  *service.WebhookSender
+	webhookWorker  *service.WebhookWorker
 	registry       *worker.Registry
 	renderer       *Renderer
 	dataDir        string
 	log            *slog.Logger
 }
 
-func NewPageSettingsHandlers(settingsSvc *service.SettingsService, workerNodeSvc *service.WorkerNodeService, authSvc *service.AuthService, webhookSender *service.WebhookSender, registry *worker.Registry, renderer *Renderer, dataDir string, log *slog.Logger) *PageSettingsHandlers {
-	return &PageSettingsHandlers{settingsSvc: settingsSvc, workerNodeSvc: workerNodeSvc, authSvc: authSvc, webhookSender: webhookSender, registry: registry, renderer: renderer, dataDir: dataDir, log: log}
+func NewPageSettingsHandlers(settingsSvc *service.SettingsService, workerNodeSvc *service.WorkerNodeService, authSvc *service.AuthService, webhookWorker *service.WebhookWorker, registry *worker.Registry, renderer *Renderer, dataDir string, log *slog.Logger) *PageSettingsHandlers {
+	return &PageSettingsHandlers{settingsSvc: settingsSvc, workerNodeSvc: workerNodeSvc, authSvc: authSvc, webhookWorker: webhookWorker, registry: registry, renderer: renderer, dataDir: dataDir, log: log}
 }
 
 func (h *PageSettingsHandlers) SettingsPage(w http.ResponseWriter, r *http.Request) {
@@ -624,12 +624,12 @@ func (h *PageSettingsHandlers) ClearWebhookSecret(w http.ResponseWriter, r *http
 }
 
 func (h *PageSettingsHandlers) TestWebhook(w http.ResponseWriter, r *http.Request) {
-	if h.webhookSender == nil {
+	if h.webhookWorker == nil {
 		http.Error(w, "Webhooks not configured", http.StatusBadRequest)
 		return
 	}
 
-	statusCode, err := h.webhookSender.SendTest()
+	statusCode, err := h.webhookWorker.SendTest()
 	if err != nil {
 		http.Error(w, "Webhook test failed: "+err.Error(), http.StatusBadRequest)
 		return

@@ -5,6 +5,11 @@ import (
 	"time"
 )
 
+type WebhookEvent interface {
+	EventType() string
+	EventTimestamp() time.Time
+}
+
 type StatusEvent struct {
 	GameserverID string    `json:"gameserver_id"`
 	OldStatus    string    `json:"old_status"`
@@ -13,26 +18,29 @@ type StatusEvent struct {
 	Timestamp    time.Time `json:"timestamp"`
 }
 
+func (e StatusEvent) EventType() string        { return "status_changed" }
+func (e StatusEvent) EventTimestamp() time.Time { return e.Timestamp }
+
 type EventBroadcaster struct {
 	mu          sync.RWMutex
-	subscribers map[uint64]chan StatusEvent
+	subscribers map[uint64]chan WebhookEvent
 	nextID      uint64
 }
 
 func NewEventBroadcaster() *EventBroadcaster {
 	return &EventBroadcaster{
-		subscribers: make(map[uint64]chan StatusEvent),
+		subscribers: make(map[uint64]chan WebhookEvent),
 	}
 }
 
-// Subscribe returns a channel that receives status events and an unsubscribe function.
-func (b *EventBroadcaster) Subscribe() (<-chan StatusEvent, func()) {
+// Subscribe returns a channel that receives events and an unsubscribe function.
+func (b *EventBroadcaster) Subscribe() (<-chan WebhookEvent, func()) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
 	id := b.nextID
 	b.nextID++
-	ch := make(chan StatusEvent, 64)
+	ch := make(chan WebhookEvent, 64)
 	b.subscribers[id] = ch
 
 	unsubscribe := func() {
@@ -46,7 +54,7 @@ func (b *EventBroadcaster) Subscribe() (<-chan StatusEvent, func()) {
 }
 
 // Publish sends an event to all subscribers. Non-blocking: slow clients miss events.
-func (b *EventBroadcaster) Publish(event StatusEvent) {
+func (b *EventBroadcaster) Publish(event WebhookEvent) {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
