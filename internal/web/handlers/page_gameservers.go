@@ -143,7 +143,11 @@ func (h *PageGameserverHandlers) New(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	usedPortsJSON, _ := json.Marshal(h.buildUsedPorts(""))
+	usedPorts := h.buildUsedPorts("")
+	if usedPorts == nil {
+		usedPorts = []usedPortEntry{}
+	}
+	usedPortsJSON, _ := json.Marshal(usedPorts)
 
 	data := map[string]any{
 		"Mode":              "new",
@@ -453,7 +457,11 @@ func (h *PageGameserverHandlers) Edit(w http.ResponseWriter, r *http.Request) {
 	}
 	gamesJSONBytes, _ := json.Marshal([]any{gameForJS})
 
-	usedPortsJSON, _ := json.Marshal(h.buildUsedPorts(gs.ID))
+	editUsedPorts := h.buildUsedPorts(gs.ID)
+	if editUsedPorts == nil {
+		editUsedPorts = []usedPortEntry{}
+	}
+	usedPortsJSON, _ := json.Marshal(editUsedPorts)
 
 	gamesForTemplate := []games.Game{}
 	if game != nil {

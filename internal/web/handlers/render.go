@@ -64,6 +64,7 @@ func NewRenderer(netInfo *netinfo.Info, settingsSvc *service.SettingsService, bi
 		"gameservers/files.html",
 		"gameservers/schedules.html",
 		"gameservers/backups.html",
+		"gameservers/sftp_password.html",
 		"auth/login.html",
 		"auth/tokens.html",
 		"auth/token_created.html",
