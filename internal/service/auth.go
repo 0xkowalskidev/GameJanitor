@@ -86,7 +86,7 @@ func (s *AuthService) GenerateAdminToken() (string, error) {
 // Multiple admin tokens can coexist. Raw token must be shown to user once.
 func (s *AuthService) CreateAdminToken(name string) (string, *models.Token, error) {
 	if name == "" {
-		return "", nil, fmt.Errorf("token name is required")
+		return "", nil, ErrBadRequest("token name is required")
 	}
 
 	rawToken, err := generateSecureToken()
@@ -119,13 +119,13 @@ func (s *AuthService) CreateAdminToken(name string) (string, *models.Token, erro
 // Raw token must be shown to user once.
 func (s *AuthService) CreateScopedToken(name string, gameserverIDs []string, permissions []string, expiresAt *time.Time) (string, *models.Token, error) {
 	if name == "" {
-		return "", nil, fmt.Errorf("token name is required")
+		return "", nil, ErrBadRequest("token name is required")
 	}
 
 	// Validate permissions
 	for _, p := range permissions {
 		if !isValidPermission(p) {
-			return "", nil, fmt.Errorf("invalid permission: %s", p)
+			return "", nil, ErrBadRequestf("invalid permission: %s", p)
 		}
 	}
 
@@ -163,7 +163,7 @@ func (s *AuthService) CreateScopedToken(name string, gameserverIDs []string, per
 // Raw token must be shown to the admin once.
 func (s *AuthService) CreateWorkerToken(name string) (string, *models.Token, error) {
 	if name == "" {
-		return "", nil, fmt.Errorf("token name is required")
+		return "", nil, ErrBadRequest("token name is required")
 	}
 
 	rawToken, err := generateSecureToken()

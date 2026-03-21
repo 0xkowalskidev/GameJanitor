@@ -117,7 +117,7 @@ var validScheduleTypes = map[string]bool{
 
 func validateScheduleType(t string) error {
 	if !validScheduleTypes[t] {
-		return fmt.Errorf("invalid schedule type: %s (must be restart, backup, command, or update)", t)
+		return ErrBadRequestf("invalid schedule type: %s (must be restart, backup, command, or update)", t)
 	}
 	return nil
 }
