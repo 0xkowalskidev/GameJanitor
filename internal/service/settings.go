@@ -39,6 +39,11 @@ func (s *SettingsService) SetWorkerNodePortRange(id string, start, end *int) err
 	return models.SetWorkerNodePortRange(s.db, id, start, end)
 }
 
+// SetWorkerNodeCordoned marks a worker as cordoned (excluded from new placements) or uncordoned.
+func (s *SettingsService) SetWorkerNodeCordoned(id string, cordoned bool) error {
+	return models.SetWorkerNodeCordoned(s.db, id, cordoned)
+}
+
 // SetWorkerNodeLimits updates the resource limits for a specific worker node.
 func (s *SettingsService) SetWorkerNodeLimits(id string, maxMemoryMB *int, maxCPU *float64, maxStorageMB *int) error {
 	return models.SetWorkerNodeLimits(s.db, id, maxMemoryMB, maxCPU, maxStorageMB)

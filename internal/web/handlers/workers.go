@@ -38,6 +38,7 @@ type workerAPIView struct {
 	MaxMemoryMB       *int     `json:"max_memory_mb"`
 	MaxCPU            *float64 `json:"max_cpu"`
 	MaxStorageMB      *int     `json:"max_storage_mb"`
+	Cordoned          bool     `json:"cordoned"`
 	Status            string   `json:"status"`
 	LastSeen          *string  `json:"last_seen"`
 }
@@ -72,6 +73,7 @@ func (h *WorkerHandlers) buildWorkerView(info worker.WorkerInfo, gsCount, allocM
 		v.MaxMemoryMB = node.MaxMemoryMB
 		v.MaxCPU = node.MaxCPU
 		v.MaxStorageMB = node.MaxStorageMB
+		v.Cordoned = node.Cordoned
 	}
 	return v
 }
@@ -230,5 +232,29 @@ func (h *WorkerHandlers) ClearLimits(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.log.Info("worker limits cleared via API", "worker_id", workerID)
+	h.getWorkerAndRespond(w, workerID)
+}
+
+func (h *WorkerHandlers) Cordon(w http.ResponseWriter, r *http.Request) {
+	workerID := chi.URLParam(r, "workerID")
+
+	if err := h.settingsSvc.SetWorkerNodeCordoned(workerID, true); err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	h.log.Info("worker cordoned via API", "worker_id", workerID)
+	h.getWorkerAndRespond(w, workerID)
+}
+
+func (h *WorkerHandlers) Uncordon(w http.ResponseWriter, r *http.Request) {
+	workerID := chi.URLParam(r, "workerID")
+
+	if err := h.settingsSvc.SetWorkerNodeCordoned(workerID, false); err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	h.log.Info("worker uncordoned via API", "worker_id", workerID)
 	h.getWorkerAndRespond(w, workerID)
 }

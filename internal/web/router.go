@@ -193,6 +193,8 @@ func NewRouter(
 				r.Delete("/port-range", workerHandlers.ClearPortRange)
 				r.Patch("/limits", workerHandlers.SetLimits)
 				r.Delete("/limits", workerHandlers.ClearLimits)
+				r.Post("/cordon", workerHandlers.Cordon)
+				r.Delete("/cordon", workerHandlers.Uncordon)
 			})
 		})
 
@@ -304,6 +306,8 @@ func NewRouter(
 			r.Delete("/workers/{workerID}/port-range", pageSettings.ClearWorkerPortRange)
 			r.Post("/workers/{workerID}/limits", pageSettings.SaveWorkerLimits)
 			r.Delete("/workers/{workerID}/limits", pageSettings.ClearWorkerLimits)
+			r.Post("/workers/{workerID}/cordon", pageSettings.CordonWorker)
+			r.Delete("/workers/{workerID}/cordon", pageSettings.UncordonWorker)
 			r.Post("/worker-tokens", pageSettings.CreateWorkerToken)
 			r.Delete("/worker-tokens/{tokenId}", pageSettings.DeleteWorkerToken)
 			r.Get("/tokens", pageAuth.TokensPage)

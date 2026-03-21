@@ -39,6 +39,7 @@ var workersListCmd = &cobra.Command{
 			MaxMemoryMB       *int     `json:"max_memory_mb"`
 			MaxCPU            *float64 `json:"max_cpu"`
 			MaxStorageMB      *int     `json:"max_storage_mb"`
+			Cordoned          bool     `json:"cordoned"`
 			Status            string   `json:"status"`
 		}
 		if err := json.Unmarshal(resp.Data, &workers); err != nil {
@@ -54,9 +55,13 @@ var workersListCmd = &cobra.Command{
 		fmt.Fprintln(w, "ID\tLAN IP\tCPU\tMEMORY\tGAMESERVERS\tSTATUS")
 		for _, wk := range workers {
 			memory := fmt.Sprintf("%s / %s", formatMemory(int(wk.MemoryAvailableMB)), formatMemory(int(wk.MemoryTotalMB)))
+			status := wk.Status
+			if wk.Cordoned {
+				status += " (cordoned)"
+			}
 
 			fmt.Fprintf(w, "%s\t%s\t%d cores\t%s\t%d\t%s\n",
-				wk.ID, wk.LanIP, wk.CPUCores, memory, wk.GameserverCount, wk.Status)
+				wk.ID, wk.LanIP, wk.CPUCores, memory, wk.GameserverCount, status)
 		}
 		w.Flush()
 		return nil
@@ -93,6 +98,7 @@ var workersGetCmd = &cobra.Command{
 			MaxMemoryMB       *int     `json:"max_memory_mb"`
 			MaxCPU            *float64 `json:"max_cpu"`
 			MaxStorageMB      *int     `json:"max_storage_mb"`
+			Cordoned          bool     `json:"cordoned"`
 			Status            string   `json:"status"`
 			LastSeen          string   `json:"last_seen"`
 		}
@@ -102,7 +108,11 @@ var workersGetCmd = &cobra.Command{
 
 		w := newTabWriter()
 		fmt.Fprintf(w, "ID:\t%s\n", wk.ID)
-		fmt.Fprintf(w, "Status:\t%s\n", wk.Status)
+		status := wk.Status
+		if wk.Cordoned {
+			status += " (cordoned)"
+		}
+		fmt.Fprintf(w, "Status:\t%s\n", status)
 		fmt.Fprintf(w, "LAN IP:\t%s\n", wk.LanIP)
 		if wk.ExternalIP != "" {
 			fmt.Fprintf(w, "External IP:\t%s\n", wk.ExternalIP)
@@ -235,6 +245,40 @@ var workersClearLimitsCmd = &cobra.Command{
 	},
 }
 
+var workersCordonCmd = &cobra.Command{
+	Use:   "cordon <worker-id>",
+	Short: "Cordon a worker (prevent new gameserver placements)",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		resp, err := apiPost("/api/workers/"+args[0]+"/cordon", nil)
+		if err != nil {
+			return exitError(err)
+		}
+		if jsonOutput {
+			printJSONResponse(resp)
+			return nil
+		}
+		fmt.Printf("Worker %s cordoned.\n", args[0])
+		return nil
+	},
+}
+
+var workersUncordonCmd = &cobra.Command{
+	Use:   "uncordon <worker-id>",
+	Short: "Uncordon a worker (allow new gameserver placements)",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		_, err := apiDelete("/api/workers/" + args[0] + "/cordon")
+		if err != nil {
+			return exitError(err)
+		}
+		if !jsonOutput {
+			fmt.Printf("Worker %s uncordoned.\n", args[0])
+		}
+		return nil
+	},
+}
+
 func init() {
 	workersSetPortRangeCmd.Flags().Int("start", 0, "Port range start (required)")
 	workersSetPortRangeCmd.Flags().Int("end", 0, "Port range end (required)")
@@ -247,5 +291,6 @@ func init() {
 		workersListCmd, workersGetCmd,
 		workersSetPortRangeCmd, workersClearPortRangeCmd,
 		workersSetLimitsCmd, workersClearLimitsCmd,
+		workersCordonCmd, workersUncordonCmd,
 	)
 }

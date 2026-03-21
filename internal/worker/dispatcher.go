@@ -116,6 +116,11 @@ func (d *Dispatcher) RankWorkersForPlacement() []PlacementCandidate {
 
 		node, _ := models.GetWorkerNode(d.db, info.ID)
 
+		if node != nil && node.Cordoned {
+			d.log.Debug("skipping cordoned worker for placement", "worker_id", info.ID)
+			continue
+		}
+
 		hasLimits := false
 		score := math.MaxFloat64
 

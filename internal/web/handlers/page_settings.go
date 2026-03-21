@@ -92,6 +92,7 @@ type workerView struct {
 	AllocatedMemoryMB int
 	AllocatedCPU      float64
 	GameserverCount   int
+	Cordoned          bool
 }
 
 func (h *PageSettingsHandlers) workerViews() []workerView {
@@ -132,6 +133,7 @@ func (h *PageSettingsHandlers) workerViews() []workerView {
 			v.MaxMemoryMB = node.MaxMemoryMB
 			v.MaxCPU = node.MaxCPU
 			v.MaxStorageMB = node.MaxStorageMB
+			v.Cordoned = node.Cordoned
 		}
 		views = append(views, v)
 	}
@@ -357,6 +359,34 @@ func (h *PageSettingsHandlers) ClearWorkerLimits(w http.ResponseWriter, r *http.
 	}
 
 	h.log.Info("worker limits cleared", "worker_id", workerID)
+	w.Header().Set("HX-Redirect", "/settings")
+	w.WriteHeader(http.StatusOK)
+}
+
+func (h *PageSettingsHandlers) CordonWorker(w http.ResponseWriter, r *http.Request) {
+	workerID := chi.URLParam(r, "workerID")
+
+	if err := h.settingsSvc.SetWorkerNodeCordoned(workerID, true); err != nil {
+		h.log.Error("cordoning worker", "worker_id", workerID, "error", err)
+		http.Error(w, "Failed to cordon worker: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	h.log.Info("worker cordoned", "worker_id", workerID)
+	w.Header().Set("HX-Redirect", "/settings")
+	w.WriteHeader(http.StatusOK)
+}
+
+func (h *PageSettingsHandlers) UncordonWorker(w http.ResponseWriter, r *http.Request) {
+	workerID := chi.URLParam(r, "workerID")
+
+	if err := h.settingsSvc.SetWorkerNodeCordoned(workerID, false); err != nil {
+		h.log.Error("uncordoning worker", "worker_id", workerID, "error", err)
+		http.Error(w, "Failed to uncordon worker: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	h.log.Info("worker uncordoned", "worker_id", workerID)
 	w.Header().Set("HX-Redirect", "/settings")
 	w.WriteHeader(http.StatusOK)
 }
