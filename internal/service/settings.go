@@ -88,17 +88,62 @@ func NewSettingsService(db *sql.DB, log *slog.Logger) *SettingsService {
 	return &SettingsService{db: db, log: log}
 }
 
-func (s *SettingsService) GetConnectionAddress() string {
-	if v := os.Getenv("GJ_CONNECTION_ADDRESS"); v != "" {
+func (s *SettingsService) getInt(envKey, dbKey string, defaultVal int) int {
+	if v := os.Getenv(envKey); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
+	v, err := models.GetSetting(s.db, dbKey)
+	if err != nil || v == "" {
+		return defaultVal
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return defaultVal
+	}
+	return n
+}
+
+func (s *SettingsService) getBool(envKey, dbKey string, defaultVal bool) bool {
+	if v := os.Getenv(envKey); v != "" {
+		return v == "true" || v == "1"
+	}
+	v, err := models.GetSetting(s.db, dbKey)
+	if err != nil || v == "" {
+		return defaultVal
+	}
+	return v == "true"
+}
+
+func (s *SettingsService) getString(envKey, dbKey string) string {
+	if v := os.Getenv(envKey); v != "" {
 		return v
 	}
-
-	v, err := models.GetSetting(s.db, SettingConnectionAddress)
+	v, err := models.GetSetting(s.db, dbKey)
 	if err != nil {
-		s.log.Error("reading connection_address setting", "error", err)
+		s.log.Error("reading setting", "key", dbKey, "error", err)
 		return ""
 	}
 	return v
+}
+
+func (s *SettingsService) setInt(dbKey string, v int) error {
+	return models.SetSetting(s.db, dbKey, strconv.Itoa(v))
+}
+
+func (s *SettingsService) setBool(dbKey string, v bool) error {
+	val := "false"
+	if v {
+		val = "true"
+	}
+	return models.SetSetting(s.db, dbKey, val)
+}
+
+// --- Connection Address ---
+
+func (s *SettingsService) GetConnectionAddress() string {
+	return s.getString("GJ_CONNECTION_ADDRESS", SettingConnectionAddress)
 }
 
 func (s *SettingsService) IsConnectionAddressConfigured() bool {
@@ -117,43 +162,29 @@ func (s *SettingsService) ClearConnectionAddress() error {
 	return models.DeleteSetting(s.db, SettingConnectionAddress)
 }
 
+// --- Port Range ---
+
 func (s *SettingsService) GetPortRangeStart() int {
-	if v := os.Getenv("GJ_PORT_RANGE_START"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil {
-			return n
-		}
-	}
-	v, err := models.GetSetting(s.db, SettingPortRangeStart)
-	if err != nil || v == "" {
-		return DefaultPortRangeStart
-	}
-	n, err := strconv.Atoi(v)
-	if err != nil {
-		return DefaultPortRangeStart
-	}
-	return n
+	return s.getInt("GJ_PORT_RANGE_START", SettingPortRangeStart, DefaultPortRangeStart)
 }
 
 func (s *SettingsService) GetPortRangeEnd() int {
-	if v := os.Getenv("GJ_PORT_RANGE_END"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil {
-			return n
-		}
-	}
-	v, err := models.GetSetting(s.db, SettingPortRangeEnd)
-	if err != nil || v == "" {
-		return DefaultPortRangeEnd
-	}
-	n, err := strconv.Atoi(v)
-	if err != nil {
-		return DefaultPortRangeEnd
-	}
-	return n
+	return s.getInt("GJ_PORT_RANGE_END", SettingPortRangeEnd, DefaultPortRangeEnd)
 }
 
 func (s *SettingsService) IsPortRangeFromEnv() bool {
 	return os.Getenv("GJ_PORT_RANGE_START") != "" || os.Getenv("GJ_PORT_RANGE_END") != ""
 }
+
+func (s *SettingsService) SetPortRangeStart(v int) error {
+	return s.setInt(SettingPortRangeStart, v)
+}
+
+func (s *SettingsService) SetPortRangeEnd(v int) error {
+	return s.setInt(SettingPortRangeEnd, v)
+}
+
+// --- Port Mode ---
 
 func (s *SettingsService) GetPreferredPortMode() string {
 	if v := os.Getenv("GJ_PORT_MODE"); v != "" {
@@ -175,14 +206,6 @@ func (s *SettingsService) IsPortModeFromEnv() bool {
 	return os.Getenv("GJ_PORT_MODE") != ""
 }
 
-func (s *SettingsService) SetPortRangeStart(v int) error {
-	return models.SetSetting(s.db, SettingPortRangeStart, strconv.Itoa(v))
-}
-
-func (s *SettingsService) SetPortRangeEnd(v int) error {
-	return models.SetSetting(s.db, SettingPortRangeEnd, strconv.Itoa(v))
-}
-
 func (s *SettingsService) SetPreferredPortMode(mode string) error {
 	if mode != "auto" && mode != "manual" {
 		mode = DefaultPreferredPortMode
@@ -190,21 +213,10 @@ func (s *SettingsService) SetPreferredPortMode(mode string) error {
 	return models.SetSetting(s.db, SettingPreferredPortMode, mode)
 }
 
+// --- Max Backups ---
+
 func (s *SettingsService) GetMaxBackups() int {
-	if v := os.Getenv("GJ_MAX_BACKUPS"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil {
-			return n
-		}
-	}
-	v, err := models.GetSetting(s.db, SettingMaxBackups)
-	if err != nil || v == "" {
-		return DefaultMaxBackups
-	}
-	n, err := strconv.Atoi(v)
-	if err != nil {
-		return DefaultMaxBackups
-	}
-	return n
+	return s.getInt("GJ_MAX_BACKUPS", SettingMaxBackups, DefaultMaxBackups)
 }
 
 func (s *SettingsService) IsMaxBackupsFromEnv() bool {
@@ -212,18 +224,13 @@ func (s *SettingsService) IsMaxBackupsFromEnv() bool {
 }
 
 func (s *SettingsService) SetMaxBackups(v int) error {
-	return models.SetSetting(s.db, SettingMaxBackups, strconv.Itoa(v))
+	return s.setInt(SettingMaxBackups, v)
 }
 
+// --- Auth ---
+
 func (s *SettingsService) GetAuthEnabled() bool {
-	if v := os.Getenv("GJ_AUTH_ENABLED"); v != "" {
-		return v == "true" || v == "1"
-	}
-	v, err := models.GetSetting(s.db, SettingAuthEnabled)
-	if err != nil || v == "" {
-		return false
-	}
-	return v == "true"
+	return s.getBool("GJ_AUTH_ENABLED", SettingAuthEnabled, false)
 }
 
 func (s *SettingsService) IsAuthEnabledFromEnv() bool {
@@ -231,23 +238,13 @@ func (s *SettingsService) IsAuthEnabledFromEnv() bool {
 }
 
 func (s *SettingsService) SetAuthEnabled(enabled bool) error {
-	v := "false"
-	if enabled {
-		v = "true"
-	}
-	return models.SetSetting(s.db, SettingAuthEnabled, v)
+	return s.setBool(SettingAuthEnabled, enabled)
 }
 
-// Defaults to true (bypass enabled).
+// --- Localhost Bypass (defaults to true) ---
+
 func (s *SettingsService) GetLocalhostBypass() bool {
-	if v := os.Getenv("GJ_LOCALHOST_BYPASS"); v != "" {
-		return v == "true" || v == "1"
-	}
-	v, err := models.GetSetting(s.db, SettingLocalhostBypass)
-	if err != nil || v == "" {
-		return true // default: bypass enabled
-	}
-	return v == "true"
+	return s.getBool("GJ_LOCALHOST_BYPASS", SettingLocalhostBypass, true)
 }
 
 func (s *SettingsService) IsLocalhostBypassFromEnv() bool {
@@ -255,28 +252,13 @@ func (s *SettingsService) IsLocalhostBypassFromEnv() bool {
 }
 
 func (s *SettingsService) SetLocalhostBypass(enabled bool) error {
-	v := "false"
-	if enabled {
-		v = "true"
-	}
-	return models.SetSetting(s.db, SettingLocalhostBypass, v)
+	return s.setBool(SettingLocalhostBypass, enabled)
 }
 
+// --- Audit Retention ---
+
 func (s *SettingsService) GetAuditRetentionDays() int {
-	if v := os.Getenv("GJ_AUDIT_RETENTION_DAYS"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil {
-			return n
-		}
-	}
-	v, err := models.GetSetting(s.db, SettingAuditRetention)
-	if err != nil || v == "" {
-		return DefaultAuditRetention
-	}
-	n, err := strconv.Atoi(v)
-	if err != nil {
-		return DefaultAuditRetention
-	}
-	return n
+	return s.getInt("GJ_AUDIT_RETENTION_DAYS", SettingAuditRetention, DefaultAuditRetention)
 }
 
 func (s *SettingsService) IsAuditRetentionFromEnv() bool {
@@ -284,18 +266,13 @@ func (s *SettingsService) IsAuditRetentionFromEnv() bool {
 }
 
 func (s *SettingsService) SetAuditRetentionDays(v int) error {
-	return models.SetSetting(s.db, SettingAuditRetention, strconv.Itoa(v))
+	return s.setInt(SettingAuditRetention, v)
 }
 
+// --- Rate Limiting ---
+
 func (s *SettingsService) GetRateLimitEnabled() bool {
-	if v := os.Getenv("GJ_RATE_LIMIT_ENABLED"); v != "" {
-		return v == "true" || v == "1"
-	}
-	v, err := models.GetSetting(s.db, SettingRateLimitEnabled)
-	if err != nil || v == "" {
-		return false
-	}
-	return v == "true"
+	return s.getBool("GJ_RATE_LIMIT_ENABLED", SettingRateLimitEnabled, false)
 }
 
 func (s *SettingsService) IsRateLimitEnabledFromEnv() bool {
@@ -303,28 +280,11 @@ func (s *SettingsService) IsRateLimitEnabledFromEnv() bool {
 }
 
 func (s *SettingsService) SetRateLimitEnabled(enabled bool) error {
-	v := "false"
-	if enabled {
-		v = "true"
-	}
-	return models.SetSetting(s.db, SettingRateLimitEnabled, v)
+	return s.setBool(SettingRateLimitEnabled, enabled)
 }
 
 func (s *SettingsService) GetRateLimitPerIP() int {
-	if v := os.Getenv("GJ_RATE_LIMIT_PER_IP"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil {
-			return n
-		}
-	}
-	v, err := models.GetSetting(s.db, SettingRateLimitPerIP)
-	if err != nil || v == "" {
-		return DefaultRateLimitPerIP
-	}
-	n, err := strconv.Atoi(v)
-	if err != nil {
-		return DefaultRateLimitPerIP
-	}
-	return n
+	return s.getInt("GJ_RATE_LIMIT_PER_IP", SettingRateLimitPerIP, DefaultRateLimitPerIP)
 }
 
 func (s *SettingsService) IsRateLimitPerIPFromEnv() bool {
@@ -332,24 +292,11 @@ func (s *SettingsService) IsRateLimitPerIPFromEnv() bool {
 }
 
 func (s *SettingsService) SetRateLimitPerIP(v int) error {
-	return models.SetSetting(s.db, SettingRateLimitPerIP, strconv.Itoa(v))
+	return s.setInt(SettingRateLimitPerIP, v)
 }
 
 func (s *SettingsService) GetRateLimitPerToken() int {
-	if v := os.Getenv("GJ_RATE_LIMIT_PER_TOKEN"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil {
-			return n
-		}
-	}
-	v, err := models.GetSetting(s.db, SettingRateLimitPerToken)
-	if err != nil || v == "" {
-		return DefaultRateLimitPerToken
-	}
-	n, err := strconv.Atoi(v)
-	if err != nil {
-		return DefaultRateLimitPerToken
-	}
-	return n
+	return s.getInt("GJ_RATE_LIMIT_PER_TOKEN", SettingRateLimitPerToken, DefaultRateLimitPerToken)
 }
 
 func (s *SettingsService) IsRateLimitPerTokenFromEnv() bool {
@@ -357,24 +304,11 @@ func (s *SettingsService) IsRateLimitPerTokenFromEnv() bool {
 }
 
 func (s *SettingsService) SetRateLimitPerToken(v int) error {
-	return models.SetSetting(s.db, SettingRateLimitPerToken, strconv.Itoa(v))
+	return s.setInt(SettingRateLimitPerToken, v)
 }
 
 func (s *SettingsService) GetRateLimitLogin() int {
-	if v := os.Getenv("GJ_RATE_LIMIT_LOGIN"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil {
-			return n
-		}
-	}
-	v, err := models.GetSetting(s.db, SettingRateLimitLogin)
-	if err != nil || v == "" {
-		return DefaultRateLimitLogin
-	}
-	n, err := strconv.Atoi(v)
-	if err != nil {
-		return DefaultRateLimitLogin
-	}
-	return n
+	return s.getInt("GJ_RATE_LIMIT_LOGIN", SettingRateLimitLogin, DefaultRateLimitLogin)
 }
 
 func (s *SettingsService) IsRateLimitLoginFromEnv() bool {
@@ -382,18 +316,13 @@ func (s *SettingsService) IsRateLimitLoginFromEnv() bool {
 }
 
 func (s *SettingsService) SetRateLimitLogin(v int) error {
-	return models.SetSetting(s.db, SettingRateLimitLogin, strconv.Itoa(v))
+	return s.setInt(SettingRateLimitLogin, v)
 }
 
+// --- Trust Proxy Headers ---
+
 func (s *SettingsService) GetTrustProxyHeaders() bool {
-	if v := os.Getenv("GJ_TRUST_PROXY_HEADERS"); v != "" {
-		return v == "true" || v == "1"
-	}
-	v, err := models.GetSetting(s.db, SettingTrustProxyHeaders)
-	if err != nil || v == "" {
-		return false
-	}
-	return v == "true"
+	return s.getBool("GJ_TRUST_PROXY_HEADERS", SettingTrustProxyHeaders, false)
 }
 
 func (s *SettingsService) IsTrustProxyHeadersFromEnv() bool {
@@ -401,22 +330,13 @@ func (s *SettingsService) IsTrustProxyHeadersFromEnv() bool {
 }
 
 func (s *SettingsService) SetTrustProxyHeaders(enabled bool) error {
-	v := "false"
-	if enabled {
-		v = "true"
-	}
-	return models.SetSetting(s.db, SettingTrustProxyHeaders, v)
+	return s.setBool(SettingTrustProxyHeaders, enabled)
 }
 
+// --- Webhooks ---
+
 func (s *SettingsService) GetWebhookEnabled() bool {
-	if v := os.Getenv("GJ_WEBHOOK_ENABLED"); v != "" {
-		return v == "true" || v == "1"
-	}
-	v, err := models.GetSetting(s.db, SettingWebhookEnabled)
-	if err != nil || v == "" {
-		return false
-	}
-	return v == "true"
+	return s.getBool("GJ_WEBHOOK_ENABLED", SettingWebhookEnabled, false)
 }
 
 func (s *SettingsService) IsWebhookEnabledFromEnv() bool {
@@ -424,23 +344,11 @@ func (s *SettingsService) IsWebhookEnabledFromEnv() bool {
 }
 
 func (s *SettingsService) SetWebhookEnabled(enabled bool) error {
-	v := "false"
-	if enabled {
-		v = "true"
-	}
-	return models.SetSetting(s.db, SettingWebhookEnabled, v)
+	return s.setBool(SettingWebhookEnabled, enabled)
 }
 
 func (s *SettingsService) GetWebhookURL() string {
-	if v := os.Getenv("GJ_WEBHOOK_URL"); v != "" {
-		return v
-	}
-	v, err := models.GetSetting(s.db, SettingWebhookURL)
-	if err != nil {
-		s.log.Error("reading webhook_url setting", "error", err)
-		return ""
-	}
-	return v
+	return s.getString("GJ_WEBHOOK_URL", SettingWebhookURL)
 }
 
 func (s *SettingsService) IsWebhookURLFromEnv() bool {
@@ -456,15 +364,7 @@ func (s *SettingsService) ClearWebhookURL() error {
 }
 
 func (s *SettingsService) GetWebhookSecret() string {
-	if v := os.Getenv("GJ_WEBHOOK_SECRET"); v != "" {
-		return v
-	}
-	v, err := models.GetSetting(s.db, SettingWebhookSecret)
-	if err != nil {
-		s.log.Error("reading webhook_secret setting", "error", err)
-		return ""
-	}
-	return v
+	return s.getString("GJ_WEBHOOK_SECRET", SettingWebhookSecret)
 }
 
 func (s *SettingsService) IsWebhookSecretFromEnv() bool {
