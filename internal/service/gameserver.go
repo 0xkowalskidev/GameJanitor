@@ -87,7 +87,7 @@ func (s *GameserverService) portRangeForNode(nodeID string) (int, int) {
 }
 
 // checkWorkerLimits returns an error if the worker has exceeded its configured resource limits.
-func (s *GameserverService) checkWorkerLimits(nodeID string, memoryNeeded int, cpuNeeded float64) error {
+func (s *GameserverService) checkWorkerLimits(nodeID string, memoryNeeded int, cpuNeeded float64, storageNeeded int) error {
 	node, err := models.GetWorkerNode(s.db, nodeID)
 	if err != nil || node == nil {
 		return nil // no node record = no limits
@@ -113,7 +113,24 @@ func (s *GameserverService) checkWorkerLimits(nodeID string, memoryNeeded int, c
 		}
 	}
 
+	if node.MaxStorageMB != nil && storageNeeded > 0 {
+		allocated, err := models.AllocatedStorageByNode(s.db, nodeID)
+		if err != nil {
+			return fmt.Errorf("checking worker limits: %w", err)
+		}
+		if allocated+storageNeeded > *node.MaxStorageMB {
+			return fmt.Errorf("worker %s has reached its storage limit (%d MB allocated, %d MB limit)", nodeID, allocated, *node.MaxStorageMB)
+		}
+	}
+
 	return nil
+}
+
+func ptrIntOr0(p *int) int {
+	if p != nil {
+		return *p
+	}
+	return 0
 }
 
 // AllocatePorts finds a contiguous block of free host ports for the game's port requirements.
@@ -216,7 +233,7 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gam
 		}
 		targetWorker = w
 
-		if err := s.checkWorkerLimits(nodeID, gs.MemoryLimitMB, gs.CPULimit); err != nil {
+		if err := s.checkWorkerLimits(nodeID, gs.MemoryLimitMB, gs.CPULimit, ptrIntOr0(gs.MaxStorageMB)); err != nil {
 			return "", err
 		}
 		if gs.PortMode == "auto" {
@@ -236,7 +253,7 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gam
 		var lastErr error
 		for _, c := range candidates {
 			if c.NodeID != "" {
-				if err := s.checkWorkerLimits(c.NodeID, gs.MemoryLimitMB, gs.CPULimit); err != nil {
+				if err := s.checkWorkerLimits(c.NodeID, gs.MemoryLimitMB, gs.CPULimit, ptrIntOr0(gs.MaxStorageMB)); err != nil {
 					s.log.Debug("worker skipped during placement", "worker_id", c.NodeID, "reason", err)
 					lastErr = err
 					continue
@@ -1077,7 +1094,7 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 	}
 
 	// Check target node limits
-	if err := s.checkWorkerLimits(targetNodeID, gs.MemoryLimitMB, gs.CPULimit); err != nil {
+	if err := s.checkWorkerLimits(targetNodeID, gs.MemoryLimitMB, gs.CPULimit, ptrIntOr0(gs.MaxStorageMB)); err != nil {
 		return err
 	}
 

@@ -172,6 +172,16 @@ func AllocatedCPUByNode(db *sql.DB, nodeID string) (float64, error) {
 	return total, nil
 }
 
+// AllocatedStorageByNode returns the total max_storage_mb allocated to gameservers on a node.
+func AllocatedStorageByNode(db *sql.DB, nodeID string) (int, error) {
+	var total int
+	err := db.QueryRow("SELECT COALESCE(SUM(max_storage_mb), 0) FROM gameservers WHERE node_id = ?", nodeID).Scan(&total)
+	if err != nil {
+		return 0, fmt.Errorf("querying allocated storage for node %s: %w", nodeID, err)
+	}
+	return total, nil
+}
+
 func DeleteGameserver(db *sql.DB, id string) error {
 	result, err := db.Exec("DELETE FROM gameservers WHERE id = ?", id)
 	if err != nil {

@@ -108,6 +108,11 @@ func (d *Dispatcher) RankWorkersForPlacement() []PlacementCandidate {
 			d.log.Warn("failed to query allocated CPU for worker", "worker_id", info.ID, "error", err)
 			continue
 		}
+		allocStorage, err := models.AllocatedStorageByNode(d.db, info.ID)
+		if err != nil {
+			d.log.Warn("failed to query allocated storage for worker", "worker_id", info.ID, "error", err)
+			continue
+		}
 
 		node, _ := models.GetWorkerNode(d.db, info.ID)
 
@@ -126,6 +131,13 @@ func (d *Dispatcher) RankWorkersForPlacement() []PlacementCandidate {
 			cpuPct := (*node.MaxCPU - allocCPU) / *node.MaxCPU
 			if cpuPct < score {
 				score = cpuPct
+			}
+		}
+		if node != nil && node.MaxStorageMB != nil && *node.MaxStorageMB > 0 {
+			hasLimits = true
+			storagePct := float64(*node.MaxStorageMB-allocStorage) / float64(*node.MaxStorageMB)
+			if storagePct < score {
+				score = storagePct
 			}
 		}
 
