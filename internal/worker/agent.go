@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/0xkowalskidev/gamejanitor/internal/games"
 	"github.com/0xkowalskidev/gamejanitor/internal/worker/pb"
@@ -400,6 +399,5 @@ func (a *Agent) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (*pb.He
 		"memory_total_mb", req.MemoryTotalMb,
 		"memory_available_mb", req.MemoryAvailableMb,
 	)
-	_ = time.Now() // placeholder for future last-seen tracking
 	return &pb.HeartbeatResponse{Accepted: true}, nil
 }

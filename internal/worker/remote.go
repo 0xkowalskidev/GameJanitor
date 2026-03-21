@@ -351,13 +351,11 @@ func (w *RemoteWorker) PrepareGameScripts(ctx context.Context, gameID, gameserve
 	return resp.ScriptDir, resp.DefaultsDir, nil
 }
 
-// Sendbeat sends a heartbeat to the controller (called by worker nodes).
 func (w *RemoteWorker) Sendbeat(ctx context.Context, req *pb.HeartbeatRequest) error {
 	_, err := w.client.Heartbeat(ctx, req)
 	return err
 }
 
-// Close closes the underlying gRPC connection.
 func (w *RemoteWorker) Close() error {
 	if w.conn != nil {
 		return w.conn.Close()

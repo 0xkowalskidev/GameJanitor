@@ -204,7 +204,6 @@ func definitionToGame(def GameDefinition) *Game {
 	}
 }
 
-
 func (s *GameStore) ListGames() []Game {
 	return s.sorted
 }

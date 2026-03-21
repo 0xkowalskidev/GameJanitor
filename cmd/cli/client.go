@@ -93,15 +93,6 @@ func printJSONResponse(resp *apiResponse) {
 	enc.Encode(out)
 }
 
-// printJSONData prints just the data field as indented JSON.
-func printJSONData(data json.RawMessage) {
-	var v any
-	json.Unmarshal(data, &v)
-	enc := json.NewEncoder(os.Stdout)
-	enc.SetIndent("", "  ")
-	enc.Encode(v)
-}
-
 func newTabWriter() *tabwriter.Writer {
 	return tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 }

@@ -39,7 +39,7 @@ func WorkerAuthInterceptor() grpc.UnaryServerInterceptor {
 	}
 }
 
-// TokenFromContext extracts the raw token string set by WorkerAuthInterceptor.
+// Returns the raw token string set by WorkerAuthInterceptor.
 func TokenFromContext(ctx context.Context) string {
 	v, _ := ctx.Value(tokenCtxKey).(string)
 	return v

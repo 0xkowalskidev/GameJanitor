@@ -236,8 +236,6 @@ func (m *StatusManager) handleEvent(event worker.ContainerEvent) {
 		return
 	}
 
-	w := m.workerForGameserver(gs)
-
 	switch event.Action {
 	case "start":
 		m.log.Debug("docker event: container started", "id", gsID)
@@ -255,8 +253,6 @@ func (m *StatusManager) handleEvent(event worker.ContainerEvent) {
 	case "kill":
 		m.log.Debug("docker event: container killed", "id", gsID)
 	}
-
-	_ = w
 }
 
 // onWorkerRegistered is called when a remote worker registers.

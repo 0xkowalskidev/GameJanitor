@@ -7,19 +7,19 @@ import (
 )
 
 type WorkerNode struct {
-	ID             string
-	LanIP          string
-	ExternalIP     string
-	PortRangeStart *int
-	PortRangeEnd   *int
-	MaxMemoryMB    *int
-	MaxCPU         *float64
-	MaxStorageMB   *int
-	Cordoned       bool
-	SFTPPort       int
-	LastSeen       *time.Time
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	ID             string     `json:"id"`
+	LanIP          string     `json:"lan_ip"`
+	ExternalIP     string     `json:"external_ip"`
+	PortRangeStart *int       `json:"port_range_start"`
+	PortRangeEnd   *int       `json:"port_range_end"`
+	MaxMemoryMB    *int       `json:"max_memory_mb"`
+	MaxCPU         *float64   `json:"max_cpu"`
+	MaxStorageMB   *int       `json:"max_storage_mb"`
+	Cordoned       bool       `json:"cordoned"`
+	SFTPPort       int        `json:"sftp_port"`
+	LastSeen       *time.Time `json:"last_seen"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
 }
 
 // UpsertWorkerNode inserts or updates a worker node's IP and last_seen fields.

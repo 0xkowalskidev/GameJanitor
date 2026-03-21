@@ -36,12 +36,10 @@ func NewGameserverService(db *sql.DB, dispatcher *worker.Dispatcher, broadcaster
 	return &GameserverService{db: db, dispatcher: dispatcher, broadcaster: broadcaster, settingsSvc: settingsSvc, gameStore: gameStore, dataDir: dataDir, log: log}
 }
 
-// SetReadyWatcher sets the ready watcher for log-based ready detection after start.
 // Called after both services are created to break the circular dependency.
 func (s *GameserverService) SetReadyWatcher(rw *ReadyWatcher) {
 	s.readyWatcher = rw
 }
-
 
 func (s *GameserverService) ListGameservers(filter models.GameserverFilter) ([]models.Gameserver, error) {
 	return models.ListGameservers(s.db, filter)
@@ -891,7 +889,6 @@ func (s *GameserverService) Reinstall(ctx context.Context, id string) error {
 	s.log.Info("volume wiped, starting fresh install", "id", id)
 	return s.Start(ctx, id)
 }
-
 
 // Port mapping from gameserver's ports JSON
 // flexInt handles JSON values that may be a number or a string containing a number.

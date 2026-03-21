@@ -10,7 +10,7 @@ import (
 )
 
 // ResolveConnectionIP returns the connection IP for a gameserver on the given node.
-// Priority: global override > worker's persisted IP > empty (caller falls back to 127.0.0.1).
+// Priority: global override > worker external IP > worker LAN IP > empty (caller falls back to 127.0.0.1).
 func (s *SettingsService) ResolveConnectionIP(nodeID *string) (ip string, configured bool) {
 	if globalIP := s.GetConnectionAddress(); globalIP != "" {
 		return globalIP, true
@@ -29,27 +29,22 @@ func (s *SettingsService) ResolveConnectionIP(nodeID *string) (ip string, config
 	return "", false
 }
 
-// GetWorkerNode returns a single worker node by ID.
 func (s *SettingsService) GetWorkerNode(id string) (*models.WorkerNode, error) {
 	return models.GetWorkerNode(s.db, id)
 }
 
-// SetWorkerNodePortRange updates the port range for a specific worker node.
 func (s *SettingsService) SetWorkerNodePortRange(id string, start, end *int) error {
 	return models.SetWorkerNodePortRange(s.db, id, start, end)
 }
 
-// SetWorkerNodeCordoned marks a worker as cordoned (excluded from new placements) or uncordoned.
 func (s *SettingsService) SetWorkerNodeCordoned(id string, cordoned bool) error {
 	return models.SetWorkerNodeCordoned(s.db, id, cordoned)
 }
 
-// SetWorkerNodeLimits updates the resource limits for a specific worker node.
 func (s *SettingsService) SetWorkerNodeLimits(id string, maxMemoryMB *int, maxCPU *float64, maxStorageMB *int) error {
 	return models.SetWorkerNodeLimits(s.db, id, maxMemoryMB, maxCPU, maxStorageMB)
 }
 
-// ListGameserversByNode returns all gameservers for computing per-node resource usage.
 func (s *SettingsService) ListGameserversByNode() ([]models.Gameserver, error) {
 	return models.ListGameservers(s.db, models.GameserverFilter{})
 }
@@ -93,8 +88,6 @@ func NewSettingsService(db *sql.DB, log *slog.Logger) *SettingsService {
 	return &SettingsService{db: db, log: log}
 }
 
-// GetConnectionAddress returns the configured connection address.
-// Priority: ENV var > DB setting > empty string (unconfigured).
 func (s *SettingsService) GetConnectionAddress() string {
 	if v := os.Getenv("GJ_CONNECTION_ADDRESS"); v != "" {
 		return v
@@ -108,30 +101,22 @@ func (s *SettingsService) GetConnectionAddress() string {
 	return v
 }
 
-// IsConnectionAddressConfigured returns true if a connection address is set via ENV or DB.
 func (s *SettingsService) IsConnectionAddressConfigured() bool {
 	return s.GetConnectionAddress() != ""
 }
 
-// IsConnectionAddressFromEnv returns true if the connection address is set via ENV (not editable from UI).
 func (s *SettingsService) IsConnectionAddressFromEnv() bool {
 	return os.Getenv("GJ_CONNECTION_ADDRESS") != ""
 }
 
-// SetConnectionAddress saves the connection address to the DB.
 func (s *SettingsService) SetConnectionAddress(address string) error {
-	s.log.Info("setting connection address", "address", address)
 	return models.SetSetting(s.db, SettingConnectionAddress, address)
 }
 
-// ClearConnectionAddress removes the connection address from the DB.
 func (s *SettingsService) ClearConnectionAddress() error {
-	s.log.Info("clearing connection address")
 	return models.DeleteSetting(s.db, SettingConnectionAddress)
 }
 
-// GetPortRangeStart returns the start of the port allocation range.
-// Priority: ENV var > DB setting > default.
 func (s *SettingsService) GetPortRangeStart() int {
 	if v := os.Getenv("GJ_PORT_RANGE_START"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
@@ -149,8 +134,6 @@ func (s *SettingsService) GetPortRangeStart() int {
 	return n
 }
 
-// GetPortRangeEnd returns the end of the port allocation range.
-// Priority: ENV var > DB setting > default.
 func (s *SettingsService) GetPortRangeEnd() int {
 	if v := os.Getenv("GJ_PORT_RANGE_END"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
@@ -172,8 +155,6 @@ func (s *SettingsService) IsPortRangeFromEnv() bool {
 	return os.Getenv("GJ_PORT_RANGE_START") != "" || os.Getenv("GJ_PORT_RANGE_END") != ""
 }
 
-// GetPreferredPortMode returns the preferred port allocation mode.
-// Priority: ENV var > DB setting > default.
 func (s *SettingsService) GetPreferredPortMode() string {
 	if v := os.Getenv("GJ_PORT_MODE"); v != "" {
 		if v == "auto" || v == "manual" {
@@ -209,8 +190,6 @@ func (s *SettingsService) SetPreferredPortMode(mode string) error {
 	return models.SetSetting(s.db, SettingPreferredPortMode, mode)
 }
 
-// GetMaxBackups returns the maximum number of backups to keep per gameserver.
-// 0 means unlimited. Priority: ENV var > DB setting > default.
 func (s *SettingsService) GetMaxBackups() int {
 	if v := os.Getenv("GJ_MAX_BACKUPS"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
@@ -236,8 +215,6 @@ func (s *SettingsService) SetMaxBackups(v int) error {
 	return models.SetSetting(s.db, SettingMaxBackups, strconv.Itoa(v))
 }
 
-// GetAuthEnabled returns true if auth is enabled.
-// ENV var GJ_AUTH_ENABLED overrides DB setting.
 func (s *SettingsService) GetAuthEnabled() bool {
 	if v := os.Getenv("GJ_AUTH_ENABLED"); v != "" {
 		return v == "true" || v == "1"
@@ -258,12 +235,10 @@ func (s *SettingsService) SetAuthEnabled(enabled bool) error {
 	if enabled {
 		v = "true"
 	}
-	s.log.Info("setting auth_enabled", "enabled", enabled)
 	return models.SetSetting(s.db, SettingAuthEnabled, v)
 }
 
-// GetLocalhostBypass returns true if localhost requests bypass auth.
-// ENV var GJ_LOCALHOST_BYPASS overrides DB setting. Defaults to true.
+// Defaults to true (bypass enabled).
 func (s *SettingsService) GetLocalhostBypass() bool {
 	if v := os.Getenv("GJ_LOCALHOST_BYPASS"); v != "" {
 		return v == "true" || v == "1"
@@ -284,7 +259,6 @@ func (s *SettingsService) SetLocalhostBypass(enabled bool) error {
 	if enabled {
 		v = "true"
 	}
-	s.log.Info("setting localhost_bypass", "enabled", enabled)
 	return models.SetSetting(s.db, SettingLocalhostBypass, v)
 }
 
@@ -333,7 +307,6 @@ func (s *SettingsService) SetRateLimitEnabled(enabled bool) error {
 	if enabled {
 		v = "true"
 	}
-	s.log.Info("setting rate_limit_enabled", "enabled", enabled)
 	return models.SetSetting(s.db, SettingRateLimitEnabled, v)
 }
 
@@ -432,7 +405,6 @@ func (s *SettingsService) SetTrustProxyHeaders(enabled bool) error {
 	if enabled {
 		v = "true"
 	}
-	s.log.Info("setting trust_proxy_headers", "enabled", enabled)
 	return models.SetSetting(s.db, SettingTrustProxyHeaders, v)
 }
 
@@ -456,7 +428,6 @@ func (s *SettingsService) SetWebhookEnabled(enabled bool) error {
 	if enabled {
 		v = "true"
 	}
-	s.log.Info("setting webhook_enabled", "enabled", enabled)
 	return models.SetSetting(s.db, SettingWebhookEnabled, v)
 }
 
@@ -477,12 +448,10 @@ func (s *SettingsService) IsWebhookURLFromEnv() bool {
 }
 
 func (s *SettingsService) SetWebhookURL(url string) error {
-	s.log.Info("setting webhook_url", "url", url)
 	return models.SetSetting(s.db, SettingWebhookURL, url)
 }
 
 func (s *SettingsService) ClearWebhookURL() error {
-	s.log.Info("clearing webhook_url")
 	return models.DeleteSetting(s.db, SettingWebhookURL)
 }
 
@@ -503,11 +472,9 @@ func (s *SettingsService) IsWebhookSecretFromEnv() bool {
 }
 
 func (s *SettingsService) SetWebhookSecret(secret string) error {
-	s.log.Info("setting webhook_secret")
 	return models.SetSetting(s.db, SettingWebhookSecret, secret)
 }
 
 func (s *SettingsService) ClearWebhookSecret() error {
-	s.log.Info("clearing webhook_secret")
 	return models.DeleteSetting(s.db, SettingWebhookSecret)
 }

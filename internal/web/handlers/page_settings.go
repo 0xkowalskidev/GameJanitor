@@ -29,7 +29,6 @@ func NewPageSettingsHandlers(settingsSvc *service.SettingsService, authSvc *serv
 	return &PageSettingsHandlers{settingsSvc: settingsSvc, authSvc: authSvc, webhookSender: webhookSender, registry: registry, renderer: renderer, dataDir: dataDir, log: log}
 }
 
-// SettingsPage renders the main settings page.
 func (h *PageSettingsHandlers) SettingsPage(w http.ResponseWriter, r *http.Request) {
 	data := map[string]any{
 		"DataDir":                h.dataDir,
@@ -163,7 +162,6 @@ func (h *PageSettingsHandlers) workerTokens() []models.Token {
 	return workerTokens
 }
 
-// CreateWorkerToken handles creating a worker auth token.
 func (h *PageSettingsHandlers) CreateWorkerToken(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "Invalid form data", http.StatusBadRequest)
@@ -190,7 +188,6 @@ func (h *PageSettingsHandlers) CreateWorkerToken(w http.ResponseWriter, r *http.
 	})
 }
 
-// DeleteWorkerToken handles deleting a worker auth token.
 func (h *PageSettingsHandlers) DeleteWorkerToken(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "tokenId")
 	if err := h.authSvc.DeleteToken(id); err != nil {
@@ -251,7 +248,6 @@ func (h *PageSettingsHandlers) ClearConnectionAddress(w http.ResponseWriter, r *
 	w.WriteHeader(http.StatusOK)
 }
 
-// SaveWorkerPortRange sets a custom port range for a specific worker node.
 func (h *PageSettingsHandlers) SaveWorkerPortRange(w http.ResponseWriter, r *http.Request) {
 	workerID := chi.URLParam(r, "workerID")
 	if err := r.ParseForm(); err != nil {
@@ -300,7 +296,6 @@ func (h *PageSettingsHandlers) ClearWorkerPortRange(w http.ResponseWriter, r *ht
 	w.WriteHeader(http.StatusOK)
 }
 
-// SaveWorkerLimits sets resource limits for a specific worker node.
 func (h *PageSettingsHandlers) SaveWorkerLimits(w http.ResponseWriter, r *http.Request) {
 	workerID := chi.URLParam(r, "workerID")
 	if err := r.ParseForm(); err != nil {
@@ -399,7 +394,6 @@ func (h *PageSettingsHandlers) UncordonWorker(w http.ResponseWriter, r *http.Req
 	w.WriteHeader(http.StatusOK)
 }
 
-// SavePortRange handles the port range form submission.
 func (h *PageSettingsHandlers) SavePortRange(w http.ResponseWriter, r *http.Request) {
 	if h.settingsSvc.IsPortRangeFromEnv() {
 		http.Error(w, "Port range is controlled by environment variable", http.StatusBadRequest)
@@ -442,7 +436,6 @@ func (h *PageSettingsHandlers) SavePortRange(w http.ResponseWriter, r *http.Requ
 	w.WriteHeader(http.StatusOK)
 }
 
-// SavePortMode handles the port allocation mode form submission.
 func (h *PageSettingsHandlers) SavePortMode(w http.ResponseWriter, r *http.Request) {
 	if h.settingsSvc.IsPortModeFromEnv() {
 		http.Error(w, "Port mode is controlled by environment variable", http.StatusBadRequest)
@@ -466,7 +459,6 @@ func (h *PageSettingsHandlers) SavePortMode(w http.ResponseWriter, r *http.Reque
 	w.WriteHeader(http.StatusOK)
 }
 
-// SaveMaxBackups handles the max backups form submission.
 func (h *PageSettingsHandlers) SaveMaxBackups(w http.ResponseWriter, r *http.Request) {
 	if h.settingsSvc.IsMaxBackupsFromEnv() {
 		http.Error(w, "Max backups is controlled by environment variable", http.StatusBadRequest)
@@ -495,7 +487,6 @@ func (h *PageSettingsHandlers) SaveMaxBackups(w http.ResponseWriter, r *http.Req
 	w.WriteHeader(http.StatusOK)
 }
 
-// SaveAuditRetention handles the audit retention days form submission.
 func (h *PageSettingsHandlers) SaveAuditRetention(w http.ResponseWriter, r *http.Request) {
 	if h.settingsSvc.IsAuditRetentionFromEnv() {
 		http.Error(w, "Audit retention is controlled by environment variable", http.StatusBadRequest)
@@ -524,7 +515,6 @@ func (h *PageSettingsHandlers) SaveAuditRetention(w http.ResponseWriter, r *http
 	w.WriteHeader(http.StatusOK)
 }
 
-// SetRateLimitEnabled handles enabling/disabling rate limiting.
 func (h *PageSettingsHandlers) SetRateLimitEnabled(enabled bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if h.settingsSvc.IsRateLimitEnabledFromEnv() {
@@ -628,7 +618,6 @@ func (h *PageSettingsHandlers) SaveRateLimitLogin(w http.ResponseWriter, r *http
 	w.WriteHeader(http.StatusOK)
 }
 
-// SetTrustProxyHeaders handles enabling/disabling trust proxy headers.
 func (h *PageSettingsHandlers) SetTrustProxyHeaders(enabled bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if h.settingsSvc.IsTrustProxyHeadersFromEnv() {
@@ -765,7 +754,6 @@ func (h *PageSettingsHandlers) TestWebhook(w http.ResponseWriter, r *http.Reques
 	}
 }
 
-// SetLocalhostBypass handles enabling/disabling localhost bypass.
 func (h *PageSettingsHandlers) SetLocalhostBypass(enabled bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if h.settingsSvc.IsLocalhostBypassFromEnv() {

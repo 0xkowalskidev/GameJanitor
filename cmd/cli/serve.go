@@ -12,9 +12,8 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"time"
-
 	"strconv"
+	"time"
 
 	"github.com/0xkowalskidev/gamejanitor/internal/config"
 	"github.com/0xkowalskidev/gamejanitor/internal/db"

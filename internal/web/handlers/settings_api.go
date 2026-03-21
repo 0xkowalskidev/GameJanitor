@@ -30,24 +30,24 @@ type settingsResponse struct {
 	MaxBackupsFromEnv        bool   `json:"max_backups_from_env"`
 	AuthEnabled              bool   `json:"auth_enabled"`
 	AuthFromEnv              bool   `json:"auth_from_env"`
-	LocalhostBypass            bool   `json:"localhost_bypass"`
-	LocalhostBypassFromEnv     bool   `json:"localhost_bypass_from_env"`
-	RateLimitEnabled           bool   `json:"rate_limit_enabled"`
-	RateLimitEnabledFromEnv    bool   `json:"rate_limit_enabled_from_env"`
-	RateLimitPerIP             int    `json:"rate_limit_per_ip"`
-	RateLimitPerIPFromEnv      bool   `json:"rate_limit_per_ip_from_env"`
-	RateLimitPerToken          int    `json:"rate_limit_per_token"`
-	RateLimitPerTokenFromEnv   bool   `json:"rate_limit_per_token_from_env"`
-	RateLimitLogin             int    `json:"rate_limit_login"`
-	RateLimitLoginFromEnv      bool   `json:"rate_limit_login_from_env"`
-	TrustProxyHeaders          bool   `json:"trust_proxy_headers"`
-	TrustProxyHeadersFromEnv   bool   `json:"trust_proxy_headers_from_env"`
-	WebhookEnabled             bool   `json:"webhook_enabled"`
-	WebhookEnabledFromEnv      bool   `json:"webhook_enabled_from_env"`
-	WebhookURL                 string `json:"webhook_url"`
-	WebhookURLFromEnv          bool   `json:"webhook_url_from_env"`
-	WebhookSecretSet           bool   `json:"webhook_secret_set"`
-	WebhookSecretFromEnv       bool   `json:"webhook_secret_from_env"`
+	LocalhostBypass          bool   `json:"localhost_bypass"`
+	LocalhostBypassFromEnv   bool   `json:"localhost_bypass_from_env"`
+	RateLimitEnabled         bool   `json:"rate_limit_enabled"`
+	RateLimitEnabledFromEnv  bool   `json:"rate_limit_enabled_from_env"`
+	RateLimitPerIP           int    `json:"rate_limit_per_ip"`
+	RateLimitPerIPFromEnv    bool   `json:"rate_limit_per_ip_from_env"`
+	RateLimitPerToken        int    `json:"rate_limit_per_token"`
+	RateLimitPerTokenFromEnv bool   `json:"rate_limit_per_token_from_env"`
+	RateLimitLogin           int    `json:"rate_limit_login"`
+	RateLimitLoginFromEnv    bool   `json:"rate_limit_login_from_env"`
+	TrustProxyHeaders        bool   `json:"trust_proxy_headers"`
+	TrustProxyHeadersFromEnv bool   `json:"trust_proxy_headers_from_env"`
+	WebhookEnabled           bool   `json:"webhook_enabled"`
+	WebhookEnabledFromEnv    bool   `json:"webhook_enabled_from_env"`
+	WebhookURL               string `json:"webhook_url"`
+	WebhookURLFromEnv        bool   `json:"webhook_url_from_env"`
+	WebhookSecretSet         bool   `json:"webhook_secret_set"`
+	WebhookSecretFromEnv     bool   `json:"webhook_secret_from_env"`
 }
 
 func (h *SettingsAPIHandlers) Get(w http.ResponseWriter, r *http.Request) {
@@ -63,24 +63,24 @@ func (h *SettingsAPIHandlers) Get(w http.ResponseWriter, r *http.Request) {
 		MaxBackupsFromEnv:        h.settingsSvc.IsMaxBackupsFromEnv(),
 		AuthEnabled:              h.settingsSvc.GetAuthEnabled(),
 		AuthFromEnv:              h.settingsSvc.IsAuthEnabledFromEnv(),
-		LocalhostBypass:            h.settingsSvc.GetLocalhostBypass(),
-		LocalhostBypassFromEnv:     h.settingsSvc.IsLocalhostBypassFromEnv(),
-		RateLimitEnabled:           h.settingsSvc.GetRateLimitEnabled(),
-		RateLimitEnabledFromEnv:    h.settingsSvc.IsRateLimitEnabledFromEnv(),
-		RateLimitPerIP:             h.settingsSvc.GetRateLimitPerIP(),
-		RateLimitPerIPFromEnv:      h.settingsSvc.IsRateLimitPerIPFromEnv(),
-		RateLimitPerToken:          h.settingsSvc.GetRateLimitPerToken(),
-		RateLimitPerTokenFromEnv:   h.settingsSvc.IsRateLimitPerTokenFromEnv(),
-		RateLimitLogin:             h.settingsSvc.GetRateLimitLogin(),
-		RateLimitLoginFromEnv:      h.settingsSvc.IsRateLimitLoginFromEnv(),
-		TrustProxyHeaders:          h.settingsSvc.GetTrustProxyHeaders(),
-		TrustProxyHeadersFromEnv:   h.settingsSvc.IsTrustProxyHeadersFromEnv(),
-		WebhookEnabled:             h.settingsSvc.GetWebhookEnabled(),
-		WebhookEnabledFromEnv:      h.settingsSvc.IsWebhookEnabledFromEnv(),
-		WebhookURL:                 h.settingsSvc.GetWebhookURL(),
-		WebhookURLFromEnv:          h.settingsSvc.IsWebhookURLFromEnv(),
-		WebhookSecretSet:           h.settingsSvc.GetWebhookSecret() != "",
-		WebhookSecretFromEnv:       h.settingsSvc.IsWebhookSecretFromEnv(),
+		LocalhostBypass:          h.settingsSvc.GetLocalhostBypass(),
+		LocalhostBypassFromEnv:   h.settingsSvc.IsLocalhostBypassFromEnv(),
+		RateLimitEnabled:         h.settingsSvc.GetRateLimitEnabled(),
+		RateLimitEnabledFromEnv:  h.settingsSvc.IsRateLimitEnabledFromEnv(),
+		RateLimitPerIP:           h.settingsSvc.GetRateLimitPerIP(),
+		RateLimitPerIPFromEnv:    h.settingsSvc.IsRateLimitPerIPFromEnv(),
+		RateLimitPerToken:        h.settingsSvc.GetRateLimitPerToken(),
+		RateLimitPerTokenFromEnv: h.settingsSvc.IsRateLimitPerTokenFromEnv(),
+		RateLimitLogin:           h.settingsSvc.GetRateLimitLogin(),
+		RateLimitLoginFromEnv:    h.settingsSvc.IsRateLimitLoginFromEnv(),
+		TrustProxyHeaders:        h.settingsSvc.GetTrustProxyHeaders(),
+		TrustProxyHeadersFromEnv: h.settingsSvc.IsTrustProxyHeadersFromEnv(),
+		WebhookEnabled:           h.settingsSvc.GetWebhookEnabled(),
+		WebhookEnabledFromEnv:    h.settingsSvc.IsWebhookEnabledFromEnv(),
+		WebhookURL:               h.settingsSvc.GetWebhookURL(),
+		WebhookURLFromEnv:        h.settingsSvc.IsWebhookURLFromEnv(),
+		WebhookSecretSet:         h.settingsSvc.GetWebhookSecret() != "",
+		WebhookSecretFromEnv:     h.settingsSvc.IsWebhookSecretFromEnv(),
 	})
 }
 
@@ -368,4 +368,3 @@ func (h *SettingsAPIHandlers) TestWebhook(w http.ResponseWriter, r *http.Request
 		"success":         statusCode >= 200 && statusCode < 300,
 	})
 }
-

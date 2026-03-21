@@ -19,12 +19,10 @@ type authContextKey string
 
 const tokenContextKey authContextKey = "auth_token"
 
-// SetTokenInContext stores an authenticated token in the request context.
 func SetTokenInContext(ctx context.Context, token *models.Token) context.Context {
 	return context.WithValue(ctx, tokenContextKey, token)
 }
 
-// TokenFromContext returns the authenticated token from the request context, or nil.
 func TokenFromContext(ctx context.Context) *models.Token {
 	t, _ := ctx.Value(tokenContextKey).(*models.Token)
 	return t
@@ -36,7 +34,6 @@ const (
 	ScopeWorker     = "worker"
 )
 
-// All available permissions for scoped tokens.
 var AllPermissions = []string{"start", "stop", "restart", "logs", "commands", "files", "backups", "configure", "delete"}
 
 type AuthService struct {
@@ -48,8 +45,6 @@ func NewAuthService(db *sql.DB, log *slog.Logger) *AuthService {
 	return &AuthService{db: db, log: log}
 }
 
-// ValidateToken checks a raw token string against all stored tokens.
-// Returns the matching Token if valid, nil if invalid/expired.
 func (s *AuthService) ValidateToken(rawToken string) *models.Token {
 	tokens, err := models.ListTokens(s.db)
 	if err != nil {
@@ -79,8 +74,6 @@ func (s *AuthService) ValidateToken(rawToken string) *models.Token {
 	return nil
 }
 
-// GenerateAdminToken creates a new admin token named "Admin".
-// Returns the raw (unhashed) token string — must be shown to user once.
 // Used by the Enable Auth flow for first-time setup.
 func (s *AuthService) GenerateAdminToken() (string, error) {
 	rawToken, _, err := s.CreateAdminToken("Admin")
@@ -90,8 +83,7 @@ func (s *AuthService) GenerateAdminToken() (string, error) {
 	return rawToken, nil
 }
 
-// CreateAdminToken creates a named admin token. Multiple admin tokens can coexist.
-// Returns the raw token string — must be shown to user once.
+// Multiple admin tokens can coexist. Raw token must be shown to user once.
 func (s *AuthService) CreateAdminToken(name string) (string, *models.Token, error) {
 	if name == "" {
 		return "", nil, fmt.Errorf("token name is required")
@@ -124,8 +116,7 @@ func (s *AuthService) CreateAdminToken(name string) (string, *models.Token, erro
 	return rawToken, token, nil
 }
 
-// CreateScopedToken creates a new scoped token for specific gameservers with specific permissions.
-// Returns the raw token string — must be shown to user once.
+// Raw token must be shown to user once.
 func (s *AuthService) CreateScopedToken(name string, gameserverIDs []string, permissions []string, expiresAt *time.Time) (string, *models.Token, error) {
 	if name == "" {
 		return "", nil, fmt.Errorf("token name is required")
@@ -169,8 +160,7 @@ func (s *AuthService) CreateScopedToken(name string, gameserverIDs []string, per
 	return rawToken, token, nil
 }
 
-// CreateWorkerToken creates a new worker token for gRPC authentication.
-// Returns the raw token string — must be shown to the admin once.
+// Raw token must be shown to the admin once.
 func (s *AuthService) CreateWorkerToken(name string) (string, *models.Token, error) {
 	if name == "" {
 		return "", nil, fmt.Errorf("token name is required")
@@ -222,12 +212,10 @@ func (s *AuthService) DeleteToken(id string) error {
 	return models.DeleteToken(s.db, id)
 }
 
-// IsAdmin returns true if the token has admin scope.
 func IsAdmin(token *models.Token) bool {
 	return token != nil && token.Scope == ScopeAdmin
 }
 
-// HasPermission returns true if the token grants the given permission on the given gameserver.
 func HasPermission(token *models.Token, gameserverID string, permission string) bool {
 	if token == nil {
 		return false
