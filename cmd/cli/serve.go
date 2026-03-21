@@ -509,6 +509,15 @@ func runRegistrationLoop(controllerAddr, workerID, ownAddr, workerToken string, 
 		if sftpPort > 0 {
 			regReq.SftpPort = int32(sftpPort)
 		}
+		if v, err := strconv.Atoi(os.Getenv("GJ_MAX_MEMORY")); err == nil && v > 0 {
+			regReq.MaxMemoryMb = int64(v)
+		}
+		if v, err := strconv.ParseFloat(os.Getenv("GJ_MAX_CPU"), 64); err == nil && v > 0 {
+			regReq.MaxCpu = v
+		}
+		if v, err := strconv.Atoi(os.Getenv("GJ_MAX_STORAGE")); err == nil && v > 0 {
+			regReq.MaxStorageMb = int64(v)
+		}
 		regResp, err := client.Register(ctx, regReq)
 		if err != nil {
 			logger.Error("registration failed", "error", err, "retry_in", backoff)

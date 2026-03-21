@@ -87,33 +87,29 @@ func (s *GameserverService) portRangeForNode(nodeID string) (int, int) {
 }
 
 // checkWorkerLimits returns an error if the worker has exceeded its configured resource limits.
-func (s *GameserverService) checkWorkerLimits(nodeID string, memoryNeeded int) error {
+func (s *GameserverService) checkWorkerLimits(nodeID string, memoryNeeded int, cpuNeeded float64) error {
 	node, err := models.GetWorkerNode(s.db, nodeID)
 	if err != nil || node == nil {
 		return nil // no node record = no limits
 	}
 
-	if node.MaxGameservers == nil && node.MaxMemoryMB == nil {
-		return nil
-	}
-
-	nid := &nodeID
-	existing, err := s.ListGameservers(models.GameserverFilter{NodeID: nid})
-	if err != nil {
-		return fmt.Errorf("checking worker limits: %w", err)
-	}
-
-	if node.MaxGameservers != nil && len(existing) >= *node.MaxGameservers {
-		return fmt.Errorf("worker %s has reached its gameserver limit (%d)", nodeID, *node.MaxGameservers)
-	}
-
 	if node.MaxMemoryMB != nil {
-		var allocated int
-		for _, gs := range existing {
-			allocated += gs.MemoryLimitMB
+		allocated, err := models.AllocatedMemoryByNode(s.db, nodeID)
+		if err != nil {
+			return fmt.Errorf("checking worker limits: %w", err)
 		}
 		if allocated+memoryNeeded > *node.MaxMemoryMB {
 			return fmt.Errorf("worker %s has reached its memory limit (%d MB allocated, %d MB limit)", nodeID, allocated, *node.MaxMemoryMB)
+		}
+	}
+
+	if node.MaxCPU != nil {
+		allocated, err := models.AllocatedCPUByNode(s.db, nodeID)
+		if err != nil {
+			return fmt.Errorf("checking worker limits: %w", err)
+		}
+		if allocated+cpuNeeded > *node.MaxCPU {
+			return fmt.Errorf("worker %s has reached its CPU limit (%.1f allocated, %.1f limit)", nodeID, allocated, *node.MaxCPU)
 		}
 	}
 
@@ -212,36 +208,59 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gam
 	var targetWorker worker.Worker
 	var nodeID string
 	if gs.NodeID != nil && *gs.NodeID != "" {
-		// User chose a specific node
+		// User chose a specific node — no fallback
 		nodeID = *gs.NodeID
 		w, err := s.dispatcher.SelectWorkerByNodeID(nodeID)
 		if err != nil {
 			return "", fmt.Errorf("selected worker unavailable: %w", err)
 		}
 		targetWorker = w
+
+		if err := s.checkWorkerLimits(nodeID, gs.MemoryLimitMB, gs.CPULimit); err != nil {
+			return "", err
+		}
+		if gs.PortMode == "auto" {
+			allocatedPorts, err := s.AllocatePorts(game, nodeID, "")
+			if err != nil {
+				return "", fmt.Errorf("auto-allocating ports: %w", err)
+			}
+			gs.Ports = allocatedPorts
+		}
 	} else {
-		targetWorker, nodeID = s.dispatcher.SelectWorkerForPlacement()
-		if targetWorker == nil {
+		// Try candidates in ranked order until one passes limit check + port allocation
+		candidates := s.dispatcher.RankWorkersForPlacement()
+		if len(candidates) == 0 {
 			return "", fmt.Errorf("no workers available — connect a worker node first")
+		}
+
+		var lastErr error
+		for _, c := range candidates {
+			if c.NodeID != "" {
+				if err := s.checkWorkerLimits(c.NodeID, gs.MemoryLimitMB, gs.CPULimit); err != nil {
+					s.log.Debug("worker skipped during placement", "worker_id", c.NodeID, "reason", err)
+					lastErr = err
+					continue
+				}
+			}
+			if gs.PortMode == "auto" {
+				allocatedPorts, err := s.AllocatePorts(game, c.NodeID, "")
+				if err != nil {
+					s.log.Debug("worker skipped during placement", "worker_id", c.NodeID, "reason", err)
+					lastErr = err
+					continue
+				}
+				gs.Ports = allocatedPorts
+			}
+			targetWorker = c.Worker
+			nodeID = c.NodeID
+			break
+		}
+		if targetWorker == nil {
+			return "", fmt.Errorf("no worker has capacity for this gameserver: %w", lastErr)
 		}
 		if nodeID != "" {
 			gs.NodeID = &nodeID
 		}
-	}
-
-	// Check resource limits before allocating
-	if nodeID != "" {
-		if err := s.checkWorkerLimits(nodeID, gs.MemoryLimitMB); err != nil {
-			return "", err
-		}
-	}
-
-	if gs.PortMode == "auto" {
-		allocatedPorts, err := s.AllocatePorts(game, nodeID, "")
-		if err != nil {
-			return "", fmt.Errorf("auto-allocating ports: %w", err)
-		}
-		gs.Ports = allocatedPorts
 	}
 
 	if err := applyGameDefaults(gs, game); err != nil {
@@ -1058,7 +1077,7 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 	}
 
 	// Check target node limits
-	if err := s.checkWorkerLimits(targetNodeID, gs.MemoryLimitMB); err != nil {
+	if err := s.checkWorkerLimits(targetNodeID, gs.MemoryLimitMB, gs.CPULimit); err != nil {
 		return err
 	}
 

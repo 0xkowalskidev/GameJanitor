@@ -162,6 +162,16 @@ func AllocatedMemoryByNode(db *sql.DB, nodeID string) (int, error) {
 	return total, nil
 }
 
+// AllocatedCPUByNode returns the total cpu_limit allocated to gameservers on a node.
+func AllocatedCPUByNode(db *sql.DB, nodeID string) (float64, error) {
+	var total float64
+	err := db.QueryRow("SELECT COALESCE(SUM(cpu_limit), 0) FROM gameservers WHERE node_id = ?", nodeID).Scan(&total)
+	if err != nil {
+		return 0, fmt.Errorf("querying allocated CPU for node %s: %w", nodeID, err)
+	}
+	return total, nil
+}
+
 func DeleteGameserver(db *sql.DB, id string) error {
 	result, err := db.Exec("DELETE FROM gameservers WHERE id = ?", id)
 	if err != nil {

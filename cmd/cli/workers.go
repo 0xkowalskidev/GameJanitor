@@ -28,16 +28,18 @@ var workersListCmd = &cobra.Command{
 		}
 
 		var workers []struct {
-			ID                string `json:"id"`
-			LanIP             string `json:"lan_ip"`
-			CPUCores          int64  `json:"cpu_cores"`
-			MemoryTotalMB     int64  `json:"memory_total_mb"`
-			MemoryAvailableMB int64  `json:"memory_available_mb"`
-			GameserverCount   int    `json:"gameserver_count"`
-			AllocatedMemoryMB int    `json:"allocated_memory_mb"`
-			MaxMemoryMB       *int   `json:"max_memory_mb"`
-			MaxGameservers    *int   `json:"max_gameservers"`
-			Status            string `json:"status"`
+			ID                string   `json:"id"`
+			LanIP             string   `json:"lan_ip"`
+			CPUCores          int64    `json:"cpu_cores"`
+			MemoryTotalMB     int64    `json:"memory_total_mb"`
+			MemoryAvailableMB int64    `json:"memory_available_mb"`
+			GameserverCount   int      `json:"gameserver_count"`
+			AllocatedMemoryMB int      `json:"allocated_memory_mb"`
+			AllocatedCPU      float64  `json:"allocated_cpu"`
+			MaxMemoryMB       *int     `json:"max_memory_mb"`
+			MaxCPU            *float64 `json:"max_cpu"`
+			MaxStorageMB      *int     `json:"max_storage_mb"`
+			Status            string   `json:"status"`
 		}
 		if err := json.Unmarshal(resp.Data, &workers); err != nil {
 			return fmt.Errorf("parsing response: %w", err)
@@ -53,13 +55,8 @@ var workersListCmd = &cobra.Command{
 		for _, wk := range workers {
 			memory := fmt.Sprintf("%s / %s", formatMemory(int(wk.MemoryAvailableMB)), formatMemory(int(wk.MemoryTotalMB)))
 
-			gs := fmt.Sprintf("%d", wk.GameserverCount)
-			if wk.MaxGameservers != nil {
-				gs = fmt.Sprintf("%d/%d", wk.GameserverCount, *wk.MaxGameservers)
-			}
-
-			fmt.Fprintf(w, "%s\t%s\t%d cores\t%s\t%s\t%s\n",
-				wk.ID, wk.LanIP, wk.CPUCores, memory, gs, wk.Status)
+			fmt.Fprintf(w, "%s\t%s\t%d cores\t%s\t%d\t%s\n",
+				wk.ID, wk.LanIP, wk.CPUCores, memory, wk.GameserverCount, wk.Status)
 		}
 		w.Flush()
 		return nil
@@ -82,20 +79,22 @@ var workersGetCmd = &cobra.Command{
 		}
 
 		var wk struct {
-			ID                string `json:"id"`
-			LanIP             string `json:"lan_ip"`
-			ExternalIP        string `json:"external_ip"`
-			CPUCores          int64  `json:"cpu_cores"`
-			MemoryTotalMB     int64  `json:"memory_total_mb"`
-			MemoryAvailableMB int64  `json:"memory_available_mb"`
-			GameserverCount   int    `json:"gameserver_count"`
-			AllocatedMemoryMB int    `json:"allocated_memory_mb"`
-			PortRangeStart    *int   `json:"port_range_start"`
-			PortRangeEnd      *int   `json:"port_range_end"`
-			MaxMemoryMB       *int   `json:"max_memory_mb"`
-			MaxGameservers    *int   `json:"max_gameservers"`
-			Status            string `json:"status"`
-			LastSeen          string `json:"last_seen"`
+			ID                string   `json:"id"`
+			LanIP             string   `json:"lan_ip"`
+			ExternalIP        string   `json:"external_ip"`
+			CPUCores          int64    `json:"cpu_cores"`
+			MemoryTotalMB     int64    `json:"memory_total_mb"`
+			MemoryAvailableMB int64    `json:"memory_available_mb"`
+			GameserverCount   int      `json:"gameserver_count"`
+			AllocatedMemoryMB int      `json:"allocated_memory_mb"`
+			AllocatedCPU      float64  `json:"allocated_cpu"`
+			PortRangeStart    *int     `json:"port_range_start"`
+			PortRangeEnd      *int     `json:"port_range_end"`
+			MaxMemoryMB       *int     `json:"max_memory_mb"`
+			MaxCPU            *float64 `json:"max_cpu"`
+			MaxStorageMB      *int     `json:"max_storage_mb"`
+			Status            string   `json:"status"`
+			LastSeen          string   `json:"last_seen"`
 		}
 		if err := json.Unmarshal(resp.Data, &wk); err != nil {
 			return fmt.Errorf("parsing response: %w", err)
@@ -112,17 +111,21 @@ var workersGetCmd = &cobra.Command{
 		fmt.Fprintf(w, "Memory:\t%s / %s available\n", formatMemory(int(wk.MemoryAvailableMB)), formatMemory(int(wk.MemoryTotalMB)))
 		fmt.Fprintf(w, "Gameservers:\t%d\n", wk.GameserverCount)
 		fmt.Fprintf(w, "Allocated Memory:\t%s\n", formatMemory(wk.AllocatedMemoryMB))
+		fmt.Fprintf(w, "Allocated CPU:\t%.1f\n", wk.AllocatedCPU)
 
 		if wk.PortRangeStart != nil && wk.PortRangeEnd != nil {
 			fmt.Fprintf(w, "Port Range:\t%d-%d\n", *wk.PortRangeStart, *wk.PortRangeEnd)
 		} else {
 			fmt.Fprintf(w, "Port Range:\tdefault\n")
 		}
-		if wk.MaxGameservers != nil {
-			fmt.Fprintf(w, "Max Gameservers:\t%d\n", *wk.MaxGameservers)
-		}
 		if wk.MaxMemoryMB != nil {
 			fmt.Fprintf(w, "Max Memory:\t%s\n", formatMemory(*wk.MaxMemoryMB))
+		}
+		if wk.MaxCPU != nil {
+			fmt.Fprintf(w, "Max CPU:\t%.1f\n", *wk.MaxCPU)
+		}
+		if wk.MaxStorageMB != nil {
+			fmt.Fprintf(w, "Max Storage:\t%s\n", formatMemory(*wk.MaxStorageMB))
 		}
 		fmt.Fprintf(w, "Last Seen:\t%s\n", wk.LastSeen)
 		w.Flush()
@@ -188,13 +191,17 @@ var workersSetLimitsCmd = &cobra.Command{
 			v, _ := cmd.Flags().GetInt("max-memory")
 			body["max_memory_mb"] = v
 		}
-		if cmd.Flags().Changed("max-gameservers") {
-			v, _ := cmd.Flags().GetInt("max-gameservers")
-			body["max_gameservers"] = v
+		if cmd.Flags().Changed("max-cpu") {
+			v, _ := cmd.Flags().GetFloat64("max-cpu")
+			body["max_cpu"] = v
+		}
+		if cmd.Flags().Changed("max-storage") {
+			v, _ := cmd.Flags().GetInt("max-storage")
+			body["max_storage_mb"] = v
 		}
 
 		if len(body) == 0 {
-			return exitError(fmt.Errorf("at least one of --max-memory or --max-gameservers is required"))
+			return exitError(fmt.Errorf("at least one of --max-memory, --max-cpu, or --max-storage is required"))
 		}
 
 		resp, err := apiPatch("/api/workers/"+args[0]+"/limits", body)
@@ -233,7 +240,8 @@ func init() {
 	workersSetPortRangeCmd.Flags().Int("end", 0, "Port range end (required)")
 
 	workersSetLimitsCmd.Flags().Int("max-memory", 0, "Max memory in MB (0 to clear)")
-	workersSetLimitsCmd.Flags().Int("max-gameservers", 0, "Max gameservers (0 to clear)")
+	workersSetLimitsCmd.Flags().Float64("max-cpu", 0, "Max CPU cores (0 to clear)")
+	workersSetLimitsCmd.Flags().Int("max-storage", 0, "Max storage in MB (0 to clear)")
 
 	workersCmd.AddCommand(
 		workersListCmd, workersGetCmd,

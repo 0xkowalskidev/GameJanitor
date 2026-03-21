@@ -13,7 +13,8 @@ type WorkerNode struct {
 	PortRangeStart *int
 	PortRangeEnd   *int
 	MaxMemoryMB    *int
-	MaxGameservers *int
+	MaxCPU         *float64
+	MaxStorageMB   *int
 	SFTPPort       int
 	LastSeen       *time.Time
 	CreatedAt      time.Time
@@ -43,9 +44,9 @@ func UpsertWorkerNode(db *sql.DB, node *WorkerNode) error {
 func GetWorkerNode(db *sql.DB, id string) (*WorkerNode, error) {
 	var n WorkerNode
 	err := db.QueryRow(
-		"SELECT id, lan_ip, external_ip, port_range_start, port_range_end, max_memory_mb, max_gameservers, sftp_port, last_seen, created_at, updated_at FROM worker_nodes WHERE id = ?",
+		"SELECT id, lan_ip, external_ip, port_range_start, port_range_end, max_memory_mb, max_cpu, max_storage_mb, sftp_port, last_seen, created_at, updated_at FROM worker_nodes WHERE id = ?",
 		id,
-	).Scan(&n.ID, &n.LanIP, &n.ExternalIP, &n.PortRangeStart, &n.PortRangeEnd, &n.MaxMemoryMB, &n.MaxGameservers, &n.SFTPPort, &n.LastSeen, &n.CreatedAt, &n.UpdatedAt)
+	).Scan(&n.ID, &n.LanIP, &n.ExternalIP, &n.PortRangeStart, &n.PortRangeEnd, &n.MaxMemoryMB, &n.MaxCPU, &n.MaxStorageMB, &n.SFTPPort, &n.LastSeen, &n.CreatedAt, &n.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -56,7 +57,7 @@ func GetWorkerNode(db *sql.DB, id string) (*WorkerNode, error) {
 }
 
 func ListWorkerNodes(db *sql.DB) ([]WorkerNode, error) {
-	rows, err := db.Query("SELECT id, lan_ip, external_ip, port_range_start, port_range_end, max_memory_mb, max_gameservers, sftp_port, last_seen, created_at, updated_at FROM worker_nodes ORDER BY id")
+	rows, err := db.Query("SELECT id, lan_ip, external_ip, port_range_start, port_range_end, max_memory_mb, max_cpu, max_storage_mb, sftp_port, last_seen, created_at, updated_at FROM worker_nodes ORDER BY id")
 	if err != nil {
 		return nil, fmt.Errorf("listing worker nodes: %w", err)
 	}
@@ -65,7 +66,7 @@ func ListWorkerNodes(db *sql.DB) ([]WorkerNode, error) {
 	var nodes []WorkerNode
 	for rows.Next() {
 		var n WorkerNode
-		if err := rows.Scan(&n.ID, &n.LanIP, &n.ExternalIP, &n.PortRangeStart, &n.PortRangeEnd, &n.MaxMemoryMB, &n.MaxGameservers, &n.SFTPPort, &n.LastSeen, &n.CreatedAt, &n.UpdatedAt); err != nil {
+		if err := rows.Scan(&n.ID, &n.LanIP, &n.ExternalIP, &n.PortRangeStart, &n.PortRangeEnd, &n.MaxMemoryMB, &n.MaxCPU, &n.MaxStorageMB, &n.SFTPPort, &n.LastSeen, &n.CreatedAt, &n.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scanning worker node row: %w", err)
 		}
 		nodes = append(nodes, n)
@@ -109,10 +110,10 @@ func SetWorkerNodeSFTPPort(db *sql.DB, id string, sftpPort int) error {
 	return nil
 }
 
-func SetWorkerNodeLimits(db *sql.DB, id string, maxMemoryMB, maxGameservers *int) error {
+func SetWorkerNodeLimits(db *sql.DB, id string, maxMemoryMB *int, maxCPU *float64, maxStorageMB *int) error {
 	result, err := db.Exec(
-		"UPDATE worker_nodes SET max_memory_mb = ?, max_gameservers = ?, updated_at = ? WHERE id = ?",
-		maxMemoryMB, maxGameservers, time.Now(), id,
+		"UPDATE worker_nodes SET max_memory_mb = ?, max_cpu = ?, max_storage_mb = ?, updated_at = ? WHERE id = ?",
+		maxMemoryMB, maxCPU, maxStorageMB, time.Now(), id,
 	)
 	if err != nil {
 		return fmt.Errorf("setting limits for worker node %s: %w", id, err)

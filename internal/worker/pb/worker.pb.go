@@ -2620,6 +2620,9 @@ type RegisterRequest struct {
 	SftpPort          int32                  `protobuf:"varint,10,opt,name=sftp_port,json=sftpPort,proto3" json:"sftp_port,omitempty"`
 	DiskTotalMb       int64                  `protobuf:"varint,11,opt,name=disk_total_mb,json=diskTotalMb,proto3" json:"disk_total_mb,omitempty"`
 	DiskAvailableMb   int64                  `protobuf:"varint,12,opt,name=disk_available_mb,json=diskAvailableMb,proto3" json:"disk_available_mb,omitempty"`
+	MaxMemoryMb       int64                  `protobuf:"varint,13,opt,name=max_memory_mb,json=maxMemoryMb,proto3" json:"max_memory_mb,omitempty"`
+	MaxCpu            float64                `protobuf:"fixed64,14,opt,name=max_cpu,json=maxCpu,proto3" json:"max_cpu,omitempty"`
+	MaxStorageMb      int64                  `protobuf:"varint,15,opt,name=max_storage_mb,json=maxStorageMb,proto3" json:"max_storage_mb,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -2734,6 +2737,27 @@ func (x *RegisterRequest) GetDiskTotalMb() int64 {
 func (x *RegisterRequest) GetDiskAvailableMb() int64 {
 	if x != nil {
 		return x.DiskAvailableMb
+	}
+	return 0
+}
+
+func (x *RegisterRequest) GetMaxMemoryMb() int64 {
+	if x != nil {
+		return x.MaxMemoryMb
+	}
+	return 0
+}
+
+func (x *RegisterRequest) GetMaxCpu() float64 {
+	if x != nil {
+		return x.MaxCpu
+	}
+	return 0
+}
+
+func (x *RegisterRequest) GetMaxStorageMb() int64 {
+	if x != nil {
+		return x.MaxStorageMb
 	}
 	return 0
 }
@@ -3159,7 +3183,7 @@ const file_proto_worker_proto_rawDesc = "" +
 	"\rdisk_total_mb\x18\a \x01(\x03R\vdiskTotalMb\x12*\n" +
 	"\x11disk_available_mb\x18\b \x01(\x03R\x0fdiskAvailableMb\"/\n" +
 	"\x11HeartbeatResponse\x12\x1a\n" +
-	"\baccepted\x18\x01 \x01(\bR\baccepted\"\xbb\x03\n" +
+	"\baccepted\x18\x01 \x01(\bR\baccepted\"\x9e\x04\n" +
 	"\x0fRegisterRequest\x12\x1b\n" +
 	"\tworker_id\x18\x01 \x01(\tR\bworkerId\x12!\n" +
 	"\fgrpc_address\x18\x02 \x01(\tR\vgrpcAddress\x12\x1b\n" +
@@ -3174,7 +3198,10 @@ const file_proto_worker_proto_rawDesc = "" +
 	"\tsftp_port\x18\n" +
 	" \x01(\x05R\bsftpPort\x12\"\n" +
 	"\rdisk_total_mb\x18\v \x01(\x03R\vdiskTotalMb\x12*\n" +
-	"\x11disk_available_mb\x18\f \x01(\x03R\x0fdiskAvailableMb\".\n" +
+	"\x11disk_available_mb\x18\f \x01(\x03R\x0fdiskAvailableMb\x12\"\n" +
+	"\rmax_memory_mb\x18\r \x01(\x03R\vmaxMemoryMb\x12\x17\n" +
+	"\amax_cpu\x18\x0e \x01(\x01R\x06maxCpu\x12$\n" +
+	"\x0emax_storage_mb\x18\x0f \x01(\x03R\fmaxStorageMb\".\n" +
 	"\x10RegisterResponse\x12\x1a\n" +
 	"\baccepted\x18\x01 \x01(\bR\baccepted\"J\n" +
 	"\x10SFTPLoginRequest\x12\x1a\n" +

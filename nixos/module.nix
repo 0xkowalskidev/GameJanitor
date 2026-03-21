@@ -139,6 +139,26 @@ in {
       description = "Max backups per gameserver. 0 = unlimited. null = leave at DB/default (10).";
     };
 
+    workerLimits = {
+      maxMemoryMB = lib.mkOption {
+        type = lib.types.nullOr lib.types.int;
+        default = null;
+        description = "Max allocatable memory in MB for this worker. null = unlimited.";
+      };
+
+      maxCPU = lib.mkOption {
+        type = lib.types.nullOr lib.types.float;
+        default = null;
+        description = "Max allocatable CPU cores for this worker. null = unlimited.";
+      };
+
+      maxStorageMB = lib.mkOption {
+        type = lib.types.nullOr lib.types.int;
+        default = null;
+        description = "Max storage in MB for this worker. null = unlimited.";
+      };
+    };
+
     s3 = {
       bucket = lib.mkOption {
         type = lib.types.nullOr lib.types.str;
@@ -240,7 +260,10 @@ in {
       // lib.optionalAttrs (!cfg.s3.useSSL) { GJ_S3_USE_SSL = "false"; }
       // lib.optionalAttrs (cfg.grpcTLS.caFile != null) { GJ_GRPC_CA = toString cfg.grpcTLS.caFile; }
       // lib.optionalAttrs (cfg.grpcTLS.certFile != null) { GJ_GRPC_CERT = toString cfg.grpcTLS.certFile; }
-      // lib.optionalAttrs (cfg.grpcTLS.keyFile != null) { GJ_GRPC_KEY = toString cfg.grpcTLS.keyFile; };
+      // lib.optionalAttrs (cfg.grpcTLS.keyFile != null) { GJ_GRPC_KEY = toString cfg.grpcTLS.keyFile; }
+      // lib.optionalAttrs (cfg.workerLimits.maxMemoryMB != null) { GJ_MAX_MEMORY = toString cfg.workerLimits.maxMemoryMB; }
+      // lib.optionalAttrs (cfg.workerLimits.maxCPU != null) { GJ_MAX_CPU = toString cfg.workerLimits.maxCPU; }
+      // lib.optionalAttrs (cfg.workerLimits.maxStorageMB != null) { GJ_MAX_STORAGE = toString cfg.workerLimits.maxStorageMB; };
   in {
     assertions = [
       {

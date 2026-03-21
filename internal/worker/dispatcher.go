@@ -5,9 +5,17 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"sort"
 
 	"github.com/0xkowalskidev/gamejanitor/internal/models"
 )
+
+// PlacementCandidate is a worker ranked for gameserver placement.
+type PlacementCandidate struct {
+	Worker Worker
+	NodeID string
+	Score  float64
+}
 
 // Dispatcher routes operations to the correct Worker for a given gameserver.
 // In standalone mode, all operations go to a single LocalWorker.
@@ -66,68 +74,85 @@ func (d *Dispatcher) WorkerFor(gameserverID string) Worker {
 	return w
 }
 
-// SelectWorkerForPlacement picks the best worker for new gameserver creation.
-// Ranks by least allocated memory (sum of memory_limit_mb for assigned gameservers),
-// not live free memory, to avoid overcommit when stopped servers are started.
-func (d *Dispatcher) SelectWorkerForPlacement() (Worker, string) {
+// RankWorkersForPlacement returns all connected workers ranked by placement score (best first).
+// Scores by minimum headroom percentage across memory and CPU limits.
+// Uses allocated (sum of limits for assigned gameservers), not live usage,
+// to avoid overcommit when stopped servers are started.
+func (d *Dispatcher) RankWorkersForPlacement() []PlacementCandidate {
 	if d.registry == nil {
-		return d.local, ""
+		if d.local != nil {
+			return []PlacementCandidate{{Worker: d.local, NodeID: "", Score: 0}}
+		}
+		return nil
 	}
 
 	workers := d.registry.ListWorkers()
 	if len(workers) == 0 {
-		if d.local == nil {
-			d.log.Error("no workers available for gameserver placement")
-			return nil, ""
+		if d.local != nil {
+			return []PlacementCandidate{{Worker: d.local, NodeID: "", Score: 0}}
 		}
-		return d.local, ""
+		d.log.Error("no workers available for gameserver placement")
+		return nil
 	}
 
-	var bestNodeID string
-	bestHeadroom := math.MinInt64
+	var candidates []PlacementCandidate
 
 	for _, info := range workers {
-		allocated, err := models.AllocatedMemoryByNode(d.db, info.ID)
+		allocMem, err := models.AllocatedMemoryByNode(d.db, info.ID)
 		if err != nil {
 			d.log.Warn("failed to query allocated memory for worker", "worker_id", info.ID, "error", err)
 			continue
 		}
+		allocCPU, err := models.AllocatedCPUByNode(d.db, info.ID)
+		if err != nil {
+			d.log.Warn("failed to query allocated CPU for worker", "worker_id", info.ID, "error", err)
+			continue
+		}
 
-		// If MaxMemoryMB is set, headroom = limit - allocated. Otherwise use negative allocated
-		// so the worker with least allocation wins.
 		node, _ := models.GetWorkerNode(d.db, info.ID)
-		var headroom int
-		if node != nil && node.MaxMemoryMB != nil {
-			headroom = *node.MaxMemoryMB - allocated
-		} else {
-			headroom = -allocated
+
+		hasLimits := false
+		score := math.MaxFloat64
+
+		if node != nil && node.MaxMemoryMB != nil && *node.MaxMemoryMB > 0 {
+			hasLimits = true
+			memPct := float64(*node.MaxMemoryMB-allocMem) / float64(*node.MaxMemoryMB)
+			if memPct < score {
+				score = memPct
+			}
+		}
+		if node != nil && node.MaxCPU != nil && *node.MaxCPU > 0 {
+			hasLimits = true
+			cpuPct := (*node.MaxCPU - allocCPU) / *node.MaxCPU
+			if cpuPct < score {
+				score = cpuPct
+			}
 		}
 
-		if headroom > bestHeadroom {
-			bestHeadroom = headroom
-			bestNodeID = info.ID
+		if !hasLimits {
+			// No limits set — rank by least allocated memory (negative so less = better)
+			score = -float64(allocMem)
 		}
+
+		w, ok := d.registry.Get(info.ID)
+		if !ok {
+			continue
+		}
+		candidates = append(candidates, PlacementCandidate{Worker: w, NodeID: info.ID, Score: score})
 	}
 
-	if bestNodeID == "" {
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].Score > candidates[j].Score
+	})
+
+	if len(candidates) == 0 {
 		d.log.Warn("no suitable worker found, falling back to local")
-		if d.local == nil {
-			return nil, ""
+		if d.local != nil {
+			return []PlacementCandidate{{Worker: d.local, NodeID: "", Score: 0}}
 		}
-		return d.local, ""
 	}
 
-	w, ok := d.registry.Get(bestNodeID)
-	if !ok {
-		d.log.Warn("best worker disappeared from registry, falling back to local", "worker_id", bestNodeID)
-		if d.local == nil {
-			return nil, ""
-		}
-		return d.local, ""
-	}
-
-	d.log.Debug("selected worker for placement", "worker_id", bestNodeID, "headroom_mb", bestHeadroom)
-	return w, bestNodeID
+	return candidates
 }
 
 // SelectWorkerByNodeID returns the Worker for a specific node ID.

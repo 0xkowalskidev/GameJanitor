@@ -293,6 +293,9 @@ message RegisterRequest {
     int32 sftp_port = 10;
     int64 disk_total_mb = 11;
     int64 disk_available_mb = 12;
+    int64 max_memory_mb = 13;
+    double max_cpu = 14;
+    int64 max_storage_mb = 15;
 }
 message RegisterResponse {
     bool accepted = 1;

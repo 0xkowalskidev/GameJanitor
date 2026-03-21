@@ -87,8 +87,10 @@ type workerView struct {
 	DefaultRangeStart int
 	DefaultRangeEnd   int
 	MaxMemoryMB       *int
-	MaxGameservers    *int
+	MaxCPU            *float64
+	MaxStorageMB      *int
 	AllocatedMemoryMB int
+	AllocatedCPU      float64
 	GameserverCount   int
 }
 
@@ -100,11 +102,13 @@ func (h *PageSettingsHandlers) workerViews() []workerView {
 	// Count gameservers and allocated memory per node
 	gsCountByNode := make(map[string]int)
 	memByNode := make(map[string]int)
+	cpuByNode := make(map[string]float64)
 	if gameservers, err := h.settingsSvc.ListGameserversByNode(); err == nil {
 		for _, gs := range gameservers {
 			if gs.NodeID != nil && *gs.NodeID != "" {
 				gsCountByNode[*gs.NodeID]++
 				memByNode[*gs.NodeID] += gs.MemoryLimitMB
+				cpuByNode[*gs.NodeID] += gs.CPULimit
 			}
 		}
 	}
@@ -120,12 +124,14 @@ func (h *PageSettingsHandlers) workerViews() []workerView {
 			DefaultRangeEnd:   defaultEnd,
 			GameserverCount:   gsCountByNode[info.ID],
 			AllocatedMemoryMB: memByNode[info.ID],
+			AllocatedCPU:      cpuByNode[info.ID],
 		}
 		if node, err := h.settingsSvc.GetWorkerNode(info.ID); err == nil && node != nil {
 			v.PortRangeStart = node.PortRangeStart
 			v.PortRangeEnd = node.PortRangeEnd
 			v.MaxMemoryMB = node.MaxMemoryMB
-			v.MaxGameservers = node.MaxGameservers
+			v.MaxCPU = node.MaxCPU
+			v.MaxStorageMB = node.MaxStorageMB
 		}
 		views = append(views, v)
 	}
@@ -292,7 +298,9 @@ func (h *PageSettingsHandlers) SaveWorkerLimits(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	var maxMemoryMB, maxGameservers *int
+	var maxMemoryMB *int
+	var maxCPU *float64
+	var maxStorageMB *int
 
 	if v := r.FormValue("max_memory_mb"); v != "" {
 		n, err := strconv.Atoi(v)
@@ -305,24 +313,35 @@ func (h *PageSettingsHandlers) SaveWorkerLimits(w http.ResponseWriter, r *http.R
 		}
 	}
 
-	if v := r.FormValue("max_gameservers"); v != "" {
-		n, err := strconv.Atoi(v)
+	if v := r.FormValue("max_cpu"); v != "" {
+		n, err := strconv.ParseFloat(v, 64)
 		if err != nil || n < 0 {
-			http.Error(w, "Invalid max gameservers value", http.StatusBadRequest)
+			http.Error(w, "Invalid max CPU value", http.StatusBadRequest)
 			return
 		}
 		if n > 0 {
-			maxGameservers = &n
+			maxCPU = &n
 		}
 	}
 
-	if err := h.settingsSvc.SetWorkerNodeLimits(workerID, maxMemoryMB, maxGameservers); err != nil {
+	if v := r.FormValue("max_storage_mb"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 {
+			http.Error(w, "Invalid max storage value", http.StatusBadRequest)
+			return
+		}
+		if n > 0 {
+			maxStorageMB = &n
+		}
+	}
+
+	if err := h.settingsSvc.SetWorkerNodeLimits(workerID, maxMemoryMB, maxCPU, maxStorageMB); err != nil {
 		h.log.Error("setting worker limits", "worker_id", workerID, "error", err)
 		http.Error(w, "Failed to save worker limits: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	h.log.Info("worker limits updated", "worker_id", workerID, "max_memory_mb", maxMemoryMB, "max_gameservers", maxGameservers)
+	h.log.Info("worker limits updated", "worker_id", workerID, "max_memory_mb", maxMemoryMB, "max_cpu", maxCPU, "max_storage_mb", maxStorageMB)
 	w.Header().Set("HX-Redirect", "/settings")
 	w.WriteHeader(http.StatusOK)
 }
@@ -331,7 +350,7 @@ func (h *PageSettingsHandlers) SaveWorkerLimits(w http.ResponseWriter, r *http.R
 func (h *PageSettingsHandlers) ClearWorkerLimits(w http.ResponseWriter, r *http.Request) {
 	workerID := chi.URLParam(r, "workerID")
 
-	if err := h.settingsSvc.SetWorkerNodeLimits(workerID, nil, nil); err != nil {
+	if err := h.settingsSvc.SetWorkerNodeLimits(workerID, nil, nil, nil); err != nil {
 		h.log.Error("clearing worker limits", "worker_id", workerID, "error", err)
 		http.Error(w, "Failed to clear worker limits: "+err.Error(), http.StatusInternalServerError)
 		return

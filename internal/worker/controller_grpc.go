@@ -113,6 +113,40 @@ func (c *ControllerGRPC) Register(ctx context.Context, req *pb.RegisterRequest) 
 		}
 	}
 
+	// Persist worker-reported resource limits (ENV-configured on worker takes precedence over API)
+	if req.MaxMemoryMb > 0 || req.MaxCpu > 0 || req.MaxStorageMb > 0 {
+		var maxMem *int
+		var maxCPU *float64
+		var maxStorage *int
+		if req.MaxMemoryMb > 0 {
+			v := int(req.MaxMemoryMb)
+			maxMem = &v
+		}
+		if req.MaxCpu > 0 {
+			v := req.MaxCpu
+			maxCPU = &v
+		}
+		if req.MaxStorageMb > 0 {
+			v := int(req.MaxStorageMb)
+			maxStorage = &v
+		}
+		// Only update fields the worker explicitly set — read existing first to preserve API-configured values
+		if existing, err := models.GetWorkerNode(c.db, req.WorkerId); err == nil && existing != nil {
+			if maxMem == nil {
+				maxMem = existing.MaxMemoryMB
+			}
+			if maxCPU == nil {
+				maxCPU = existing.MaxCPU
+			}
+			if maxStorage == nil {
+				maxStorage = existing.MaxStorageMB
+			}
+		}
+		if err := models.SetWorkerNodeLimits(c.db, req.WorkerId, maxMem, maxCPU, maxStorage); err != nil {
+			c.log.Error("failed to set worker resource limits on register", "worker_id", req.WorkerId, "error", err)
+		}
+	}
+
 	c.log.Info("worker registered successfully", "worker_id", req.WorkerId, "grpc_address", req.GrpcAddress, "token_id", token.ID)
 	return &pb.RegisterResponse{Accepted: true}, nil
 }
