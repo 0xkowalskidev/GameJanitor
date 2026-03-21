@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -39,6 +40,7 @@ type GameserverFilter struct {
 	GameID *string
 	Status *string
 	NodeID *string
+	IDs    []string // restrict results to these IDs (used for scoped token filtering)
 }
 
 func ListGameservers(db *sql.DB, filter GameserverFilter) ([]Gameserver, error) {
@@ -59,6 +61,14 @@ func ListGameservers(db *sql.DB, filter GameserverFilter) ([]Gameserver, error) 
 		} else {
 			query += " AND node_id = ?"
 			args = append(args, *filter.NodeID)
+		}
+	}
+	if len(filter.IDs) > 0 {
+		placeholders := strings.Repeat("?,", len(filter.IDs))
+		placeholders = placeholders[:len(placeholders)-1]
+		query += " AND id IN (" + placeholders + ")"
+		for _, id := range filter.IDs {
+			args = append(args, id)
 		}
 	}
 	query += " ORDER BY name"

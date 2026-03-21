@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"log/slog"
 	"net/http"
 
@@ -37,7 +38,14 @@ type statusSummary struct {
 }
 
 func (h *StatusHandlers) Get(w http.ResponseWriter, r *http.Request) {
-	gameservers, err := h.gameserverSvc.ListGameservers(models.GameserverFilter{})
+	filter := models.GameserverFilter{}
+	if token := service.TokenFromContext(r.Context()); token != nil && token.Scope == service.ScopeGameserver {
+		var gsIDs []string
+		if err := json.Unmarshal(token.GameserverIDs, &gsIDs); err == nil && len(gsIDs) > 0 {
+			filter.IDs = gsIDs
+		}
+	}
+	gameservers, err := h.gameserverSvc.ListGameservers(filter)
 	if err != nil {
 		h.log.Error("listing gameservers for status", "error", err)
 		respondError(w, http.StatusInternalServerError, err.Error())
