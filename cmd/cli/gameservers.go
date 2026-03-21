@@ -234,7 +234,7 @@ var gameserversUpdateCmd = &cobra.Command{
 			v, _ := cmd.Flags().GetFloat64("cpu")
 			body["cpu_limit"] = v
 		}
-		resp, err := apiPut("/api/gameservers/"+gsID, body)
+		resp, err := apiPatch("/api/gameservers/"+gsID, body)
 		if err != nil {
 			return exitError(err)
 		}

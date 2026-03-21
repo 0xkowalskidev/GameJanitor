@@ -153,7 +153,7 @@ var schedulesUpdateCmd = &cobra.Command{
 			return fmt.Errorf("no update flags specified")
 		}
 
-		resp, err := apiPut("/api/gameservers/"+gsID+"/schedules/"+id, body)
+		resp, err := apiPatch("/api/gameservers/"+gsID+"/schedules/"+id, body)
 		if err != nil {
 			return exitError(err)
 		}

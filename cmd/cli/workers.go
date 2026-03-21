@@ -146,7 +146,7 @@ var workersSetPortRangeCmd = &cobra.Command{
 			"port_range_end":   end,
 		}
 
-		resp, err := apiPut("/api/workers/"+args[0]+"/port-range", body)
+		resp, err := apiPatch("/api/workers/"+args[0]+"/port-range", body)
 		if err != nil {
 			return exitError(err)
 		}
@@ -197,7 +197,7 @@ var workersSetLimitsCmd = &cobra.Command{
 			return exitError(fmt.Errorf("at least one of --max-memory or --max-gameservers is required"))
 		}
 
-		resp, err := apiPut("/api/workers/"+args[0]+"/limits", body)
+		resp, err := apiPatch("/api/workers/"+args[0]+"/limits", body)
 		if err != nil {
 			return exitError(err)
 		}

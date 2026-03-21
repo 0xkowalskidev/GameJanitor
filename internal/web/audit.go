@@ -153,11 +153,11 @@ func deriveAuditAction(method, pattern string) (action, resourceType, resourceID
 		"DELETE /settings/worker-tokens/{tokenId}":            {"worker-token.delete", "token", "tokenId"},
 		"POST /settings/tokens":                               {"token.create", "token", ""},
 		"DELETE /settings/tokens/{tokenId}":                    {"token.delete", "token", "tokenId"},
-		"PUT /settings":                                        {"settings.update", "settings", ""},
-		"PUT /workers/{workerID}":                             {"worker.update", "worker", "workerID"},
-		"PUT /workers/{workerID}/port-range":                  {"worker.update", "worker", "workerID"},
+		"PATCH /settings":                                        {"settings.update", "settings", ""},
+		"PATCH /workers/{workerID}":                             {"worker.update", "worker", "workerID"},
+		"PATCH /workers/{workerID}/port-range":                  {"worker.update", "worker", "workerID"},
 		"DELETE /workers/{workerID}/port-range":               {"worker.update", "worker", "workerID"},
-		"PUT /workers/{workerID}/limits":                      {"worker.update", "worker", "workerID"},
+		"PATCH /workers/{workerID}/limits":                      {"worker.update", "worker", "workerID"},
 		"DELETE /workers/{workerID}/limits":                   {"worker.update", "worker", "workerID"},
 	}
 
@@ -184,7 +184,7 @@ func deriveGenericAction(method, path string) (action, resourceType, resourceIDP
 	switch method {
 	case http.MethodPost:
 		verb = "create"
-	case http.MethodPut:
+	case http.MethodPut, http.MethodPatch:
 		verb = "update"
 	case http.MethodDelete:
 		verb = "delete"

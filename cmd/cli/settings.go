@@ -116,7 +116,7 @@ var settingsSetCmd = &cobra.Command{
 			return exitError(fmt.Errorf("no settings flags provided — use --help to see available options"))
 		}
 
-		resp, err := apiPut("/api/settings", body)
+		resp, err := apiPatch("/api/settings", body)
 		if err != nil {
 			return exitError(err)
 		}

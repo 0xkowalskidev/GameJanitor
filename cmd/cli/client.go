@@ -26,8 +26,8 @@ func apiPost(path string, body any) (*apiResponse, error) {
 	return apiRequest("POST", path, body)
 }
 
-func apiPut(path string, body any) (*apiResponse, error) {
-	return apiRequest("PUT", path, body)
+func apiPatch(path string, body any) (*apiResponse, error) {
+	return apiRequest("PATCH", path, body)
 }
 
 func apiDelete(path string) (*apiResponse, error) {

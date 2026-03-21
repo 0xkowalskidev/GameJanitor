@@ -130,7 +130,7 @@ func NewRouter(
 			r.With(requireAdmin).Post("/bulk", gameserverHandlers.BulkAction)
 			r.Route("/{id}", func(r chi.Router) {
 				r.With(requireAccess).Get("/", gameserverHandlers.Get)
-				r.With(requireConfigure).Put("/", gameserverHandlers.Update)
+				r.With(requireConfigure).Patch("/", gameserverHandlers.Update)
 				r.With(requireDelete).Delete("/", gameserverHandlers.Delete)
 				r.With(requireStart).Post("/start", gameserverHandlers.Start)
 				r.With(requireStop).Post("/stop", gameserverHandlers.Stop)
@@ -151,7 +151,7 @@ func NewRouter(
 					r.Post("/", scheduleHandlers.Create)
 					r.Route("/{scheduleId}", func(r chi.Router) {
 						r.Get("/", scheduleHandlers.Get)
-						r.Put("/", scheduleHandlers.Update)
+						r.Patch("/", scheduleHandlers.Update)
 						r.Delete("/", scheduleHandlers.Delete)
 					})
 				})
@@ -189,9 +189,9 @@ func NewRouter(
 			r.Get("/", workerHandlers.List)
 			r.Route("/{workerID}", func(r chi.Router) {
 				r.Get("/", workerHandlers.Get)
-				r.Put("/port-range", workerHandlers.SetPortRange)
+				r.Patch("/port-range", workerHandlers.SetPortRange)
 				r.Delete("/port-range", workerHandlers.ClearPortRange)
-				r.Put("/limits", workerHandlers.SetLimits)
+				r.Patch("/limits", workerHandlers.SetLimits)
 				r.Delete("/limits", workerHandlers.ClearLimits)
 			})
 		})
@@ -199,7 +199,7 @@ func NewRouter(
 		r.Route("/settings", func(r chi.Router) {
 			r.Use(requireAdmin)
 			r.Get("/", settingsAPIHandlers.Get)
-			r.Put("/", settingsAPIHandlers.Update)
+			r.Patch("/", settingsAPIHandlers.Update)
 		})
 
 		r.Route("/tokens", func(r chi.Router) {
@@ -323,7 +323,7 @@ func NewRouter(
 
 				// Settings permission
 				r.With(requireConfigure).Get("/edit", pageGameservers.Edit)
-				r.With(requireConfigure).Put("/", pageGameservers.Update)
+				r.With(requireConfigure).Patch("/", pageGameservers.Update)
 				r.With(requireDelete).Delete("/", pageGameservers.Delete)
 
 				// Lifecycle actions
@@ -354,7 +354,7 @@ func NewRouter(
 				// Schedules
 				r.With(requireConfigure).Get("/schedules", pageSchedules.List)
 				r.With(requireConfigure).Post("/schedules", pageSchedules.Create)
-				r.With(requireConfigure).Put("/schedules/{scheduleId}", pageSchedules.Update)
+				r.With(requireConfigure).Patch("/schedules/{scheduleId}", pageSchedules.Update)
 				r.With(requireConfigure).Delete("/schedules/{scheduleId}", pageSchedules.Delete)
 				r.With(requireConfigure).Post("/schedules/{scheduleId}/toggle", pageSchedules.Toggle)
 

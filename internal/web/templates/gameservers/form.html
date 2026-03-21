@@ -28,7 +28,7 @@
 
   <form x-ref="form" @submit="validateForm($event)"
         {{if eq .Mode "edit"}}
-        hx-put="/gameservers/{{.Gameserver.ID}}" hx-target="#content"
+        hx-patch="/gameservers/{{.Gameserver.ID}}" hx-target="#content"
         {{else}}
         hx-post="/gameservers" hx-target="#content"
         {{end}}>

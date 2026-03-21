@@ -141,7 +141,7 @@ var gamesUpdateCmd = &cobra.Command{
 			body["recommended_memory_mb"] = v
 		}
 
-		resp, err := apiPut("/api/games/"+args[0], body)
+		resp, err := apiPatch("/api/games/"+args[0], body)
 		if err != nil {
 			return exitError(err)
 		}
