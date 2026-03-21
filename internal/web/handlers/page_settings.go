@@ -459,201 +459,89 @@ func (h *PageSettingsHandlers) SavePortMode(w http.ResponseWriter, r *http.Reque
 	w.WriteHeader(http.StatusOK)
 }
 
+// saveIntHandler generates an http.HandlerFunc that parses a form int, validates, and saves.
+func (h *PageSettingsHandlers) saveIntHandler(envLocked func() bool, formField string, min int, setter func(int) error, envMsg, errMsg, logMsg string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if envLocked() {
+			http.Error(w, envMsg+" is controlled by environment variable", http.StatusBadRequest)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "Invalid form data", http.StatusBadRequest)
+			return
+		}
+		v, err := strconv.Atoi(r.FormValue(formField))
+		if err != nil || v < min {
+			http.Error(w, errMsg, http.StatusBadRequest)
+			return
+		}
+		if err := setter(v); err != nil {
+			h.log.Error(logMsg, "error", err)
+			http.Error(w, "Failed to save setting", http.StatusInternalServerError)
+			return
+		}
+		h.log.Info(logMsg, "value", v)
+		w.Header().Set("HX-Redirect", "/settings")
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
+// boolToggleHandler generates an http.HandlerFunc that sets a boolean setting.
+func (h *PageSettingsHandlers) boolToggleHandler(envLocked func() bool, setter func(bool) error, envMsg, logMsg string, enabled bool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if envLocked() {
+			http.Error(w, envMsg+" is controlled by environment variable", http.StatusBadRequest)
+			return
+		}
+		if err := setter(enabled); err != nil {
+			h.log.Error(logMsg, "error", err)
+			http.Error(w, "Failed to save setting", http.StatusInternalServerError)
+			return
+		}
+		h.log.Info(logMsg, "enabled", enabled)
+		w.Header().Set("HX-Redirect", "/settings")
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
 func (h *PageSettingsHandlers) SaveMaxBackups(w http.ResponseWriter, r *http.Request) {
-	if h.settingsSvc.IsMaxBackupsFromEnv() {
-		http.Error(w, "Max backups is controlled by environment variable", http.StatusBadRequest)
-		return
-	}
-
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid form data", http.StatusBadRequest)
-		return
-	}
-
-	v, err := strconv.Atoi(r.FormValue("max_backups"))
-	if err != nil || v < 0 {
-		http.Error(w, "Invalid max backups value", http.StatusBadRequest)
-		return
-	}
-
-	if err := h.settingsSvc.SetMaxBackups(v); err != nil {
-		h.log.Error("setting max backups", "error", err)
-		http.Error(w, "Failed to save max backups", http.StatusInternalServerError)
-		return
-	}
-
-	h.log.Info("max backups updated", "value", v)
-	w.Header().Set("HX-Redirect", "/settings")
-	w.WriteHeader(http.StatusOK)
+	h.saveIntHandler(h.settingsSvc.IsMaxBackupsFromEnv, "max_backups", 0, h.settingsSvc.SetMaxBackups,
+		"Max backups", "Invalid max backups value", "max backups updated").ServeHTTP(w, r)
 }
 
 func (h *PageSettingsHandlers) SaveAuditRetention(w http.ResponseWriter, r *http.Request) {
-	if h.settingsSvc.IsAuditRetentionFromEnv() {
-		http.Error(w, "Audit retention is controlled by environment variable", http.StatusBadRequest)
-		return
-	}
-
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid form data", http.StatusBadRequest)
-		return
-	}
-
-	v, err := strconv.Atoi(r.FormValue("audit_retention_days"))
-	if err != nil || v < 0 {
-		http.Error(w, "Invalid audit retention value", http.StatusBadRequest)
-		return
-	}
-
-	if err := h.settingsSvc.SetAuditRetentionDays(v); err != nil {
-		h.log.Error("setting audit retention", "error", err)
-		http.Error(w, "Failed to save audit retention", http.StatusInternalServerError)
-		return
-	}
-
-	h.log.Info("audit retention updated", "days", v)
-	w.Header().Set("HX-Redirect", "/settings")
-	w.WriteHeader(http.StatusOK)
+	h.saveIntHandler(h.settingsSvc.IsAuditRetentionFromEnv, "audit_retention_days", 0, h.settingsSvc.SetAuditRetentionDays,
+		"Audit retention", "Invalid audit retention value", "audit retention updated").ServeHTTP(w, r)
 }
 
 func (h *PageSettingsHandlers) SetRateLimitEnabled(enabled bool) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if h.settingsSvc.IsRateLimitEnabledFromEnv() {
-			http.Error(w, "Rate limiting is controlled by environment variable", http.StatusBadRequest)
-			return
-		}
-
-		if err := h.settingsSvc.SetRateLimitEnabled(enabled); err != nil {
-			h.log.Error("setting rate limit enabled", "error", err)
-			http.Error(w, "Failed to save rate limit setting", http.StatusInternalServerError)
-			return
-		}
-
-		h.log.Info("rate limiting updated", "enabled", enabled)
-		w.Header().Set("HX-Redirect", "/settings")
-		w.WriteHeader(http.StatusOK)
-	}
+	return h.boolToggleHandler(h.settingsSvc.IsRateLimitEnabledFromEnv, h.settingsSvc.SetRateLimitEnabled,
+		"Rate limiting", "rate limiting updated", enabled)
 }
 
 func (h *PageSettingsHandlers) SaveRateLimitPerIP(w http.ResponseWriter, r *http.Request) {
-	if h.settingsSvc.IsRateLimitPerIPFromEnv() {
-		http.Error(w, "Rate limit per IP is controlled by environment variable", http.StatusBadRequest)
-		return
-	}
-
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid form data", http.StatusBadRequest)
-		return
-	}
-
-	v, err := strconv.Atoi(r.FormValue("rate_limit_per_ip"))
-	if err != nil || v < 1 {
-		http.Error(w, "Invalid rate limit value (must be >= 1)", http.StatusBadRequest)
-		return
-	}
-
-	if err := h.settingsSvc.SetRateLimitPerIP(v); err != nil {
-		h.log.Error("setting rate limit per ip", "error", err)
-		http.Error(w, "Failed to save rate limit", http.StatusInternalServerError)
-		return
-	}
-
-	h.log.Info("rate limit per ip updated", "value", v)
-	w.Header().Set("HX-Redirect", "/settings")
-	w.WriteHeader(http.StatusOK)
+	h.saveIntHandler(h.settingsSvc.IsRateLimitPerIPFromEnv, "rate_limit_per_ip", 1, h.settingsSvc.SetRateLimitPerIP,
+		"Rate limit per IP", "Invalid rate limit value (must be >= 1)", "rate limit per ip updated").ServeHTTP(w, r)
 }
 
 func (h *PageSettingsHandlers) SaveRateLimitPerToken(w http.ResponseWriter, r *http.Request) {
-	if h.settingsSvc.IsRateLimitPerTokenFromEnv() {
-		http.Error(w, "Rate limit per token is controlled by environment variable", http.StatusBadRequest)
-		return
-	}
-
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid form data", http.StatusBadRequest)
-		return
-	}
-
-	v, err := strconv.Atoi(r.FormValue("rate_limit_per_token"))
-	if err != nil || v < 1 {
-		http.Error(w, "Invalid rate limit value (must be >= 1)", http.StatusBadRequest)
-		return
-	}
-
-	if err := h.settingsSvc.SetRateLimitPerToken(v); err != nil {
-		h.log.Error("setting rate limit per token", "error", err)
-		http.Error(w, "Failed to save rate limit", http.StatusInternalServerError)
-		return
-	}
-
-	h.log.Info("rate limit per token updated", "value", v)
-	w.Header().Set("HX-Redirect", "/settings")
-	w.WriteHeader(http.StatusOK)
+	h.saveIntHandler(h.settingsSvc.IsRateLimitPerTokenFromEnv, "rate_limit_per_token", 1, h.settingsSvc.SetRateLimitPerToken,
+		"Rate limit per token", "Invalid rate limit value (must be >= 1)", "rate limit per token updated").ServeHTTP(w, r)
 }
 
 func (h *PageSettingsHandlers) SaveRateLimitLogin(w http.ResponseWriter, r *http.Request) {
-	if h.settingsSvc.IsRateLimitLoginFromEnv() {
-		http.Error(w, "Login rate limit is controlled by environment variable", http.StatusBadRequest)
-		return
-	}
-
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid form data", http.StatusBadRequest)
-		return
-	}
-
-	v, err := strconv.Atoi(r.FormValue("rate_limit_login"))
-	if err != nil || v < 1 {
-		http.Error(w, "Invalid rate limit value (must be >= 1)", http.StatusBadRequest)
-		return
-	}
-
-	if err := h.settingsSvc.SetRateLimitLogin(v); err != nil {
-		h.log.Error("setting rate limit login", "error", err)
-		http.Error(w, "Failed to save rate limit", http.StatusInternalServerError)
-		return
-	}
-
-	h.log.Info("rate limit login updated", "value", v)
-	w.Header().Set("HX-Redirect", "/settings")
-	w.WriteHeader(http.StatusOK)
+	h.saveIntHandler(h.settingsSvc.IsRateLimitLoginFromEnv, "rate_limit_login", 1, h.settingsSvc.SetRateLimitLogin,
+		"Login rate limit", "Invalid rate limit value (must be >= 1)", "rate limit login updated").ServeHTTP(w, r)
 }
 
 func (h *PageSettingsHandlers) SetTrustProxyHeaders(enabled bool) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if h.settingsSvc.IsTrustProxyHeadersFromEnv() {
-			http.Error(w, "Trust proxy headers is controlled by environment variable", http.StatusBadRequest)
-			return
-		}
-
-		if err := h.settingsSvc.SetTrustProxyHeaders(enabled); err != nil {
-			h.log.Error("setting trust proxy headers", "error", err)
-			http.Error(w, "Failed to save trust proxy headers", http.StatusInternalServerError)
-			return
-		}
-
-		h.log.Info("trust proxy headers updated", "enabled", enabled)
-		w.Header().Set("HX-Redirect", "/settings")
-		w.WriteHeader(http.StatusOK)
-	}
+	return h.boolToggleHandler(h.settingsSvc.IsTrustProxyHeadersFromEnv, h.settingsSvc.SetTrustProxyHeaders,
+		"Trust proxy headers", "trust proxy headers updated", enabled)
 }
 
 func (h *PageSettingsHandlers) SetWebhookEnabled(enabled bool) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if h.settingsSvc.IsWebhookEnabledFromEnv() {
-			http.Error(w, "Webhook enabled is controlled by environment variable", http.StatusBadRequest)
-			return
-		}
-
-		if err := h.settingsSvc.SetWebhookEnabled(enabled); err != nil {
-			h.log.Error("setting webhook enabled", "error", err)
-			http.Error(w, "Failed to save webhook setting", http.StatusInternalServerError)
-			return
-		}
-
-		h.log.Info("webhook enabled updated", "enabled", enabled)
-		w.Header().Set("HX-Redirect", "/settings")
-		w.WriteHeader(http.StatusOK)
-	}
+	return h.boolToggleHandler(h.settingsSvc.IsWebhookEnabledFromEnv, h.settingsSvc.SetWebhookEnabled,
+		"Webhook enabled", "webhook enabled updated", enabled)
 }
 
 func (h *PageSettingsHandlers) SaveWebhookURL(w http.ResponseWriter, r *http.Request) {
@@ -755,20 +643,6 @@ func (h *PageSettingsHandlers) TestWebhook(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *PageSettingsHandlers) SetLocalhostBypass(enabled bool) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if h.settingsSvc.IsLocalhostBypassFromEnv() {
-			http.Error(w, "Localhost bypass is controlled by environment variable", http.StatusBadRequest)
-			return
-		}
-
-		if err := h.settingsSvc.SetLocalhostBypass(enabled); err != nil {
-			h.log.Error("setting localhost bypass", "error", err)
-			http.Error(w, "Failed to save localhost bypass", http.StatusInternalServerError)
-			return
-		}
-
-		h.log.Info("localhost bypass updated", "enabled", enabled)
-		w.Header().Set("HX-Redirect", "/settings")
-		w.WriteHeader(http.StatusOK)
-	}
+	return h.boolToggleHandler(h.settingsSvc.IsLocalhostBypassFromEnv, h.settingsSvc.SetLocalhostBypass,
+		"Localhost bypass", "localhost bypass updated", enabled)
 }
