@@ -84,6 +84,8 @@ func extractGameserverID(event WebhookEvent) string {
 		return e.GameserverID
 	case BackupEvent:
 		return e.GameserverID
+	case ScheduleActionEvent:
+		return e.GameserverID
 	case ScheduledTaskEvent:
 		return e.GameserverID
 	case StatusEvent:
@@ -115,6 +117,8 @@ func extractActor(event WebhookEvent) Actor {
 	case BackupEvent:
 		return e.Actor
 	case WorkerEvent:
+		return e.Actor
+	case ScheduleActionEvent:
 		return e.Actor
 	case ScheduledTaskEvent:
 		return e.Actor

@@ -1,9 +1,11 @@
 package service
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/warsmite/gamejanitor/internal/models"
 	"github.com/google/uuid"
@@ -11,13 +13,14 @@ import (
 )
 
 type ScheduleService struct {
-	db        *sql.DB
-	scheduler *Scheduler
-	log       *slog.Logger
+	db          *sql.DB
+	scheduler   *Scheduler
+	broadcaster *EventBus
+	log         *slog.Logger
 }
 
-func NewScheduleService(db *sql.DB, scheduler *Scheduler, log *slog.Logger) *ScheduleService {
-	return &ScheduleService{db: db, scheduler: scheduler, log: log}
+func NewScheduleService(db *sql.DB, scheduler *Scheduler, broadcaster *EventBus, log *slog.Logger) *ScheduleService {
+	return &ScheduleService{db: db, scheduler: scheduler, broadcaster: broadcaster, log: log}
 }
 
 func (s *ScheduleService) ListSchedules(gameserverID string) ([]models.Schedule, error) {
@@ -28,7 +31,7 @@ func (s *ScheduleService) GetSchedule(id string) (*models.Schedule, error) {
 	return models.GetSchedule(s.db, id)
 }
 
-func (s *ScheduleService) CreateSchedule(schedule *models.Schedule) error {
+func (s *ScheduleService) CreateSchedule(ctx context.Context, schedule *models.Schedule) error {
 	if err := validateScheduleType(schedule.Type); err != nil {
 		return err
 	}
@@ -53,10 +56,19 @@ func (s *ScheduleService) CreateSchedule(schedule *models.Schedule) error {
 		}
 	}
 
+	s.broadcaster.Publish(ScheduleActionEvent{
+		Type:         EventScheduleCreate,
+		Timestamp:    time.Now(),
+		Actor:        ActorFromContext(ctx),
+		GameserverID: schedule.GameserverID,
+		ScheduleID:   schedule.ID,
+		ScheduleName: schedule.Name,
+	})
+
 	return nil
 }
 
-func (s *ScheduleService) UpdateSchedule(schedule *models.Schedule) error {
+func (s *ScheduleService) UpdateSchedule(ctx context.Context, schedule *models.Schedule) error {
 	if err := validateScheduleType(schedule.Type); err != nil {
 		return err
 	}
@@ -74,17 +86,50 @@ func (s *ScheduleService) UpdateSchedule(schedule *models.Schedule) error {
 		return fmt.Errorf("updating schedule in cron: %w", err)
 	}
 
+	s.broadcaster.Publish(ScheduleActionEvent{
+		Type:         EventScheduleUpdate,
+		Timestamp:    time.Now(),
+		Actor:        ActorFromContext(ctx),
+		GameserverID: schedule.GameserverID,
+		ScheduleID:   schedule.ID,
+		ScheduleName: schedule.Name,
+	})
+
 	return nil
 }
 
-func (s *ScheduleService) DeleteSchedule(id string) error {
+func (s *ScheduleService) DeleteSchedule(ctx context.Context, id string) error {
+	schedule, err := models.GetSchedule(s.db, id)
+	if err != nil {
+		return fmt.Errorf("getting schedule for delete: %w", err)
+	}
+
 	s.log.Info("deleting schedule", "id", id)
 
 	s.scheduler.RemoveSchedule(id)
-	return models.DeleteSchedule(s.db, id)
+	if err := models.DeleteSchedule(s.db, id); err != nil {
+		return err
+	}
+
+	gsID := ""
+	name := ""
+	if schedule != nil {
+		gsID = schedule.GameserverID
+		name = schedule.Name
+	}
+	s.broadcaster.Publish(ScheduleActionEvent{
+		Type:         EventScheduleDelete,
+		Timestamp:    time.Now(),
+		Actor:        ActorFromContext(ctx),
+		GameserverID: gsID,
+		ScheduleID:   id,
+		ScheduleName: name,
+	})
+
+	return nil
 }
 
-func (s *ScheduleService) ToggleSchedule(id string) error {
+func (s *ScheduleService) ToggleSchedule(ctx context.Context, id string) error {
 	schedule, err := models.GetSchedule(s.db, id)
 	if err != nil {
 		return fmt.Errorf("getting schedule %s: %w", id, err)
@@ -104,6 +149,15 @@ func (s *ScheduleService) ToggleSchedule(id string) error {
 	if err := s.scheduler.UpdateSchedule(*schedule); err != nil {
 		return fmt.Errorf("updating schedule in cron after toggle: %w", err)
 	}
+
+	s.broadcaster.Publish(ScheduleActionEvent{
+		Type:         EventScheduleUpdate,
+		Timestamp:    time.Now(),
+		Actor:        ActorFromContext(ctx),
+		GameserverID: schedule.GameserverID,
+		ScheduleID:   id,
+		ScheduleName: schedule.Name,
+	})
 
 	return nil
 }

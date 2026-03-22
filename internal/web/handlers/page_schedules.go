@@ -88,7 +88,7 @@ func (h *PageScheduleHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		Enabled:      true,
 	}
 
-	if err := h.scheduleSvc.CreateSchedule(schedule); err != nil {
+	if err := h.scheduleSvc.CreateSchedule(r.Context(), schedule); err != nil {
 		h.log.Error("creating schedule from web", "error", err)
 		http.Error(w, "Failed to create schedule: "+err.Error(), http.StatusBadRequest)
 		return
@@ -128,7 +128,7 @@ func (h *PageScheduleHandlers) Update(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := h.scheduleSvc.UpdateSchedule(existing); err != nil {
+	if err := h.scheduleSvc.UpdateSchedule(r.Context(), existing); err != nil {
 		h.log.Error("updating schedule from web", "id", scheduleID, "error", err)
 		http.Error(w, "Failed to update schedule: "+err.Error(), http.StatusBadRequest)
 		return
@@ -142,7 +142,7 @@ func (h *PageScheduleHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 	gsID := chi.URLParam(r, "id")
 	scheduleID := chi.URLParam(r, "scheduleId")
 
-	if err := h.scheduleSvc.DeleteSchedule(scheduleID); err != nil {
+	if err := h.scheduleSvc.DeleteSchedule(r.Context(), scheduleID); err != nil {
 		h.log.Error("deleting schedule from web", "id", scheduleID, "error", err)
 		http.Error(w, "Failed to delete schedule: "+err.Error(), http.StatusBadRequest)
 		return
@@ -155,7 +155,7 @@ func (h *PageScheduleHandlers) Toggle(w http.ResponseWriter, r *http.Request) {
 	gsID := chi.URLParam(r, "id")
 	scheduleID := chi.URLParam(r, "scheduleId")
 
-	if err := h.scheduleSvc.ToggleSchedule(scheduleID); err != nil {
+	if err := h.scheduleSvc.ToggleSchedule(r.Context(), scheduleID); err != nil {
 		h.log.Error("toggling schedule from web", "id", scheduleID, "error", err)
 		http.Error(w, "Failed to toggle schedule: "+err.Error(), http.StatusBadRequest)
 		return

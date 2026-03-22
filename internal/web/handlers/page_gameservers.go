@@ -240,7 +240,7 @@ func (h *PageGameserverHandlers) Create(w http.ResponseWriter, r *http.Request) 
 		Payload:      json.RawMessage(`{}`),
 		Enabled:      true,
 	}
-	if err := h.scheduleSvc.CreateSchedule(defaultBackup); err != nil {
+	if err := h.scheduleSvc.CreateSchedule(r.Context(), defaultBackup); err != nil {
 		h.log.Error("failed to create default backup schedule", "gameserver_id", gs.ID, "error", err)
 	}
 

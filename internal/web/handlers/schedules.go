@@ -86,7 +86,7 @@ func (h *ScheduleHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		Enabled:      enabled,
 	}
 
-	if err := h.svc.CreateSchedule(schedule); err != nil {
+	if err := h.svc.CreateSchedule(r.Context(), schedule); err != nil {
 		h.log.Error("creating schedule", "error", err)
 		respondError(w, serviceErrorStatus(err), err.Error())
 		return
@@ -137,7 +137,7 @@ func (h *ScheduleHandlers) Update(w http.ResponseWriter, r *http.Request) {
 		existing.Enabled = *req.Enabled
 	}
 
-	if err := h.svc.UpdateSchedule(existing); err != nil {
+	if err := h.svc.UpdateSchedule(r.Context(), existing); err != nil {
 		h.log.Error("updating schedule", "id", id, "error", err)
 		respondError(w, serviceErrorStatus(err), err.Error())
 		return
@@ -148,7 +148,7 @@ func (h *ScheduleHandlers) Update(w http.ResponseWriter, r *http.Request) {
 
 func (h *ScheduleHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "scheduleId")
-	if err := h.svc.DeleteSchedule(id); err != nil {
+	if err := h.svc.DeleteSchedule(r.Context(), id); err != nil {
 		h.log.Error("deleting schedule", "id", id, "error", err)
 		respondError(w, serviceErrorStatus(err), err.Error())
 		return

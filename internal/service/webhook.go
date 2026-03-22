@@ -190,6 +190,14 @@ func (w *WebhookWorker) enqueueEvent(event WebhookEvent) {
 			WorkerID: ev.WorkerID,
 		}
 
+	case ScheduleActionEvent:
+		payloadData = map[string]any{
+			"actor":         ev.Actor,
+			"gameserver_id": ev.GameserverID,
+			"schedule_id":   ev.ScheduleID,
+			"schedule_name": ev.ScheduleName,
+		}
+
 	case ScheduledTaskEvent:
 		payloadData = scheduledTaskEventData{
 			GameserverID: ev.GameserverID,

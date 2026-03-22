@@ -97,7 +97,7 @@ func initServices(database *sql.DB, dispatcher *worker.Dispatcher, localWorker w
 	gameserverSvc.SetBackupStore(backupStore)
 	backupSvc := service.NewBackupService(database, dispatcher, gameserverSvc, gameStore, backupStore, settingsSvc, broadcaster, logger)
 	scheduler := service.NewScheduler(database, backupSvc, gameserverSvc, consoleSvc, broadcaster, logger)
-	scheduleSvc := service.NewScheduleService(database, scheduler, logger)
+	scheduleSvc := service.NewScheduleService(database, scheduler, broadcaster, logger)
 	authSvc := service.NewAuthService(database, logger)
 	statusMgr := service.NewStatusManager(database, localWorker, broadcaster, querySvc, readyWatcher, dispatcher, registry, gameserverSvc.Start, logger)
 	statusSub := service.NewStatusSubscriber(database, broadcaster, logger)

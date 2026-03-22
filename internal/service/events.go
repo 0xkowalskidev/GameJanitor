@@ -213,6 +213,18 @@ type WorkerEvent struct {
 func (e WorkerEvent) EventType() string        { return e.Type }
 func (e WorkerEvent) EventTimestamp() time.Time { return e.Timestamp }
 
+type ScheduleActionEvent struct {
+	Type         string    `json:"type"`
+	Timestamp    time.Time `json:"timestamp"`
+	Actor        Actor     `json:"actor"`
+	GameserverID string    `json:"gameserver_id"`
+	ScheduleID   string    `json:"schedule_id"`
+	ScheduleName string    `json:"schedule_name"`
+}
+
+func (e ScheduleActionEvent) EventType() string        { return e.Type }
+func (e ScheduleActionEvent) EventTimestamp() time.Time { return e.Timestamp }
+
 type ScheduledTaskEvent struct {
 	Type         string    `json:"type"`
 	Timestamp    time.Time `json:"timestamp"`
