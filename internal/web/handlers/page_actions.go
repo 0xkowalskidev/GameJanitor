@@ -48,7 +48,11 @@ func (h *PageActionHandlers) doAction(w http.ResponseWriter, r *http.Request, ac
 
 	go func() {
 		// Detach from the request context so the action isn't cancelled when the HTTP response is sent.
+		// Preserve the token/actor for event attribution.
 		ctx := context.Background()
+		if token := service.TokenFromContext(r.Context()); token != nil {
+			ctx = service.SetTokenInContext(ctx, token)
+		}
 		if err := action(ctx, id); err != nil {
 			h.log.Error("gameserver action failed", "id", id, "error", err)
 		}
