@@ -56,7 +56,7 @@ func (s *GameserverService) checkWorkerLimits(nodeID string, memoryNeeded int, c
 			return fmt.Errorf("checking worker limits: %w", err)
 		}
 		if allocated+memoryNeeded > *node.MaxMemoryMB {
-			return fmt.Errorf("worker %s has reached its memory limit (%d MB allocated, %d MB limit)", nodeID, allocated, *node.MaxMemoryMB)
+			return ErrUnavailablef("worker %s has reached its memory limit (%d MB allocated, %d MB limit)", nodeID, allocated, *node.MaxMemoryMB)
 		}
 	}
 
@@ -66,7 +66,7 @@ func (s *GameserverService) checkWorkerLimits(nodeID string, memoryNeeded int, c
 			return fmt.Errorf("checking worker limits: %w", err)
 		}
 		if allocated+cpuNeeded > *node.MaxCPU {
-			return fmt.Errorf("worker %s has reached its CPU limit (%.1f allocated, %.1f limit)", nodeID, allocated, *node.MaxCPU)
+			return ErrUnavailablef("worker %s has reached its CPU limit (%.1f allocated, %.1f limit)", nodeID, allocated, *node.MaxCPU)
 		}
 	}
 
@@ -76,7 +76,7 @@ func (s *GameserverService) checkWorkerLimits(nodeID string, memoryNeeded int, c
 			return fmt.Errorf("checking worker limits: %w", err)
 		}
 		if allocated+storageNeeded > *node.MaxStorageMB {
-			return fmt.Errorf("worker %s has reached its storage limit (%d MB allocated, %d MB limit)", nodeID, allocated, *node.MaxStorageMB)
+			return ErrUnavailablef("worker %s has reached its storage limit (%d MB allocated, %d MB limit)", nodeID, allocated, *node.MaxStorageMB)
 		}
 	}
 
@@ -97,7 +97,7 @@ func (s *GameserverService) checkWorkerLimitsExcluding(nodeID string, memoryNeed
 			return fmt.Errorf("checking worker limits: %w", err)
 		}
 		if allocated+memoryNeeded > *node.MaxMemoryMB {
-			return fmt.Errorf("worker %s would exceed memory limit (%d MB allocated + %d MB needed > %d MB limit)", nodeID, allocated, memoryNeeded, *node.MaxMemoryMB)
+			return ErrUnavailablef("worker %s would exceed memory limit (%d MB allocated + %d MB needed > %d MB limit)", nodeID, allocated, memoryNeeded, *node.MaxMemoryMB)
 		}
 	}
 
@@ -107,7 +107,7 @@ func (s *GameserverService) checkWorkerLimitsExcluding(nodeID string, memoryNeed
 			return fmt.Errorf("checking worker limits: %w", err)
 		}
 		if allocated+cpuNeeded > *node.MaxCPU {
-			return fmt.Errorf("worker %s would exceed CPU limit (%.1f allocated + %.1f needed > %.1f limit)", nodeID, allocated, cpuNeeded, *node.MaxCPU)
+			return ErrUnavailablef("worker %s would exceed CPU limit (%.1f allocated + %.1f needed > %.1f limit)", nodeID, allocated, cpuNeeded, *node.MaxCPU)
 		}
 	}
 
@@ -117,7 +117,7 @@ func (s *GameserverService) checkWorkerLimitsExcluding(nodeID string, memoryNeed
 			return fmt.Errorf("checking worker limits: %w", err)
 		}
 		if allocated+storageNeeded > *node.MaxStorageMB {
-			return fmt.Errorf("worker %s would exceed storage limit (%d MB allocated + %d MB needed > %d MB limit)", nodeID, allocated, storageNeeded, *node.MaxStorageMB)
+			return ErrUnavailablef("worker %s would exceed storage limit (%d MB allocated + %d MB needed > %d MB limit)", nodeID, allocated, storageNeeded, *node.MaxStorageMB)
 		}
 	}
 

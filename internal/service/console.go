@@ -42,10 +42,10 @@ func (s *ConsoleService) StreamLogs(ctx context.Context, gameserverID string, ta
 		return nil, ErrNotFoundf("gameserver %s not found", gameserverID)
 	}
 	if gs.ContainerID == nil {
-		return nil, fmt.Errorf("gameserver %s has no container", gameserverID)
+		return nil, ErrBadRequestf("gameserver %s has no container", gameserverID)
 	}
 	if !isRunningStatus(gs.Status) {
-		return nil, fmt.Errorf("gameserver %s is not running (status: %s)", gameserverID, gs.Status)
+		return nil, ErrBadRequestf("gameserver %s is not running (status: %s)", gameserverID, gs.Status)
 	}
 
 	game := s.gameStore.GetGame(gs.GameID)
@@ -53,7 +53,7 @@ func (s *ConsoleService) StreamLogs(ctx context.Context, gameserverID string, ta
 		return nil, ErrNotFoundf("game %s not found for gameserver %s", gs.GameID, gameserverID)
 	}
 	if !HasCapability(game, "console_read") {
-		return nil, fmt.Errorf("console_read capability is disabled for game %s", game.Name)
+		return nil, ErrBadRequestf("console_read capability is disabled for game %s", game.Name)
 	}
 
 	s.log.Info("streaming logs", "gameserver_id", gameserverID, "container_id", (*gs.ContainerID)[:12])
@@ -72,10 +72,10 @@ func (s *ConsoleService) SendCommand(ctx context.Context, gameserverID string, c
 		return "", ErrNotFoundf("gameserver %s not found", gameserverID)
 	}
 	if gs.ContainerID == nil {
-		return "", fmt.Errorf("gameserver %s has no container", gameserverID)
+		return "", ErrBadRequestf("gameserver %s has no container", gameserverID)
 	}
 	if !isRunningStatus(gs.Status) {
-		return "", fmt.Errorf("gameserver %s is not running (status: %s)", gameserverID, gs.Status)
+		return "", ErrBadRequestf("gameserver %s is not running (status: %s)", gameserverID, gs.Status)
 	}
 
 	game := s.gameStore.GetGame(gs.GameID)
@@ -83,7 +83,7 @@ func (s *ConsoleService) SendCommand(ctx context.Context, gameserverID string, c
 		return "", ErrNotFoundf("game %s not found for gameserver %s", gs.GameID, gameserverID)
 	}
 	if !HasCapability(game, "command") {
-		return "", fmt.Errorf("command capability is disabled for game %s", game.Name)
+		return "", ErrBadRequestf("command capability is disabled for game %s", game.Name)
 	}
 
 	s.log.Info("sending command", "gameserver_id", gameserverID, "command", command)
@@ -93,7 +93,7 @@ func (s *ConsoleService) SendCommand(ctx context.Context, gameserverID string, c
 		return "", fmt.Errorf("executing command in gameserver %s: %w", gameserverID, err)
 	}
 	if exitCode != 0 {
-		return "", fmt.Errorf("command failed (exit %d): %s", exitCode, stderr)
+		return "", ErrBadRequestf("command failed (exit %d): %s", exitCode, stderr)
 	}
 
 	return stdout, nil

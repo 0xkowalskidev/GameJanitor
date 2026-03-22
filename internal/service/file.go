@@ -82,7 +82,7 @@ func (s *FileService) DeletePath(ctx context.Context, gameserverID string, targe
 		return err
 	}
 	if targetPath == "/data" {
-		return fmt.Errorf("cannot delete the root data directory")
+		return ErrBadRequest("cannot delete the root data directory")
 	}
 
 	gs, err := s.getGameserver(gameserverID)
@@ -119,7 +119,7 @@ func (s *FileService) RenamePath(ctx context.Context, gameserverID string, oldPa
 		return err
 	}
 	if oldPath == "/data" || newPath == "/data" {
-		return fmt.Errorf("cannot rename the root data directory")
+		return ErrBadRequest("cannot rename the root data directory")
 	}
 
 	gs, err := s.getGameserver(gameserverID)
@@ -157,7 +157,7 @@ func (s *FileService) getGameserver(gameserverID string) (*models.Gameserver, er
 func validatePath(p string) (string, error) {
 	cleaned := path.Clean(p)
 	if !strings.HasPrefix(cleaned, "/data") {
-		return "", fmt.Errorf("path must be within /data, got: %s", p)
+		return "", ErrBadRequestf("path must be within /data, got: %s", p)
 	}
 	return cleaned, nil
 }

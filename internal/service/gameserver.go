@@ -78,7 +78,7 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gam
 		nodeID = *gs.NodeID
 		w, err := s.dispatcher.SelectWorkerByNodeID(nodeID)
 		if err != nil {
-			return "", fmt.Errorf("selected worker unavailable: %w", err)
+			return "", ErrUnavailablef("selected worker unavailable: %v", err)
 		}
 		targetWorker = w
 
@@ -88,7 +88,7 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gam
 		if gs.PortMode == "auto" {
 			allocatedPorts, err := s.AllocatePorts(game, nodeID, "")
 			if err != nil {
-				return "", fmt.Errorf("auto-allocating ports: %w", err)
+				return "", ErrUnavailablef("no available ports for this gameserver")
 			}
 			gs.Ports = allocatedPorts
 		}
@@ -101,9 +101,9 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gam
 		candidates := s.dispatcher.RankWorkersForPlacement(requiredTags)
 		if len(candidates) == 0 {
 			if len(requiredTags) > 0 {
-				return "", fmt.Errorf("no workers available with required tags %v", requiredTags)
+				return "", ErrUnavailablef("no workers available with required tags %v", requiredTags)
 			}
-			return "", fmt.Errorf("no workers available — connect a worker node first")
+			return "", ErrUnavailable("no workers available — connect a worker node first")
 		}
 
 		var lastErr error
@@ -129,7 +129,7 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gam
 			break
 		}
 		if targetWorker == nil {
-			return "", fmt.Errorf("no worker has capacity for this gameserver: %w", lastErr)
+			return "", ErrUnavailablef("no worker has capacity for this gameserver: %v", lastErr)
 		}
 		if nodeID != "" {
 			gs.NodeID = &nodeID

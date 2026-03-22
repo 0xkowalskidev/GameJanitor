@@ -28,13 +28,13 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 		currentNodeID = *gs.NodeID
 	}
 	if currentNodeID == targetNodeID {
-		return fmt.Errorf("gameserver is already on node %s", targetNodeID)
+		return ErrBadRequestf("gameserver is already on node %s", targetNodeID)
 	}
 
 	// Validate target worker is connected
 	targetWorker, err := s.dispatcher.SelectWorkerByNodeID(targetNodeID)
 	if err != nil {
-		return fmt.Errorf("target worker unavailable: %w", err)
+		return ErrUnavailablef("target worker unavailable: %v", err)
 	}
 
 	// Validate target node tags
@@ -45,7 +45,7 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 	if len(requiredTags) > 0 {
 		targetNode, err := models.GetWorkerNode(s.db, targetNodeID)
 		if err != nil || targetNode == nil {
-			return fmt.Errorf("target node %s not found", targetNodeID)
+			return ErrNotFoundf("target node %s not found", targetNodeID)
 		}
 		var nodeTags []string
 		json.Unmarshal([]byte(targetNode.Tags), &nodeTags)
@@ -55,7 +55,7 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 		}
 		for _, req := range requiredTags {
 			if !tagSet[req] {
-				return fmt.Errorf("target node %s missing required tag: %s", targetNodeID, req)
+				return ErrBadRequestf("target node %s missing required tag: %s", targetNodeID, req)
 			}
 		}
 	}
@@ -68,7 +68,7 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 	// Get source worker (must be online to transfer data)
 	sourceWorker := s.dispatcher.WorkerFor(gameserverID)
 	if sourceWorker == nil {
-		return fmt.Errorf("source worker is offline, cannot migrate (both workers must be online)")
+		return ErrUnavailable("source worker is offline, cannot migrate (both workers must be online)")
 	}
 
 	s.log.Info("migrating gameserver", "id", gameserverID, "from_node", currentNodeID, "to_node", targetNodeID)
