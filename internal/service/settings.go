@@ -44,9 +44,6 @@ const (
 	SettingRateLimitPerToken = "rate_limit_per_token"
 	SettingRateLimitLogin    = "rate_limit_login"
 	SettingTrustProxyHeaders = "trust_proxy_headers"
-	SettingWebhookEnabled    = "webhook_enabled"
-	SettingWebhookURL        = "webhook_url"
-	SettingWebhookSecret     = "webhook_secret"
 
 	DefaultAuditRetention = 30
 
@@ -314,48 +311,3 @@ func (s *SettingsService) SetTrustProxyHeaders(enabled bool) error {
 	return s.setBool(SettingTrustProxyHeaders, enabled)
 }
 
-// --- Webhooks ---
-
-func (s *SettingsService) GetWebhookEnabled() bool {
-	return s.getBool("GJ_WEBHOOK_ENABLED", SettingWebhookEnabled, false)
-}
-
-func (s *SettingsService) IsWebhookEnabledFromEnv() bool {
-	return os.Getenv("GJ_WEBHOOK_ENABLED") != ""
-}
-
-func (s *SettingsService) SetWebhookEnabled(enabled bool) error {
-	return s.setBool(SettingWebhookEnabled, enabled)
-}
-
-func (s *SettingsService) GetWebhookURL() string {
-	return s.getString("GJ_WEBHOOK_URL", SettingWebhookURL)
-}
-
-func (s *SettingsService) IsWebhookURLFromEnv() bool {
-	return os.Getenv("GJ_WEBHOOK_URL") != ""
-}
-
-func (s *SettingsService) SetWebhookURL(url string) error {
-	return models.SetSetting(s.db, SettingWebhookURL, url)
-}
-
-func (s *SettingsService) ClearWebhookURL() error {
-	return models.DeleteSetting(s.db, SettingWebhookURL)
-}
-
-func (s *SettingsService) GetWebhookSecret() string {
-	return s.getString("GJ_WEBHOOK_SECRET", SettingWebhookSecret)
-}
-
-func (s *SettingsService) IsWebhookSecretFromEnv() bool {
-	return os.Getenv("GJ_WEBHOOK_SECRET") != ""
-}
-
-func (s *SettingsService) SetWebhookSecret(secret string) error {
-	return models.SetSetting(s.db, SettingWebhookSecret, secret)
-}
-
-func (s *SettingsService) ClearWebhookSecret() error {
-	return models.DeleteSetting(s.db, SettingWebhookSecret)
-}

@@ -99,8 +99,20 @@ CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON audit_log(timestamp);
 CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log(action);
 CREATE INDEX IF NOT EXISTS idx_audit_log_resource ON audit_log(resource_type, resource_id);
 
+CREATE TABLE webhook_endpoints (
+    id TEXT PRIMARY KEY,
+    description TEXT NOT NULL DEFAULT '',
+    url TEXT NOT NULL,
+    secret TEXT NOT NULL DEFAULT '',
+    events TEXT NOT NULL DEFAULT '["*"]',
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE webhook_deliveries (
     id TEXT PRIMARY KEY,
+    webhook_endpoint_id TEXT NOT NULL REFERENCES webhook_endpoints(id) ON DELETE CASCADE,
     event_type TEXT NOT NULL,
     payload JSON NOT NULL,
     state TEXT NOT NULL DEFAULT 'pending',
@@ -112,3 +124,4 @@ CREATE TABLE webhook_deliveries (
 );
 
 CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_state_next ON webhook_deliveries(state, next_attempt_at);
+CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_endpoint ON webhook_deliveries(webhook_endpoint_id);

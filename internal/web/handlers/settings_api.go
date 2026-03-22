@@ -9,13 +9,12 @@ import (
 )
 
 type SettingsAPIHandlers struct {
-	settingsSvc   *service.SettingsService
-	webhookWorker *service.WebhookWorker
-	log           *slog.Logger
+	settingsSvc *service.SettingsService
+	log         *slog.Logger
 }
 
-func NewSettingsAPIHandlers(settingsSvc *service.SettingsService, webhookWorker *service.WebhookWorker, log *slog.Logger) *SettingsAPIHandlers {
-	return &SettingsAPIHandlers{settingsSvc: settingsSvc, webhookWorker: webhookWorker, log: log}
+func NewSettingsAPIHandlers(settingsSvc *service.SettingsService, log *slog.Logger) *SettingsAPIHandlers {
+	return &SettingsAPIHandlers{settingsSvc: settingsSvc, log: log}
 }
 
 type settingsResponse struct {
@@ -40,14 +39,8 @@ type settingsResponse struct {
 	RateLimitPerTokenFromEnv bool   `json:"rate_limit_per_token_from_env"`
 	RateLimitLogin           int    `json:"rate_limit_login"`
 	RateLimitLoginFromEnv    bool   `json:"rate_limit_login_from_env"`
-	TrustProxyHeaders        bool   `json:"trust_proxy_headers"`
-	TrustProxyHeadersFromEnv bool   `json:"trust_proxy_headers_from_env"`
-	WebhookEnabled           bool   `json:"webhook_enabled"`
-	WebhookEnabledFromEnv    bool   `json:"webhook_enabled_from_env"`
-	WebhookURL               string `json:"webhook_url"`
-	WebhookURLFromEnv        bool   `json:"webhook_url_from_env"`
-	WebhookSecretSet         bool   `json:"webhook_secret_set"`
-	WebhookSecretFromEnv     bool   `json:"webhook_secret_from_env"`
+	TrustProxyHeaders        bool `json:"trust_proxy_headers"`
+	TrustProxyHeadersFromEnv bool `json:"trust_proxy_headers_from_env"`
 }
 
 func (h *SettingsAPIHandlers) Get(w http.ResponseWriter, r *http.Request) {
@@ -75,12 +68,6 @@ func (h *SettingsAPIHandlers) Get(w http.ResponseWriter, r *http.Request) {
 		RateLimitLoginFromEnv:    h.settingsSvc.IsRateLimitLoginFromEnv(),
 		TrustProxyHeaders:        h.settingsSvc.GetTrustProxyHeaders(),
 		TrustProxyHeadersFromEnv: h.settingsSvc.IsTrustProxyHeadersFromEnv(),
-		WebhookEnabled:           h.settingsSvc.GetWebhookEnabled(),
-		WebhookEnabledFromEnv:    h.settingsSvc.IsWebhookEnabledFromEnv(),
-		WebhookURL:               h.settingsSvc.GetWebhookURL(),
-		WebhookURLFromEnv:        h.settingsSvc.IsWebhookURLFromEnv(),
-		WebhookSecretSet:         h.settingsSvc.GetWebhookSecret() != "",
-		WebhookSecretFromEnv:     h.settingsSvc.IsWebhookSecretFromEnv(),
 	})
 }
 
@@ -166,9 +153,6 @@ func (h *SettingsAPIHandlers) settingDefs() map[string]settingDef {
 		"rate_limit_per_token": intSetting(svc.IsRateLimitPerTokenFromEnv, "rate_limit_per_token", 1, 0, "invalid rate_limit_per_token value (must be >= 1)", svc.SetRateLimitPerToken),
 		"rate_limit_login":     intSetting(svc.IsRateLimitLoginFromEnv, "rate_limit_login", 1, 0, "invalid rate_limit_login value (must be >= 1)", svc.SetRateLimitLogin),
 		"trust_proxy_headers": boolSetting(svc.IsTrustProxyHeadersFromEnv, "trust_proxy_headers", svc.SetTrustProxyHeaders),
-		"webhook_enabled":     boolSetting(svc.IsWebhookEnabledFromEnv, "webhook_enabled", svc.SetWebhookEnabled),
-		"webhook_url":         clearableStringSetting(svc.IsWebhookURLFromEnv, "webhook_url", svc.SetWebhookURL, svc.ClearWebhookURL),
-		"webhook_secret":      clearableStringSetting(svc.IsWebhookSecretFromEnv, "webhook_secret", svc.SetWebhookSecret, svc.ClearWebhookSecret),
 	}
 }
 
@@ -207,20 +191,3 @@ func (h *SettingsAPIHandlers) Update(w http.ResponseWriter, r *http.Request) {
 	h.Get(w, r)
 }
 
-func (h *SettingsAPIHandlers) TestWebhook(w http.ResponseWriter, r *http.Request) {
-	if h.webhookWorker == nil {
-		respondError(w, http.StatusBadRequest, "webhooks not configured")
-		return
-	}
-
-	statusCode, err := h.webhookWorker.SendTest()
-	if err != nil {
-		respondError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	respondOK(w, map[string]any{
-		"response_status": statusCode,
-		"success":         statusCode >= 200 && statusCode < 300,
-	})
-}

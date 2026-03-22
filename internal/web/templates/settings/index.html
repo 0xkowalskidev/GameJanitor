@@ -199,117 +199,163 @@
   </div>
 
   <!-- Webhooks Section -->
-  <div class="bg-surface-900/40 border border-surface-800/60 rounded-xl p-5 mb-6">
-    <h2 class="font-display font-semibold text-white mb-4">Webhooks</h2>
-
-    <!-- Webhook Toggle -->
+  <div class="bg-surface-900/40 border border-surface-800/60 rounded-xl p-5 mb-6" x-data="webhookManager()">
     <div class="flex items-center justify-between mb-4">
-      <div>
-        <p class="text-sm text-surface-300">
-          {{if .WebhookEnabled}}
-            Webhooks are enabled. All successful mutations will fire an HTTP POST to the configured URL.
-          {{else}}
-            Webhooks are disabled. No outbound notifications will be sent.
-          {{end}}
-          {{if .WebhookEnabledFromEnv}}
-            <span class="text-amber-400 text-xs ml-1">(set by environment variable)</span>
-          {{end}}
-        </p>
-      </div>
-      {{if not .WebhookEnabledFromEnv}}
-        {{if .WebhookEnabled}}
-          <form method="POST" action="/settings/webhook/disable" hx-post="/settings/webhook/disable" hx-target="#content" hx-push-url="false">
-            <input type="hidden" name="gorilla.csrf.Token" value="{{.CSRFToken}}">
-            <button type="submit" class="px-4 py-2 bg-red-500/10 border border-red-900/30 text-red-400 hover:bg-red-500/20 rounded-lg text-sm font-medium transition-colors">
-              Disable
-            </button>
-          </form>
-        {{else}}
-          <form method="POST" action="/settings/webhook/enable" hx-post="/settings/webhook/enable" hx-target="#content" hx-push-url="false">
-            <input type="hidden" name="gorilla.csrf.Token" value="{{.CSRFToken}}">
-            <button type="submit" class="px-4 py-2 bg-emerald-600/90 hover:bg-emerald-500 text-white rounded-lg text-sm font-medium transition-colors shadow-lg shadow-emerald-600/20">
-              Enable
-            </button>
-          </form>
-        {{end}}
-      {{end}}
+      <h2 class="font-display font-semibold text-white">Webhooks</h2>
+      <button @click="showAdd = true" class="px-3 py-1.5 bg-accent-600 hover:bg-accent-500 text-white rounded-lg text-sm font-medium transition-colors shadow-lg shadow-accent-600/20">
+        Add Endpoint
+      </button>
     </div>
+    <p class="text-xs text-surface-500 mb-4">Webhook endpoints receive HTTP POST requests with JSON payloads when events occur. Each endpoint can filter which events it receives.</p>
 
-    <!-- Webhook URL -->
-    <div class="border-t border-surface-800/40 pt-4 mb-4">
-      <label class="block text-sm font-medium text-surface-300 mb-1">Webhook URL</label>
-      <p class="text-xs text-surface-500 mb-2">HTTP endpoint that receives POST requests with JSON payloads for every mutation.</p>
-      {{if .WebhookURLFromEnv}}
-      <div class="flex items-center gap-2">
-        <span class="text-sm font-mono text-white">{{.WebhookURL}}</span>
-        <span class="text-amber-400 text-xs">(set by environment variable)</span>
-      </div>
-      {{else}}
-        {{if .WebhookURL}}
-        <div class="flex items-center gap-3 mb-2">
-          <span class="text-sm font-mono text-white break-all">{{.WebhookURL}}</span>
-          <form method="POST" action="/settings/webhook/url" hx-delete="/settings/webhook/url" hx-swap="none">
-            <input type="hidden" name="gorilla.csrf.Token" value="{{.CSRFToken}}">
-            <button type="submit" class="text-xs text-red-400 hover:text-red-300 transition-colors">Clear</button>
-          </form>
+    <!-- Endpoint List -->
+    <template x-if="endpoints.length === 0">
+      <p class="text-sm text-surface-500 py-4 text-center">No webhook endpoints configured.</p>
+    </template>
+
+    <div class="space-y-3">
+      <template x-for="ep in endpoints" :key="ep.id">
+        <div class="border border-surface-800/40 rounded-lg p-4">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-2 mb-1">
+                <span x-show="ep.enabled" class="inline-block w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+                <span x-show="!ep.enabled" class="inline-block w-2 h-2 rounded-full bg-surface-600 shrink-0"></span>
+                <span class="text-sm font-medium text-white truncate" x-text="ep.description || ep.url"></span>
+              </div>
+              <p class="text-xs font-mono text-surface-400 truncate" x-text="ep.url"></p>
+              <p class="text-xs text-surface-500 mt-1">
+                Events: <span x-text="ep.events.join(', ')"></span>
+              </p>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+              <button @click="testEndpoint(ep.id)" class="text-xs text-accent-400 hover:text-accent-300 transition-colors">Test</button>
+              <button @click="startEdit(ep)" class="text-xs text-surface-400 hover:text-white transition-colors">Edit</button>
+              <button @click="deleteEndpoint(ep.id)" class="text-xs text-red-400 hover:text-red-300 transition-colors">Delete</button>
+            </div>
+          </div>
         </div>
-        {{end}}
-        <form method="POST" action="/settings/webhook/url" hx-post="/settings/webhook/url" hx-swap="none" class="flex items-center gap-2">
-          <input type="hidden" name="gorilla.csrf.Token" value="{{.CSRFToken}}">
-          <input type="text" name="webhook_url" placeholder="https://example.com/webhook" value="{{.WebhookURL}}"
-                 class="text-sm px-3 py-2 bg-surface-900/60 border border-surface-700/50 rounded-lg text-white placeholder-surface-600 focus:border-accent-500/50 focus:ring-1 focus:ring-accent-500/50 focus:outline-none flex-1">
-          <button type="submit"
-                  class="px-3 py-2 bg-accent-600 hover:bg-accent-500 text-white rounded-lg text-sm font-medium transition-colors shadow-lg shadow-accent-600/20">
-            Save
-          </button>
-        </form>
-      {{end}}
+      </template>
     </div>
 
-    <!-- Webhook Secret -->
-    <div class="border-t border-surface-800/40 pt-4 mb-4">
-      <label class="block text-sm font-medium text-surface-300 mb-1">Webhook Secret</label>
-      <p class="text-xs text-surface-500 mb-2">HMAC-SHA256 signing key. When set, requests include an <code class="text-surface-400">X-Webhook-Signature</code> header.</p>
-      {{if .WebhookSecretFromEnv}}
-      <div class="flex items-center gap-2">
-        <span class="text-sm text-white">Configured</span>
-        <span class="text-amber-400 text-xs">(set by environment variable)</span>
-      </div>
-      {{else}}
-        {{if .WebhookSecretSet}}
-        <div class="flex items-center gap-3 mb-2">
-          <span class="text-sm text-surface-300">Secret is set</span>
-          <form method="POST" action="/settings/webhook/secret" hx-delete="/settings/webhook/secret" hx-swap="none">
-            <input type="hidden" name="gorilla.csrf.Token" value="{{.CSRFToken}}">
-            <button type="submit" class="text-xs text-red-400 hover:text-red-300 transition-colors">Clear</button>
-          </form>
+    <!-- Add/Edit Modal -->
+    <template x-if="showAdd || editingId">
+      <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" @click.self="closeForm()">
+        <div class="bg-surface-900 border border-surface-700/60 rounded-xl p-6 w-full max-w-lg shadow-2xl">
+          <h3 class="font-display font-semibold text-white mb-4" x-text="editingId ? 'Edit Endpoint' : 'Add Endpoint'"></h3>
+          <div class="space-y-4">
+            <div>
+              <label class="block text-xs font-medium text-surface-300 mb-1">Description</label>
+              <input type="text" x-model="form.description" placeholder="e.g. Discord alerts, Billing system"
+                     class="w-full text-sm px-3 py-2 bg-surface-900/60 border border-surface-700/50 rounded-lg text-white placeholder-surface-600 focus:border-accent-500/50 focus:ring-1 focus:ring-accent-500/50 focus:outline-none">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-surface-300 mb-1">URL <span class="text-red-400">*</span></label>
+              <input type="url" x-model="form.url" placeholder="https://example.com/webhook"
+                     class="w-full text-sm px-3 py-2 bg-surface-900/60 border border-surface-700/50 rounded-lg text-white placeholder-surface-600 focus:border-accent-500/50 focus:ring-1 focus:ring-accent-500/50 focus:outline-none">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-surface-300 mb-1">Secret</label>
+              <input type="password" x-model="form.secret" :placeholder="editingId ? 'Leave blank to keep current' : 'HMAC-SHA256 signing key (optional)'"
+                     class="w-full text-sm px-3 py-2 bg-surface-900/60 border border-surface-700/50 rounded-lg text-white placeholder-surface-600 focus:border-accent-500/50 focus:ring-1 focus:ring-accent-500/50 focus:outline-none">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-surface-300 mb-2">Events</label>
+              <div class="grid grid-cols-2 gap-2">
+                <label class="flex items-center gap-2 text-sm text-surface-300 cursor-pointer">
+                  <input type="checkbox" value="*" x-model="form.events" class="rounded border-surface-600 bg-surface-800 text-accent-500 focus:ring-accent-500/50">
+                  <span>All events</span>
+                </label>
+                <template x-for="evt in allEventTypes" :key="evt">
+                  <label class="flex items-center gap-2 text-xs text-surface-400 cursor-pointer" x-show="!form.events.includes('*')">
+                    <input type="checkbox" :value="evt" x-model="form.events" class="rounded border-surface-600 bg-surface-800 text-accent-500 focus:ring-accent-500/50">
+                    <span x-text="evt"></span>
+                  </label>
+                </template>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <input type="checkbox" x-model="form.enabled" class="rounded border-surface-600 bg-surface-800 text-accent-500 focus:ring-accent-500/50">
+              <label class="text-sm text-surface-300">Enabled</label>
+            </div>
+          </div>
+          <div class="flex justify-end gap-3 mt-6">
+            <button @click="closeForm()" class="px-4 py-2 text-sm text-surface-400 hover:text-white transition-colors">Cancel</button>
+            <button @click="saveEndpoint()" class="px-4 py-2 bg-accent-600 hover:bg-accent-500 text-white rounded-lg text-sm font-medium transition-colors shadow-lg shadow-accent-600/20">
+              <span x-text="editingId ? 'Update' : 'Create'"></span>
+            </button>
+          </div>
+          <p x-show="formError" x-text="formError" class="text-sm text-red-400 mt-3"></p>
         </div>
-        {{end}}
-        <form method="POST" action="/settings/webhook/secret" hx-post="/settings/webhook/secret" hx-swap="none" class="flex items-center gap-2">
-          <input type="hidden" name="gorilla.csrf.Token" value="{{.CSRFToken}}">
-          <input type="password" name="webhook_secret" placeholder="{{if .WebhookSecretSet}}Replace existing secret{{else}}Enter signing secret{{end}}"
-                 class="text-sm px-3 py-2 bg-surface-900/60 border border-surface-700/50 rounded-lg text-white placeholder-surface-600 focus:border-accent-500/50 focus:ring-1 focus:ring-accent-500/50 focus:outline-none w-64">
-          <button type="submit"
-                  class="px-3 py-2 bg-accent-600 hover:bg-accent-500 text-white rounded-lg text-sm font-medium transition-colors shadow-lg shadow-accent-600/20">
-            Save
-          </button>
-        </form>
-      {{end}}
-    </div>
-
-    <!-- Webhook Test -->
-    {{if .WebhookURL}}
-    <div class="border-t border-surface-800/40 pt-4">
-      <form method="POST" action="/settings/webhook/test" hx-post="/settings/webhook/test" hx-swap="none">
-        <input type="hidden" name="gorilla.csrf.Token" value="{{.CSRFToken}}">
-        <button type="submit" class="inline-flex items-center gap-2 text-sm text-accent-400 hover:text-accent-300 transition-colors">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"/></svg>
-          Send Test Webhook
-        </button>
-      </form>
-    </div>
-    {{end}}
+      </div>
+    </template>
   </div>
+
+  <script>
+    function webhookManager() {
+      return {
+        endpoints: [],
+        showAdd: false,
+        editingId: null,
+        formError: '',
+        form: { description: '', url: '', secret: '', events: ['*'], enabled: true },
+        allEventTypes: [
+          'status_changed',
+          'gameserver.created', 'gameserver.updated', 'gameserver.deleted',
+          'backup.created', 'backup.deleted', 'backup.restore_completed', 'backup.restore_failed',
+          'worker.connected', 'worker.disconnected',
+          'schedule.task_completed', 'schedule.task_failed'
+        ],
+        init() { this.loadEndpoints(); },
+        async loadEndpoints() {
+          try {
+            const res = await fetch('/api/webhooks');
+            const json = await res.json();
+            this.endpoints = json.data || [];
+          } catch (_) {}
+        },
+        closeForm() { this.showAdd = false; this.editingId = null; this.formError = ''; this.form = { description: '', url: '', secret: '', events: ['*'], enabled: true }; },
+        startEdit(ep) {
+          this.editingId = ep.id;
+          this.form = { description: ep.description, url: ep.url, secret: '', events: [...ep.events], enabled: ep.enabled };
+        },
+        async saveEndpoint() {
+          this.formError = '';
+          const body = { description: this.form.description, url: this.form.url, events: this.form.events, enabled: this.form.enabled };
+          if (this.form.secret) body.secret = this.form.secret;
+          try {
+            let res;
+            if (this.editingId) {
+              res = await fetch('/api/webhooks/' + this.editingId, { method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
+            } else {
+              if (this.form.secret) body.secret = this.form.secret;
+              res = await fetch('/api/webhooks', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
+            }
+            const json = await res.json();
+            if (!res.ok) { this.formError = json.error || 'Failed'; return; }
+            this.closeForm();
+            this.loadEndpoints();
+          } catch (e) { this.formError = e.message; }
+        },
+        async deleteEndpoint(id) {
+          if (!confirm('Delete this webhook endpoint? Pending deliveries will also be removed.')) return;
+          await fetch('/api/webhooks/' + id, { method: 'DELETE' });
+          this.loadEndpoints();
+        },
+        async testEndpoint(id) {
+          try {
+            const res = await fetch('/api/webhooks/' + id + '/test', { method: 'POST' });
+            const json = await res.json();
+            if (json.data && json.data.success) {
+              showToast && showToast('Test webhook delivered successfully');
+            } else {
+              showToast && showToast('Test webhook failed: ' + (json.error || 'HTTP ' + (json.data?.response_status || 'error')));
+            }
+          } catch (e) { showToast && showToast('Test webhook failed: ' + e.message); }
+        }
+      };
+    }
+  </script>
 
   <!-- Authentication Section -->
   <div class="bg-surface-900/40 border border-surface-800/60 rounded-xl p-5 mb-6">

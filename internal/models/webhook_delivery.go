@@ -13,22 +13,23 @@ const (
 )
 
 type WebhookDelivery struct {
-	ID            string
-	EventType     string
-	Payload       string // pre-serialized JSON
-	State         string
-	Attempts      int
-	LastAttemptAt *time.Time
-	NextAttemptAt time.Time
-	LastError     string
-	CreatedAt     time.Time
+	ID                string
+	WebhookEndpointID string
+	EventType         string
+	Payload           string // pre-serialized JSON
+	State             string
+	Attempts          int
+	LastAttemptAt     *time.Time
+	NextAttemptAt     time.Time
+	LastError         string
+	CreatedAt         time.Time
 }
 
 func CreateWebhookDelivery(db *sql.DB, d *WebhookDelivery) error {
 	_, err := db.Exec(
-		`INSERT INTO webhook_deliveries (id, event_type, payload, state, attempts, next_attempt_at, created_at)
-		 VALUES (?, ?, ?, ?, 0, ?, ?)`,
-		d.ID, d.EventType, d.Payload, WebhookStatePending, d.NextAttemptAt, d.CreatedAt,
+		`INSERT INTO webhook_deliveries (id, webhook_endpoint_id, event_type, payload, state, attempts, next_attempt_at, created_at)
+		 VALUES (?, ?, ?, ?, ?, 0, ?, ?)`,
+		d.ID, d.WebhookEndpointID, d.EventType, d.Payload, WebhookStatePending, d.NextAttemptAt, d.CreatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("creating webhook delivery: %w", err)
@@ -38,10 +39,10 @@ func CreateWebhookDelivery(db *sql.DB, d *WebhookDelivery) error {
 
 func GetPendingDeliveries(db *sql.DB, limit int) ([]WebhookDelivery, error) {
 	rows, err := db.Query(
-		`SELECT id, event_type, payload, state, attempts, last_attempt_at, next_attempt_at, last_error, created_at
-		 FROM webhook_deliveries
-		 WHERE state = ? AND next_attempt_at <= datetime('now')
-		 ORDER BY next_attempt_at
+		`SELECT d.id, d.webhook_endpoint_id, d.event_type, d.payload, d.state, d.attempts, d.last_attempt_at, d.next_attempt_at, d.last_error, d.created_at
+		 FROM webhook_deliveries d
+		 WHERE d.state = ? AND d.next_attempt_at <= datetime('now')
+		 ORDER BY d.next_attempt_at
 		 LIMIT ?`,
 		WebhookStatePending, limit,
 	)
@@ -53,7 +54,7 @@ func GetPendingDeliveries(db *sql.DB, limit int) ([]WebhookDelivery, error) {
 	var deliveries []WebhookDelivery
 	for rows.Next() {
 		var d WebhookDelivery
-		if err := rows.Scan(&d.ID, &d.EventType, &d.Payload, &d.State, &d.Attempts, &d.LastAttemptAt, &d.NextAttemptAt, &d.LastError, &d.CreatedAt); err != nil {
+		if err := rows.Scan(&d.ID, &d.WebhookEndpointID, &d.EventType, &d.Payload, &d.State, &d.Attempts, &d.LastAttemptAt, &d.NextAttemptAt, &d.LastError, &d.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scanning webhook delivery row: %w", err)
 		}
 		deliveries = append(deliveries, d)

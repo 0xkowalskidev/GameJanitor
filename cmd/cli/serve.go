@@ -97,7 +97,7 @@ func initServices(database *sql.DB, dispatcher *worker.Dispatcher, localWorker w
 	scheduleSvc := service.NewScheduleService(database, scheduler, logger)
 	authSvc := service.NewAuthService(database, logger)
 	statusMgr := service.NewStatusManager(database, localWorker, broadcaster, querySvc, readyWatcher, dispatcher, registry, gameserverSvc.Start, logger)
-	webhookWorker := service.NewWebhookWorker(database, settingsSvc, broadcaster, logger)
+	webhookWorker := service.NewWebhookWorker(database, broadcaster, logger)
 
 	return &services{
 		broadcaster:   broadcaster,
@@ -296,7 +296,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 	netInfo := netinfo.Detect(logger)
 
-	router, err := web.NewRouter(gameStore, svcs.gameserverSvc, svcs.consoleSvc, svcs.fileSvc, svcs.scheduleSvc, svcs.backupSvc, svcs.querySvc, svcs.settingsSvc, svcs.authSvc, svcs.broadcaster, svcs.webhookWorker, netInfo, registry, database, logPath, cfg.DataDir, cfg.BindAddress, cfg.Port, sftpPort, role, logger)
+	router, err := web.NewRouter(gameStore, svcs.gameserverSvc, svcs.consoleSvc, svcs.fileSvc, svcs.scheduleSvc, svcs.backupSvc, svcs.querySvc, svcs.settingsSvc, svcs.authSvc, svcs.broadcaster, netInfo, registry, database, logPath, cfg.DataDir, cfg.BindAddress, cfg.Port, sftpPort, role, logger)
 	if err != nil {
 		return fmt.Errorf("failed to initialize router: %w", err)
 	}

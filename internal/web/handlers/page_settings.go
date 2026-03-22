@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"fmt"
+	"database/sql"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -16,18 +16,18 @@ import (
 )
 
 type PageSettingsHandlers struct {
-	settingsSvc    *service.SettingsService
-	workerNodeSvc  *service.WorkerNodeService
-	authSvc        *service.AuthService
-	webhookWorker  *service.WebhookWorker
-	registry       *worker.Registry
-	renderer       *Renderer
-	dataDir        string
-	log            *slog.Logger
+	settingsSvc   *service.SettingsService
+	workerNodeSvc *service.WorkerNodeService
+	authSvc       *service.AuthService
+	db            *sql.DB
+	registry      *worker.Registry
+	renderer      *Renderer
+	dataDir       string
+	log           *slog.Logger
 }
 
-func NewPageSettingsHandlers(settingsSvc *service.SettingsService, workerNodeSvc *service.WorkerNodeService, authSvc *service.AuthService, webhookWorker *service.WebhookWorker, registry *worker.Registry, renderer *Renderer, dataDir string, log *slog.Logger) *PageSettingsHandlers {
-	return &PageSettingsHandlers{settingsSvc: settingsSvc, workerNodeSvc: workerNodeSvc, authSvc: authSvc, webhookWorker: webhookWorker, registry: registry, renderer: renderer, dataDir: dataDir, log: log}
+func NewPageSettingsHandlers(settingsSvc *service.SettingsService, workerNodeSvc *service.WorkerNodeService, authSvc *service.AuthService, db *sql.DB, registry *worker.Registry, renderer *Renderer, dataDir string, log *slog.Logger) *PageSettingsHandlers {
+	return &PageSettingsHandlers{settingsSvc: settingsSvc, workerNodeSvc: workerNodeSvc, authSvc: authSvc, db: db, registry: registry, renderer: renderer, dataDir: dataDir, log: log}
 }
 
 func (h *PageSettingsHandlers) SettingsPage(w http.ResponseWriter, r *http.Request) {
@@ -56,12 +56,7 @@ func (h *PageSettingsHandlers) SettingsPage(w http.ResponseWriter, r *http.Reque
 		"RateLimitLoginFromEnv":    h.settingsSvc.IsRateLimitLoginFromEnv(),
 		"TrustProxyHeaders":        h.settingsSvc.GetTrustProxyHeaders(),
 		"TrustProxyHeadersFromEnv": h.settingsSvc.IsTrustProxyHeadersFromEnv(),
-		"WebhookEnabled":           h.settingsSvc.GetWebhookEnabled(),
-		"WebhookEnabledFromEnv":    h.settingsSvc.IsWebhookEnabledFromEnv(),
-		"WebhookURL":               h.settingsSvc.GetWebhookURL(),
-		"WebhookURLFromEnv":        h.settingsSvc.IsWebhookURLFromEnv(),
-		"WebhookSecretSet":         h.settingsSvc.GetWebhookSecret() != "",
-		"WebhookSecretFromEnv":     h.settingsSvc.IsWebhookSecretFromEnv(),
+		"WebhookEndpoints": h.webhookEndpoints(),
 	}
 
 	if h.registry != nil {
@@ -540,107 +535,13 @@ func (h *PageSettingsHandlers) SetTrustProxyHeaders(enabled bool) http.HandlerFu
 		"Trust proxy headers", "trust proxy headers updated", enabled)
 }
 
-func (h *PageSettingsHandlers) SetWebhookEnabled(enabled bool) http.HandlerFunc {
-	return h.boolToggleHandler(h.settingsSvc.IsWebhookEnabledFromEnv, h.settingsSvc.SetWebhookEnabled,
-		"Webhook enabled", "webhook enabled updated", enabled)
-}
-
-func (h *PageSettingsHandlers) SaveWebhookURL(w http.ResponseWriter, r *http.Request) {
-	if h.settingsSvc.IsWebhookURLFromEnv() {
-		http.Error(w, "Webhook URL is controlled by environment variable", http.StatusBadRequest)
-		return
-	}
-
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid form data", http.StatusBadRequest)
-		return
-	}
-
-	url := strings.TrimSpace(r.FormValue("webhook_url"))
-	if url == "" {
-		http.Error(w, "URL is required", http.StatusBadRequest)
-		return
-	}
-
-	if err := h.settingsSvc.SetWebhookURL(url); err != nil {
-		h.log.Error("setting webhook url", "error", err)
-		http.Error(w, "Failed to save webhook URL", http.StatusInternalServerError)
-		return
-	}
-
-	h.log.Info("webhook URL updated")
-	w.Header().Set("HX-Redirect", "/settings")
-	w.WriteHeader(http.StatusOK)
-}
-
-func (h *PageSettingsHandlers) ClearWebhookURL(w http.ResponseWriter, r *http.Request) {
-	if err := h.settingsSvc.ClearWebhookURL(); err != nil {
-		h.log.Error("clearing webhook url", "error", err)
-		http.Error(w, "Failed to clear webhook URL", http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("HX-Redirect", "/settings")
-	w.WriteHeader(http.StatusOK)
-}
-
-func (h *PageSettingsHandlers) SaveWebhookSecret(w http.ResponseWriter, r *http.Request) {
-	if h.settingsSvc.IsWebhookSecretFromEnv() {
-		http.Error(w, "Webhook secret is controlled by environment variable", http.StatusBadRequest)
-		return
-	}
-
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid form data", http.StatusBadRequest)
-		return
-	}
-
-	secret := strings.TrimSpace(r.FormValue("webhook_secret"))
-	if secret == "" {
-		http.Error(w, "Secret is required", http.StatusBadRequest)
-		return
-	}
-
-	if err := h.settingsSvc.SetWebhookSecret(secret); err != nil {
-		h.log.Error("setting webhook secret", "error", err)
-		http.Error(w, "Failed to save webhook secret", http.StatusInternalServerError)
-		return
-	}
-
-	h.log.Info("webhook secret updated")
-	w.Header().Set("HX-Redirect", "/settings")
-	w.WriteHeader(http.StatusOK)
-}
-
-func (h *PageSettingsHandlers) ClearWebhookSecret(w http.ResponseWriter, r *http.Request) {
-	if err := h.settingsSvc.ClearWebhookSecret(); err != nil {
-		h.log.Error("clearing webhook secret", "error", err)
-		http.Error(w, "Failed to clear webhook secret", http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("HX-Redirect", "/settings")
-	w.WriteHeader(http.StatusOK)
-}
-
-func (h *PageSettingsHandlers) TestWebhook(w http.ResponseWriter, r *http.Request) {
-	if h.webhookWorker == nil {
-		http.Error(w, "Webhooks not configured", http.StatusBadRequest)
-		return
-	}
-
-	statusCode, err := h.webhookWorker.SendTest()
+func (h *PageSettingsHandlers) webhookEndpoints() []models.WebhookEndpoint {
+	endpoints, err := models.ListWebhookEndpoints(h.db)
 	if err != nil {
-		http.Error(w, "Webhook test failed: "+err.Error(), http.StatusBadRequest)
-		return
+		h.log.Error("listing webhook endpoints for settings page", "error", err)
+		return nil
 	}
-
-	if statusCode >= 200 && statusCode < 300 {
-		w.Header().Set("HX-Redirect", "/settings")
-		w.WriteHeader(http.StatusOK)
-	} else {
-		http.Error(w, fmt.Sprintf("Webhook returned status %d", statusCode), http.StatusBadRequest)
-	}
+	return endpoints
 }
 
 func (h *PageSettingsHandlers) SetLocalhostBypass(enabled bool) http.HandlerFunc {

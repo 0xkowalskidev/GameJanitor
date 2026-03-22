@@ -12,6 +12,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"path"
 	"sync"
 	"time"
 
@@ -71,7 +72,6 @@ type scheduledTaskEventData struct {
 
 type WebhookWorker struct {
 	db          *sql.DB
-	settingsSvc *SettingsService
 	broadcaster *EventBroadcaster
 	client      *http.Client
 	log         *slog.Logger
@@ -79,10 +79,9 @@ type WebhookWorker struct {
 	wg          sync.WaitGroup
 }
 
-func NewWebhookWorker(db *sql.DB, settingsSvc *SettingsService, broadcaster *EventBroadcaster, log *slog.Logger) *WebhookWorker {
+func NewWebhookWorker(db *sql.DB, broadcaster *EventBroadcaster, log *slog.Logger) *WebhookWorker {
 	return &WebhookWorker{
 		db:          db,
-		settingsSvc: settingsSvc,
 		broadcaster: broadcaster,
 		client:      &http.Client{Timeout: 10 * time.Second},
 		log:         log,
@@ -127,22 +126,24 @@ func (w *WebhookWorker) subscribeLoop(ctx context.Context) {
 }
 
 func (w *WebhookWorker) enqueueEvent(event WebhookEvent) {
-	if !w.settingsSvc.GetWebhookEnabled() {
+	// Skip non-transition status events (e.g., query data refresh sends running->running)
+	if se, ok := event.(StatusEvent); ok && se.OldStatus == se.NewStatus {
 		return
 	}
 
-	payload := WebhookPayload{
-		ID:        uuid.New().String(),
-		Timestamp: event.EventTimestamp(),
-		EventType: event.EventType(),
+	endpoints, err := models.ListEnabledWebhookEndpoints(w.db)
+	if err != nil {
+		w.log.Error("webhook: failed to list enabled endpoints", "error", err)
+		return
+	}
+	if len(endpoints) == 0 {
+		return
 	}
 
+	// Build payload data once (shared across all endpoints)
+	var payloadData any
 	switch ev := event.(type) {
 	case StatusEvent:
-		// Skip non-transition events (e.g., query data refresh sends running->running)
-		if ev.OldStatus == ev.NewStatus {
-			return
-		}
 		data := statusChangedData{
 			GameserverID: ev.GameserverID,
 			OldStatus:    ev.OldStatus,
@@ -160,10 +161,10 @@ func (w *WebhookWorker) enqueueEvent(event WebhookEvent) {
 				MemoryLimitMB: gs.MemoryLimitMB,
 			}
 		}
-		payload.Data = data
+		payloadData = data
 
 	case GameserverEvent:
-		payload.Data = gameserverEventData{
+		payloadData = gameserverEventData{
 			GameserverID:  ev.GameserverID,
 			Name:          ev.Name,
 			GameID:        ev.GameID,
@@ -172,7 +173,7 @@ func (w *WebhookWorker) enqueueEvent(event WebhookEvent) {
 		}
 
 	case BackupEvent:
-		payload.Data = backupEventData{
+		payloadData = backupEventData{
 			GameserverID: ev.GameserverID,
 			BackupID:     ev.BackupID,
 			BackupName:   ev.BackupName,
@@ -180,12 +181,12 @@ func (w *WebhookWorker) enqueueEvent(event WebhookEvent) {
 		}
 
 	case WorkerEvent:
-		payload.Data = workerEventData{
+		payloadData = workerEventData{
 			WorkerID: ev.WorkerID,
 		}
 
 	case ScheduledTaskEvent:
-		payload.Data = scheduledTaskEventData{
+		payloadData = scheduledTaskEventData{
 			GameserverID: ev.GameserverID,
 			ScheduleID:   ev.ScheduleID,
 			TaskType:     ev.TaskType,
@@ -197,23 +198,59 @@ func (w *WebhookWorker) enqueueEvent(event WebhookEvent) {
 		return
 	}
 
-	body, err := json.Marshal(payload)
-	if err != nil {
-		w.log.Error("webhook: failed to marshal payload", "event_type", event.EventType(), "error", err)
-		return
-	}
+	eventType := event.EventType()
 
-	now := time.Now()
-	delivery := &models.WebhookDelivery{
-		ID:            payload.ID,
-		EventType:     payload.EventType,
-		Payload:       string(body),
-		NextAttemptAt: now,
-		CreatedAt:     now,
+	for _, ep := range endpoints {
+		var events []string
+		if err := json.Unmarshal([]byte(ep.Events), &events); err != nil {
+			w.log.Warn("webhook: invalid events filter", "endpoint_id", ep.ID, "error", err)
+			continue
+		}
+
+		if !matchEventFilter(eventType, events) {
+			continue
+		}
+
+		payload := WebhookPayload{
+			ID:        uuid.New().String(),
+			Timestamp: event.EventTimestamp(),
+			EventType: eventType,
+			Data:      payloadData,
+		}
+
+		body, err := json.Marshal(payload)
+		if err != nil {
+			w.log.Error("webhook: failed to marshal payload", "event_type", eventType, "error", err)
+			return
+		}
+
+		now := time.Now()
+		delivery := &models.WebhookDelivery{
+			ID:                payload.ID,
+			WebhookEndpointID: ep.ID,
+			EventType:         payload.EventType,
+			Payload:           string(body),
+			NextAttemptAt:     now,
+			CreatedAt:         now,
+		}
+		if err := models.CreateWebhookDelivery(w.db, delivery); err != nil {
+			w.log.Error("webhook: failed to enqueue delivery", "endpoint_id", ep.ID, "event_type", eventType, "error", err)
+		}
 	}
-	if err := models.CreateWebhookDelivery(w.db, delivery); err != nil {
-		w.log.Error("webhook: failed to enqueue delivery", "event_type", event.EventType(), "error", err)
+}
+
+// matchEventFilter checks if an event type matches any of the filter patterns.
+// Supports "*" for all events and glob patterns like "gameserver.*".
+func matchEventFilter(eventType string, patterns []string) bool {
+	for _, p := range patterns {
+		if p == "*" {
+			return true
+		}
+		if matched, _ := path.Match(p, eventType); matched {
+			return true
+		}
 	}
+	return false
 }
 
 const (
@@ -250,27 +287,41 @@ func (w *WebhookWorker) deliverLoop(ctx context.Context) {
 }
 
 func (w *WebhookWorker) processPendingDeliveries() {
-	url := w.settingsSvc.GetWebhookURL()
-	if url == "" {
-		return
-	}
-
 	deliveries, err := models.GetPendingDeliveries(w.db, 10)
 	if err != nil {
 		w.log.Error("webhook: failed to fetch pending deliveries", "error", err)
 		return
 	}
 
-	secret := w.settingsSvc.GetWebhookSecret()
+	// Cache endpoint lookups within this poll cycle
+	endpointCache := make(map[string]*models.WebhookEndpoint)
 
 	for _, d := range deliveries {
-		statusCode, deliverErr := w.deliver(url, []byte(d.Payload), secret)
+		ep, cached := endpointCache[d.WebhookEndpointID]
+		if !cached {
+			ep, err = models.GetWebhookEndpoint(w.db, d.WebhookEndpointID)
+			if err != nil {
+				w.log.Error("webhook: failed to fetch endpoint for delivery", "id", d.ID, "endpoint_id", d.WebhookEndpointID, "error", err)
+				continue
+			}
+			endpointCache[d.WebhookEndpointID] = ep
+		}
+
+		if ep == nil {
+			// Endpoint was deleted but CASCADE didn't clean up (shouldn't happen)
+			if err := models.MarkDeliveryFailed(w.db, d.ID, "endpoint deleted"); err != nil {
+				w.log.Error("webhook: failed to mark orphan delivery failed", "id", d.ID, "error", err)
+			}
+			continue
+		}
+
+		statusCode, deliverErr := w.deliver(ep.URL, []byte(d.Payload), ep.Secret)
 
 		if deliverErr == nil && statusCode >= 200 && statusCode < 300 {
 			if err := models.MarkDeliverySuccess(w.db, d.ID); err != nil {
 				w.log.Error("webhook: failed to mark delivery success", "id", d.ID, "error", err)
 			} else {
-				w.log.Info("webhook: delivered", "id", d.ID, "event_type", d.EventType, "response_status", statusCode)
+				w.log.Info("webhook: delivered", "id", d.ID, "event_type", d.EventType, "endpoint_id", ep.ID, "response_status", statusCode)
 			}
 			continue
 		}
@@ -287,7 +338,7 @@ func (w *WebhookWorker) processPendingDeliveries() {
 			if err := models.MarkDeliveryFailed(w.db, d.ID, errMsg); err != nil {
 				w.log.Error("webhook: failed to mark delivery failed", "id", d.ID, "error", err)
 			}
-			w.log.Error("webhook: delivery permanently failed", "id", d.ID, "event_type", d.EventType, "attempts", newAttempts, "last_error", errMsg)
+			w.log.Error("webhook: delivery permanently failed", "id", d.ID, "event_type", d.EventType, "endpoint_id", ep.ID, "attempts", newAttempts, "last_error", errMsg)
 			continue
 		}
 
@@ -301,7 +352,7 @@ func (w *WebhookWorker) processPendingDeliveries() {
 			w.log.Error("webhook: failed to mark delivery for retry", "id", d.ID, "error", err)
 		}
 		w.log.Warn("webhook: delivery failed, will retry",
-			"id", d.ID, "event_type", d.EventType, "attempt", newAttempts,
+			"id", d.ID, "event_type", d.EventType, "endpoint_id", ep.ID, "attempt", newAttempts,
 			"next_attempt", nextAttempt.Format(time.RFC3339), "error", errMsg)
 	}
 }
@@ -330,27 +381,4 @@ func (w *WebhookWorker) deliver(url string, body []byte, secret string) (int, er
 	io.Copy(io.Discard, resp.Body)
 
 	return resp.StatusCode, nil
-}
-
-// SendTest sends a test webhook payload synchronously, bypassing the persistent queue.
-func (w *WebhookWorker) SendTest() (statusCode int, err error) {
-	url := w.settingsSvc.GetWebhookURL()
-	if url == "" {
-		return 0, fmt.Errorf("no webhook URL configured")
-	}
-
-	payload := WebhookPayload{
-		ID:        "test",
-		Timestamp: time.Now().UTC(),
-		EventType: "webhook.test",
-		Data:      map[string]string{},
-	}
-
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return 0, fmt.Errorf("marshaling test payload: %w", err)
-	}
-
-	secret := w.settingsSvc.GetWebhookSecret()
-	return w.deliver(url, body, secret)
 }

@@ -32,7 +32,6 @@ func NewRouter(
 	settingsSvc *service.SettingsService,
 	authSvc *service.AuthService,
 	broadcaster *service.EventBroadcaster,
-	webhookWorker *service.WebhookWorker,
 	netInfo *netinfo.Info,
 	registry *worker.Registry,
 	db *sql.DB,
@@ -95,7 +94,8 @@ func NewRouter(
 	authHandlers := handlers.NewAuthHandlers(authSvc, log)
 	workerNodeSvc := service.NewWorkerNodeService(db, log)
 	workerHandlers := handlers.NewWorkerHandlers(registry, workerNodeSvc, gameserverSvc, log)
-	settingsAPIHandlers := handlers.NewSettingsAPIHandlers(settingsSvc, webhookWorker, log)
+	settingsAPIHandlers := handlers.NewSettingsAPIHandlers(settingsSvc, log)
+	webhookHandlers := handlers.NewWebhookHandlers(db, log)
 	auditHandlers := handlers.NewAuditHandlers(db, log)
 
 	requireAdmin := RequireAdmin(settingsSvc)
@@ -204,7 +204,16 @@ func NewRouter(
 			r.Use(requireAdmin)
 			r.Get("/", settingsAPIHandlers.Get)
 			r.Patch("/", settingsAPIHandlers.Update)
-			r.Post("/webhook-test", settingsAPIHandlers.TestWebhook)
+		})
+
+		r.Route("/webhooks", func(r chi.Router) {
+			r.Use(requireAdmin)
+			r.Get("/", webhookHandlers.List)
+			r.Post("/", webhookHandlers.Create)
+			r.Get("/{webhookId}", webhookHandlers.Get)
+			r.Patch("/{webhookId}", webhookHandlers.Update)
+			r.Delete("/{webhookId}", webhookHandlers.Delete)
+			r.Post("/{webhookId}/test", webhookHandlers.Test)
 		})
 
 		r.Route("/tokens", func(r chi.Router) {
@@ -261,7 +270,7 @@ func NewRouter(
 	pageDashboard := handlers.NewPageDashboardHandlers(gameStore, gameserverSvc, querySvc, settingsSvc, registry, renderer, log)
 	pageGames := handlers.NewPageGameHandlers(gameStore, gameserverSvc, renderer, log)
 	pageGameservers := handlers.NewPageGameserverHandlers(gameStore, gameserverSvc, scheduleSvc, querySvc, settingsSvc, registry, renderer, db, log)
-	pageSettings := handlers.NewPageSettingsHandlers(settingsSvc, workerNodeSvc, authSvc, webhookWorker, registry, renderer, dataDir, log)
+	pageSettings := handlers.NewPageSettingsHandlers(settingsSvc, workerNodeSvc, authSvc, db, registry, renderer, dataDir, log)
 	pageAudit := handlers.NewPageAuditHandlers(db, renderer, log)
 	pageActions := handlers.NewPageActionHandlers(gameStore, gameserverSvc, renderer, log)
 	pageConsole := handlers.NewPageConsoleHandlers(consoleSvc, gameStore, gameserverSvc, renderer, log)
@@ -305,13 +314,6 @@ func NewRouter(
 			r.Post("/rate-limit/login", pageSettings.SaveRateLimitLogin)
 			r.Post("/trust-proxy-headers/enable", pageSettings.SetTrustProxyHeaders(true))
 			r.Post("/trust-proxy-headers/disable", pageSettings.SetTrustProxyHeaders(false))
-			r.Post("/webhook/enable", pageSettings.SetWebhookEnabled(true))
-			r.Post("/webhook/disable", pageSettings.SetWebhookEnabled(false))
-			r.Post("/webhook/url", pageSettings.SaveWebhookURL)
-			r.Delete("/webhook/url", pageSettings.ClearWebhookURL)
-			r.Post("/webhook/secret", pageSettings.SaveWebhookSecret)
-			r.Delete("/webhook/secret", pageSettings.ClearWebhookSecret)
-			r.Post("/webhook/test", pageSettings.TestWebhook)
 			r.Post("/workers/{workerID}/port-range", pageSettings.SaveWorkerPortRange)
 			r.Delete("/workers/{workerID}/port-range", pageSettings.ClearWorkerPortRange)
 			r.Post("/workers/{workerID}/limits", pageSettings.SaveWorkerLimits)
