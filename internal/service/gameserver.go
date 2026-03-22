@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/warsmite/gamejanitor/internal/docker"
@@ -29,6 +30,7 @@ type GameserverService struct {
 	gameStore    *games.GameStore
 	store        BackupStore
 	dataDir      string
+	placementMu  sync.Mutex // serializes port allocation + gameserver creation to prevent races
 }
 
 func NewGameserverService(db *sql.DB, dispatcher *worker.Dispatcher, broadcaster *EventBus, settingsSvc *SettingsService, gameStore *games.GameStore, store BackupStore, dataDir string, log *slog.Logger) *GameserverService {
@@ -53,6 +55,11 @@ func (s *GameserverService) GetGameserver(id string) (*models.Gameserver, error)
 }
 
 func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gameserver) (string, error) {
+	// Serialize placement + port allocation + DB write to prevent concurrent creates
+	// from allocating the same ports or overcommitting a node.
+	s.placementMu.Lock()
+	defer s.placementMu.Unlock()
+
 	gs.ID = uuid.New().String()
 	gs.VolumeName = docker.ContainerPrefix + gs.ID
 	gs.Status = StatusStopped
@@ -70,7 +77,6 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gam
 		return "", ErrNotFoundf("game %s not found", gs.GameID)
 	}
 
-	// Pick worker for placement BEFORE allocating ports so ports are scoped to the target node
 	var targetWorker worker.Worker
 	var nodeID string
 	if gs.NodeID != nil && *gs.NodeID != "" {
