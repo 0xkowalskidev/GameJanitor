@@ -51,6 +51,7 @@ CREATE TABLE tokens (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     hashed_token TEXT NOT NULL,
+    token_prefix TEXT NOT NULL DEFAULT '',
     scope TEXT NOT NULL DEFAULT 'gameserver',
     gameserver_ids JSON NOT NULL DEFAULT '[]',
     permissions JSON NOT NULL DEFAULT '[]',

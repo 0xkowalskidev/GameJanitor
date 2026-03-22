@@ -11,6 +11,7 @@ type Token struct {
 	ID            string          `json:"id"`
 	Name          string          `json:"name"`
 	HashedToken   string          `json:"-"`
+	TokenPrefix   string          `json:"-"`
 	Scope         string          `json:"scope"`
 	GameserverIDs json.RawMessage `json:"gameserver_ids"`
 	Permissions   json.RawMessage `json:"permissions"`
@@ -20,7 +21,7 @@ type Token struct {
 }
 
 func ListTokens(db *sql.DB) ([]Token, error) {
-	rows, err := db.Query("SELECT id, name, hashed_token, scope, gameserver_ids, permissions, created_at, last_used_at, expires_at FROM tokens ORDER BY created_at DESC")
+	rows, err := db.Query("SELECT id, name, hashed_token, token_prefix, scope, gameserver_ids, permissions, created_at, last_used_at, expires_at FROM tokens ORDER BY created_at DESC")
 	if err != nil {
 		return nil, fmt.Errorf("listing tokens: %w", err)
 	}
@@ -29,7 +30,7 @@ func ListTokens(db *sql.DB) ([]Token, error) {
 	var tokens []Token
 	for rows.Next() {
 		var t Token
-		if err := rows.Scan(&t.ID, &t.Name, &t.HashedToken, &t.Scope, &t.GameserverIDs, &t.Permissions, &t.CreatedAt, &t.LastUsedAt, &t.ExpiresAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.Name, &t.HashedToken, &t.TokenPrefix, &t.Scope, &t.GameserverIDs, &t.Permissions, &t.CreatedAt, &t.LastUsedAt, &t.ExpiresAt); err != nil {
 			return nil, fmt.Errorf("scanning token row: %w", err)
 		}
 		tokens = append(tokens, t)
@@ -39,8 +40,8 @@ func ListTokens(db *sql.DB) ([]Token, error) {
 
 func GetToken(db *sql.DB, id string) (*Token, error) {
 	var t Token
-	err := db.QueryRow("SELECT id, name, hashed_token, scope, gameserver_ids, permissions, created_at, last_used_at, expires_at FROM tokens WHERE id = ?", id).
-		Scan(&t.ID, &t.Name, &t.HashedToken, &t.Scope, &t.GameserverIDs, &t.Permissions, &t.CreatedAt, &t.LastUsedAt, &t.ExpiresAt)
+	err := db.QueryRow("SELECT id, name, hashed_token, token_prefix, scope, gameserver_ids, permissions, created_at, last_used_at, expires_at FROM tokens WHERE id = ?", id).
+		Scan(&t.ID, &t.Name, &t.HashedToken, &t.TokenPrefix, &t.Scope, &t.GameserverIDs, &t.Permissions, &t.CreatedAt, &t.LastUsedAt, &t.ExpiresAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -50,11 +51,26 @@ func GetToken(db *sql.DB, id string) (*Token, error) {
 	return &t, nil
 }
 
+// GetTokenByPrefix finds a token candidate by its prefix for fast lookup.
+// Returns nil if no token with this prefix exists.
+func GetTokenByPrefix(db *sql.DB, prefix string) (*Token, error) {
+	var t Token
+	err := db.QueryRow("SELECT id, name, hashed_token, token_prefix, scope, gameserver_ids, permissions, created_at, last_used_at, expires_at FROM tokens WHERE token_prefix = ?", prefix).
+		Scan(&t.ID, &t.Name, &t.HashedToken, &t.TokenPrefix, &t.Scope, &t.GameserverIDs, &t.Permissions, &t.CreatedAt, &t.LastUsedAt, &t.ExpiresAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("getting token by prefix %s: %w", prefix, err)
+	}
+	return &t, nil
+}
+
 func CreateToken(db *sql.DB, t *Token) error {
 	t.CreatedAt = time.Now()
 	_, err := db.Exec(
-		"INSERT INTO tokens (id, name, hashed_token, scope, gameserver_ids, permissions, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-		t.ID, t.Name, t.HashedToken, t.Scope, t.GameserverIDs, t.Permissions, t.CreatedAt, t.ExpiresAt,
+		"INSERT INTO tokens (id, name, hashed_token, token_prefix, scope, gameserver_ids, permissions, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		t.ID, t.Name, t.HashedToken, t.TokenPrefix, t.Scope, t.GameserverIDs, t.Permissions, t.CreatedAt, t.ExpiresAt,
 	)
 	if err != nil {
 		return fmt.Errorf("creating token %s: %w", t.ID, err)
@@ -95,4 +111,3 @@ func TokenExistsByScope(db *sql.DB, id string, scope string) bool {
 	).Scan(&exists)
 	return err == nil
 }
-

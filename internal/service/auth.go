@@ -45,6 +45,30 @@ func NewAuthService(db *sql.DB, log *slog.Logger) *AuthService {
 }
 
 func (s *AuthService) ValidateToken(rawToken string) *models.Token {
+	prefix := tokenPrefix(rawToken)
+
+	// Fast path: lookup by prefix (single DB query + one bcrypt verify)
+	if prefix != "" {
+		t, err := models.GetTokenByPrefix(s.db, prefix)
+		if err != nil {
+			s.log.Error("failed to lookup token by prefix", "error", err)
+			return nil
+		}
+		if t != nil {
+			if err := bcrypt.CompareHashAndPassword([]byte(t.HashedToken), []byte(rawToken)); err == nil {
+				if t.ExpiresAt != nil && t.ExpiresAt.Before(time.Now()) {
+					s.log.Debug("token expired", "id", t.ID, "expired_at", t.ExpiresAt)
+					return nil
+				}
+				if err := models.UpdateTokenLastUsed(s.db, t.ID); err != nil {
+					s.log.Warn("failed to update token last_used_at", "id", t.ID, "error", err)
+				}
+				return t
+			}
+		}
+	}
+
+	// Fallback: scan all tokens (handles tokens created before prefix was stored)
 	tokens, err := models.ListTokens(s.db)
 	if err != nil {
 		s.log.Error("failed to list tokens for validation", "error", err)
@@ -69,6 +93,17 @@ func (s *AuthService) ValidateToken(rawToken string) *models.Token {
 	}
 
 	return nil
+}
+
+// tokenPrefix extracts a lookup prefix from a raw token.
+// Tokens are formatted as "gj_<hex>", prefix is first 16 chars after "gj_".
+func tokenPrefix(rawToken string) string {
+	const prefixStart = 3  // skip "gj_"
+	const prefixLen = 16
+	if len(rawToken) >= prefixStart+prefixLen {
+		return rawToken[prefixStart : prefixStart+prefixLen]
+	}
+	return ""
 }
 
 // Used by the Enable Auth flow for first-time setup.
@@ -102,6 +137,7 @@ func (s *AuthService) CreateAdminToken(name string) (string, *models.Token, erro
 		ID:            uuid.New().String(),
 		Name:          name,
 		HashedToken:   string(hashed),
+		TokenPrefix:   tokenPrefix(rawToken),
 		Scope:         ScopeAdmin,
 		GameserverIDs: json.RawMessage("[]"),
 		Permissions:   permsJSON,
@@ -147,6 +183,7 @@ func (s *AuthService) CreateCustomToken(name string, gameserverIDs []string, per
 		ID:            uuid.New().String(),
 		Name:          name,
 		HashedToken:   string(hashed),
+		TokenPrefix:   tokenPrefix(rawToken),
 		Scope:         ScopeCustom,
 		GameserverIDs: gsIDsJSON,
 		Permissions:   permsJSON,
@@ -180,6 +217,7 @@ func (s *AuthService) CreateWorkerToken(name string) (string, *models.Token, err
 		ID:            uuid.New().String(),
 		Name:          name,
 		HashedToken:   string(hashed),
+		TokenPrefix:   tokenPrefix(rawToken),
 		Scope:         ScopeWorker,
 		GameserverIDs: json.RawMessage("[]"),
 		Permissions:   json.RawMessage("[]"),
