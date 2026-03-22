@@ -75,14 +75,14 @@ type scheduledTaskEventData struct {
 
 type WebhookWorker struct {
 	db          *sql.DB
-	broadcaster *EventBroadcaster
+	broadcaster *EventBus
 	client      *http.Client
 	log         *slog.Logger
 	cancel      context.CancelFunc
 	wg          sync.WaitGroup
 }
 
-func NewWebhookWorker(db *sql.DB, broadcaster *EventBroadcaster, log *slog.Logger) *WebhookWorker {
+func NewWebhookWorker(db *sql.DB, broadcaster *EventBus, log *slog.Logger) *WebhookWorker {
 	return &WebhookWorker{
 		db:          db,
 		broadcaster: broadcaster,
@@ -197,6 +197,23 @@ func (w *WebhookWorker) enqueueEvent(event WebhookEvent) {
 			TaskType:     ev.TaskType,
 			Error:        ev.Error,
 		}
+
+	case ImagePullingEvent:
+		payloadData = map[string]string{"gameserver_id": ev.GameserverID}
+	case ContainerCreatingEvent:
+		payloadData = map[string]string{"gameserver_id": ev.GameserverID}
+	case ContainerStartedEvent:
+		payloadData = map[string]string{"gameserver_id": ev.GameserverID}
+	case GameserverReadyEvent:
+		payloadData = map[string]string{"gameserver_id": ev.GameserverID}
+	case ContainerStoppingEvent:
+		payloadData = map[string]string{"gameserver_id": ev.GameserverID}
+	case ContainerStoppedEvent:
+		payloadData = map[string]string{"gameserver_id": ev.GameserverID}
+	case ContainerExitedEvent:
+		payloadData = map[string]string{"gameserver_id": ev.GameserverID}
+	case GameserverErrorEvent:
+		payloadData = map[string]any{"gameserver_id": ev.GameserverID, "reason": ev.Reason}
 
 	default:
 		w.log.Warn("webhook: unknown event type", "type", event.EventType())

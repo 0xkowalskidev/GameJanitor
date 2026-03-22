@@ -22,11 +22,11 @@ type BackupService struct {
 	gameStore     *games.GameStore
 	store         BackupStore
 	settingsSvc   *SettingsService
-	broadcaster   *EventBroadcaster
+	broadcaster   *EventBus
 	log           *slog.Logger
 }
 
-func NewBackupService(db *sql.DB, dispatcher *worker.Dispatcher, gameserverSvc *GameserverService, gameStore *games.GameStore, store BackupStore, settingsSvc *SettingsService, broadcaster *EventBroadcaster, log *slog.Logger) *BackupService {
+func NewBackupService(db *sql.DB, dispatcher *worker.Dispatcher, gameserverSvc *GameserverService, gameStore *games.GameStore, store BackupStore, settingsSvc *SettingsService, broadcaster *EventBus, log *slog.Logger) *BackupService {
 	return &BackupService{db: db, dispatcher: dispatcher, gameserverSvc: gameserverSvc, gameStore: gameStore, store: store, settingsSvc: settingsSvc, broadcaster: broadcaster, log: log}
 }
 
@@ -179,7 +179,6 @@ func (s *BackupService) RestoreBackup(ctx context.Context, backupID string) (err
 
 	s.log.Info("restoring backup", "backup_id", backupID, "gameserver_id", gs.ID, "was_running", wasRunning)
 
-	setGameserverStatus(s.db, s.log, s.broadcaster, gs.ID, StatusRestoring, "")
 	defer func() {
 		if err != nil {
 			s.broadcaster.Publish(BackupEvent{
@@ -190,10 +189,7 @@ func (s *BackupService) RestoreBackup(ctx context.Context, backupID string) (err
 				BackupID:     backupID,
 				Error:        err.Error(),
 			})
-			if curr, e := models.GetGameserver(s.db, gs.ID); e == nil && curr != nil && curr.Status != StatusError {
-				setGameserverStatus(s.db, s.log, s.broadcaster, gs.ID, StatusError,
-					operationFailedReason("Backup restore failed", err))
-			}
+			s.broadcaster.Publish(GameserverErrorEvent{GameserverID: gs.ID, Reason: operationFailedReason("Backup restore failed", err), Timestamp: time.Now()})
 		}
 	}()
 
@@ -240,7 +236,7 @@ func (s *BackupService) RestoreBackup(ctx context.Context, backupID string) (err
 			return fmt.Errorf("restarting gameserver after restore: %w", err)
 		}
 	} else {
-		setGameserverStatus(s.db, s.log, s.broadcaster, gs.ID, StatusStopped, "")
+		s.broadcaster.Publish(ContainerStoppedEvent{GameserverID: gs.ID, Timestamp: time.Now()})
 	}
 
 	return nil

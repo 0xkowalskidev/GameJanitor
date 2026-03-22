@@ -47,7 +47,7 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 	}
 
 	switch gs.Status {
-	case StatusPulling, StatusStarting, StatusStarted, StatusRunning:
+	case StatusInstalling, StatusStarting, StatusStarted, StatusRunning:
 		s.log.Info("gameserver already active, skipping start", "id", id, "status", gs.Status)
 		return nil
 	}
@@ -60,18 +60,16 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 	w := s.dispatcher.WorkerFor(id)
 
 	// Pull image
-	if err := setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusPulling, ""); err != nil {
-		return err
-	}
+	s.broadcaster.Publish(ImagePullingEvent{GameserverID: id, Timestamp: time.Now()})
 	if err := w.PullImage(ctx, game.BaseImage); err != nil {
-		setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusError, "Failed to pull game image. Check your internet connection.")
+		s.broadcaster.Publish(GameserverErrorEvent{GameserverID: id, Reason: "Failed to pull game image. Check your internet connection.", Timestamp: time.Now()})
 		return fmt.Errorf("pulling image for gameserver %s: %w", id, err)
 	}
 
 	// Merge env vars
 	env, err := mergeEnv(game, gs)
 	if err != nil {
-		setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusError, "Failed to configure environment variables.")
+		s.broadcaster.Publish(GameserverErrorEvent{GameserverID: id, Reason: "Failed to configure environment variables.", Timestamp: time.Now()})
 		return fmt.Errorf("merging env for gameserver %s: %w", id, err)
 	}
 
@@ -82,14 +80,14 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 	// Parse port bindings
 	ports, err := parseGameserverPorts(gs)
 	if err != nil {
-		setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusError, "Invalid port configuration.")
+		s.broadcaster.Publish(GameserverErrorEvent{GameserverID: id, Reason: "Invalid port configuration.", Timestamp: time.Now()})
 		return fmt.Errorf("parsing ports for gameserver %s: %w", id, err)
 	}
 
 	// Prepare game scripts on the target worker (extracts locally for bind-mounting)
 	scriptDir, defaultsDir, err := w.PrepareGameScripts(ctx, gs.GameID, id)
 	if err != nil {
-		setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusError, "Failed to extract game scripts.")
+		s.broadcaster.Publish(GameserverErrorEvent{GameserverID: id, Reason: "Failed to extract game scripts.", Timestamp: time.Now()})
 		return fmt.Errorf("preparing scripts for gameserver %s: %w", id, err)
 	}
 
@@ -126,28 +124,25 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 		Binds:         binds,
 	})
 	if err != nil {
-		setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusError, userFriendlyError("Failed to create container", err))
+		s.broadcaster.Publish(GameserverErrorEvent{GameserverID: id, Reason: userFriendlyError("Failed to create container", err), Timestamp: time.Now()})
 		return fmt.Errorf("creating container for gameserver %s: %w", id, err)
 	}
 
-	// Save container ID
+	// Save container ID (direct DB write — must persist immediately)
 	gs.ContainerID = &containerID
-	gs.Status = StatusStarting
-	gs.ErrorReason = ""
 	if err := models.UpdateGameserver(s.db, gs); err != nil {
 		w.RemoveContainer(ctx, containerID)
 		return err
 	}
+	s.broadcaster.Publish(ContainerCreatingEvent{GameserverID: id, Timestamp: time.Now()})
 
 	// Start container
 	if err := w.StartContainer(ctx, containerID); err != nil {
-		setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusError, userFriendlyError("Failed to start container", err))
+		s.broadcaster.Publish(GameserverErrorEvent{GameserverID: id, Reason: userFriendlyError("Failed to start container", err), Timestamp: time.Now()})
 		return fmt.Errorf("starting container for gameserver %s: %w", id, err)
 	}
 
-	if err := setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusStarted, ""); err != nil {
-		return err
-	}
+	s.broadcaster.Publish(ContainerStartedEvent{GameserverID: id, Timestamp: time.Now()})
 
 	if s.readyWatcher != nil {
 		s.readyWatcher.Watch(id, w, containerID)
@@ -171,13 +166,7 @@ func (s *GameserverService) Stop(ctx context.Context, id string) error {
 		return nil
 	}
 
-	// Don't overwrite operation statuses (updating, reinstalling, etc.)
-	// so the UI keeps showing the real operation in progress
-	if !isOperationStatus(gs.Status) {
-		if err := setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusStopping, ""); err != nil {
-			return err
-		}
-	}
+	s.broadcaster.Publish(ContainerStoppingEvent{GameserverID: id, Timestamp: time.Now()})
 
 	if gs.ContainerID != nil {
 		w := s.dispatcher.WorkerFor(id)
@@ -189,7 +178,7 @@ func (s *GameserverService) Stop(ctx context.Context, id string) error {
 		}
 	}
 
-	// Re-read from DB to avoid overwriting changes made by status manager during stop
+	// Clear container ID (direct DB write)
 	gs, err = models.GetGameserver(s.db, id)
 	if err != nil {
 		return fmt.Errorf("re-reading gameserver %s after stop: %w", id, err)
@@ -197,27 +186,12 @@ func (s *GameserverService) Stop(ctx context.Context, id string) error {
 	if gs == nil {
 		return ErrNotFoundf("gameserver %s not found after stop", id)
 	}
-
-	// Preserve operation status — the calling operation will transition
-	// to the next status (e.g. Start() sets pulling)
-	if isOperationStatus(gs.Status) {
-		gs.ContainerID = nil
-		if err := models.UpdateGameserver(s.db, gs); err != nil {
-			return err
-		}
-		s.log.Info("gameserver container stopped (operation in progress)", "id", id, "status", gs.Status)
-		return nil
-	}
-
-	oldStatus := gs.Status
 	gs.ContainerID = nil
-	gs.Status = StatusStopped
-	gs.ErrorReason = ""
 	if err := models.UpdateGameserver(s.db, gs); err != nil {
 		return err
 	}
 
-	s.broadcaster.Publish(StatusEvent{GameserverID: id, OldStatus: oldStatus, NewStatus: StatusStopped, Timestamp: time.Now()})
+	s.broadcaster.Publish(ContainerStoppedEvent{GameserverID: id, Timestamp: time.Now()})
 	s.log.Info("gameserver stopped", "id", id)
 	return nil
 }
@@ -256,13 +230,10 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) (er
 
 	s.log.Info("updating game for gameserver", "id", id, "game", game.ID)
 
-	setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusUpdating, "")
+	s.broadcaster.Publish(ImagePullingEvent{GameserverID: id, Timestamp: time.Now()})
 	defer func() {
 		if err != nil {
-			if gs, e := models.GetGameserver(s.db, id); e == nil && gs != nil && gs.Status != StatusError {
-				setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusError,
-					operationFailedReason("Game update failed", err))
-			}
+			s.broadcaster.Publish(GameserverErrorEvent{GameserverID: id, Reason: operationFailedReason("Game update failed", err), Timestamp: time.Now()})
 		}
 	}()
 
@@ -332,13 +303,10 @@ func (s *GameserverService) Reinstall(ctx context.Context, id string) (err error
 
 	s.log.Info("reinstalling gameserver (full wipe)", "id", id)
 
-	setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusReinstalling, "")
+	s.broadcaster.Publish(ImagePullingEvent{GameserverID: id, Timestamp: time.Now()})
 	defer func() {
 		if err != nil {
-			if gs, e := models.GetGameserver(s.db, id); e == nil && gs != nil && gs.Status != StatusError {
-				setGameserverStatus(s.db, s.log, s.broadcaster, id, StatusError,
-					operationFailedReason("Reinstall failed", err))
-			}
+			s.broadcaster.Publish(GameserverErrorEvent{GameserverID: id, Reason: operationFailedReason("Reinstall failed", err), Timestamp: time.Now()})
 		}
 	}()
 

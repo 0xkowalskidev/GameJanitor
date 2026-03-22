@@ -210,12 +210,10 @@ func statusColor(status string) string {
 	switch status {
 	case service.StatusRunning, service.StatusStarted:
 		return "green"
-	case service.StatusStarting, service.StatusPulling:
+	case service.StatusStarting, service.StatusInstalling:
 		return "yellow"
 	case service.StatusStopping:
 		return "orange"
-	case service.StatusUpdating, service.StatusReinstalling, service.StatusMigrating, service.StatusRestoring:
-		return "blue"
 	case service.StatusStopped:
 		return "gray"
 	case service.StatusError:

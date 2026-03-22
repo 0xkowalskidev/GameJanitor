@@ -53,7 +53,7 @@ type gameserverView struct {
 
 func shouldShowLogTail(status string) bool {
 	switch status {
-	case service.StatusStarting, service.StatusStarted, service.StatusPulling, service.StatusError:
+	case service.StatusStarting, service.StatusStarted, service.StatusInstalling, service.StatusError:
 		return true
 	}
 	return false

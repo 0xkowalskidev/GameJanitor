@@ -31,7 +31,7 @@ func NewRouter(
 	querySvc *service.QueryService,
 	settingsSvc *service.SettingsService,
 	authSvc *service.AuthService,
-	broadcaster *service.EventBroadcaster,
+	broadcaster *service.EventBus,
 	netInfo *netinfo.Info,
 	registry *worker.Registry,
 	db *sql.DB,

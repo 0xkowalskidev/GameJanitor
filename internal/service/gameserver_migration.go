@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/warsmite/gamejanitor/internal/models"
 )
@@ -47,13 +48,9 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 
 	s.log.Info("migrating gameserver", "id", gameserverID, "from_node", currentNodeID, "to_node", targetNodeID)
 
-	setGameserverStatus(s.db, s.log, s.broadcaster, gameserverID, StatusMigrating, "")
 	defer func() {
 		if err != nil {
-			if gs, e := models.GetGameserver(s.db, gameserverID); e == nil && gs != nil && gs.Status != StatusError {
-				setGameserverStatus(s.db, s.log, s.broadcaster, gameserverID, StatusError,
-					operationFailedReason("Migration failed", err))
-			}
+			s.broadcaster.Publish(GameserverErrorEvent{GameserverID: gameserverID, Reason: operationFailedReason("Migration failed", err), Timestamp: time.Now()})
 		}
 	}()
 
@@ -115,7 +112,7 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 		s.log.Warn("failed to remove old volume from source worker", "volume", gs.VolumeName, "error", err)
 	}
 
-	setGameserverStatus(s.db, s.log, s.broadcaster, gameserverID, StatusStopped, "")
+	s.broadcaster.Publish(ContainerStoppedEvent{GameserverID: gameserverID, Timestamp: time.Now()})
 	s.log.Info("gameserver migrated", "id", gameserverID, "from_node", currentNodeID, "to_node", targetNodeID)
 	return nil
 }

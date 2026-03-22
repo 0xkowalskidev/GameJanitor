@@ -18,7 +18,7 @@ type StatusManager struct {
 	db           *sql.DB
 	localWorker  worker.Worker
 	log          *slog.Logger
-	broadcaster  *EventBroadcaster
+	broadcaster  *EventBus
 	querySvc     *QueryService
 	readyWatcher *ReadyWatcher
 	dispatcher   *worker.Dispatcher
@@ -36,7 +36,7 @@ type StatusManager struct {
 	crashMu     sync.Mutex
 }
 
-func NewStatusManager(db *sql.DB, localWorker worker.Worker, broadcaster *EventBroadcaster, querySvc *QueryService, readyWatcher *ReadyWatcher, dispatcher *worker.Dispatcher, registry *worker.Registry, restartFunc func(ctx context.Context, id string) error, log *slog.Logger) *StatusManager {
+func NewStatusManager(db *sql.DB, localWorker worker.Worker, broadcaster *EventBus, querySvc *QueryService, readyWatcher *ReadyWatcher, dispatcher *worker.Dispatcher, registry *worker.Registry, restartFunc func(ctx context.Context, id string) error, log *slog.Logger) *StatusManager {
 	sm := &StatusManager{
 		db:            db,
 		localWorker:   localWorker,
@@ -152,7 +152,7 @@ func (m *StatusManager) workerForGameserver(gs *models.Gameserver) worker.Worker
 func (m *StatusManager) recoverGameserver(ctx context.Context, gs *models.Gameserver, w worker.Worker) {
 	if gs.ContainerID == nil {
 		m.log.Info("gameserver has no container, setting stopped", "id", gs.ID, "was_status", gs.Status)
-		setGameserverStatus(m.db, m.log, m.broadcaster, gs.ID, StatusStopped, "")
+		m.setRecoveryStatus(gs.ID, StatusStopped, "")
 		return
 	}
 
@@ -166,37 +166,51 @@ func (m *StatusManager) recoverGameserver(ctx context.Context, gs *models.Gamese
 	switch info.State {
 	case "running":
 		m.log.Info("container running, re-attaching ready watcher", "id", gs.ID)
-		setGameserverStatus(m.db, m.log, m.broadcaster, gs.ID, StatusStarted, "")
+		m.setRecoveryStatus(gs.ID, StatusStarted, "")
 		m.readyWatcher.Watch(gs.ID, w, *gs.ContainerID)
 	case "exited", "dead", "created":
 		m.log.Info("container is not running, setting stopped", "id", gs.ID, "state", info.State)
 		m.clearContainerAndSetStatus(gs, StatusStopped)
 	default:
 		m.log.Warn("container in unexpected state, setting error", "id", gs.ID, "state", info.State)
-		setGameserverStatus(m.db, m.log, m.broadcaster, gs.ID, StatusError, "Container found in unexpected state.")
+		m.setRecoveryStatus(gs.ID, StatusError, "Container found in unexpected state.")
 	}
 }
 
+// setRecoveryStatus directly writes status to DB without publishing events.
+// Used during startup recovery to reconcile DB with Docker reality.
+func (m *StatusManager) setRecoveryStatus(id string, newStatus string, errorReason string) {
+	gs, err := models.GetGameserver(m.db, id)
+	if err != nil || gs == nil {
+		m.log.Error("recovery: failed to get gameserver", "id", id, "error", err)
+		return
+	}
+	oldStatus := gs.Status
+	gs.Status = newStatus
+	if newStatus == StatusError {
+		gs.ErrorReason = errorReason
+	} else {
+		gs.ErrorReason = ""
+	}
+	if err := models.UpdateGameserver(m.db, gs); err != nil {
+		m.log.Error("recovery: failed to update status", "id", id, "from", oldStatus, "to", newStatus, "error", err)
+		return
+	}
+	m.log.Info("recovery: status set", "id", id, "from", oldStatus, "to", newStatus)
+}
+
 // clearContainerAndSetStatus clears the container_id and updates status in one DB write.
+// Used during startup recovery — no events published.
 func (m *StatusManager) clearContainerAndSetStatus(gs *models.Gameserver, newStatus string) {
 	oldStatus := gs.Status
 	gs.ContainerID = nil
 	gs.Status = newStatus
 	gs.ErrorReason = ""
 	if err := models.UpdateGameserver(m.db, gs); err != nil {
-		m.log.Error("failed to clear container and update status", "id", gs.ID, "from", oldStatus, "to", newStatus, "error", err)
+		m.log.Error("recovery: failed to clear container and update status", "id", gs.ID, "from", oldStatus, "to", newStatus, "error", err)
 		return
 	}
-	m.log.Info("gameserver status changed", "id", gs.ID, "from", oldStatus, "to", newStatus)
-
-	if m.broadcaster != nil {
-		m.broadcaster.Publish(StatusEvent{
-			GameserverID: gs.ID,
-			OldStatus:    oldStatus,
-			NewStatus:    newStatus,
-			Timestamp:    time.Now(),
-		})
-	}
+	m.log.Info("recovery: status set", "id", gs.ID, "from", oldStatus, "to", newStatus)
 }
 
 // watchWorkerEvents starts a goroutine that watches Docker events from a worker.
@@ -248,7 +262,7 @@ func (m *StatusManager) handleEvent(event worker.ContainerEvent) {
 	case "die", "stop":
 		m.readyWatcher.Stop(gsID)
 		m.querySvc.StopPolling(gsID)
-		if gs.Status == StatusStopping || gs.Status == StatusUpdating || gs.Status == StatusReinstalling || gs.Status == StatusMigrating || gs.Status == StatusRestoring {
+		if gs.Status == StatusStopping || gs.Status == StatusInstalling {
 			m.log.Debug("docker event: expected container stop", "id", gsID, "status", gs.Status)
 		} else if gs.Status == StatusRunning || gs.Status == StatusStarted {
 			m.log.Warn("docker event: unexpected container death", "id", gsID, "status", gs.Status, "action", event.Action)
@@ -340,7 +354,7 @@ const maxAutoRestartAttempts = 3
 // is enabled and the crash limit hasn't been reached, restarts the gameserver.
 func (m *StatusManager) handleUnexpectedDeath(gs *models.Gameserver) {
 	if !gs.AutoRestart || m.restartFunc == nil {
-		setGameserverStatus(m.db, m.log, m.broadcaster, gs.ID, StatusError, "Gameserver stopped unexpectedly.")
+		m.broadcaster.Publish(GameserverErrorEvent{GameserverID: gs.ID, Reason: "Gameserver stopped unexpectedly.", Timestamp: time.Now()})
 		return
 	}
 
@@ -351,8 +365,7 @@ func (m *StatusManager) handleUnexpectedDeath(gs *models.Gameserver) {
 
 	if count > maxAutoRestartAttempts {
 		m.log.Error("auto-restart limit reached, giving up", "id", gs.ID, "attempts", maxAutoRestartAttempts)
-		setGameserverStatus(m.db, m.log, m.broadcaster, gs.ID, StatusError,
-			fmt.Sprintf("Crashed %d times, auto-restart disabled. Check logs.", maxAutoRestartAttempts))
+		m.broadcaster.Publish(GameserverErrorEvent{GameserverID: gs.ID, Reason: fmt.Sprintf("Crashed %d times, auto-restart disabled. Check logs.", maxAutoRestartAttempts), Timestamp: time.Now()})
 		return
 	}
 
@@ -360,8 +373,7 @@ func (m *StatusManager) handleUnexpectedDeath(gs *models.Gameserver) {
 	go func() {
 		if err := m.restartFunc(context.Background(), gs.ID); err != nil {
 			m.log.Error("auto-restart failed", "id", gs.ID, "attempt", count, "error", err)
-			setGameserverStatus(m.db, m.log, m.broadcaster, gs.ID, StatusError,
-				fmt.Sprintf("Auto-restart failed (attempt %d/%d): %s", count, maxAutoRestartAttempts, err.Error()))
+			m.broadcaster.Publish(GameserverErrorEvent{GameserverID: gs.ID, Reason: fmt.Sprintf("Auto-restart failed (attempt %d/%d): %s", count, maxAutoRestartAttempts, err.Error()), Timestamp: time.Now()})
 		}
 	}()
 }

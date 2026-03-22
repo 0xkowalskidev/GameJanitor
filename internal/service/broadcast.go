@@ -21,20 +21,20 @@ type StatusEvent struct {
 func (e StatusEvent) EventType() string        { return EventStatusChanged }
 func (e StatusEvent) EventTimestamp() time.Time { return e.Timestamp }
 
-type EventBroadcaster struct {
+type EventBus struct {
 	mu          sync.RWMutex
 	subscribers map[uint64]chan WebhookEvent
 	nextID      uint64
 }
 
-func NewEventBroadcaster() *EventBroadcaster {
-	return &EventBroadcaster{
+func NewEventBus() *EventBus {
+	return &EventBus{
 		subscribers: make(map[uint64]chan WebhookEvent),
 	}
 }
 
 // Subscribe returns a channel that receives events and an unsubscribe function.
-func (b *EventBroadcaster) Subscribe() (<-chan WebhookEvent, func()) {
+func (b *EventBus) Subscribe() (<-chan WebhookEvent, func()) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -54,7 +54,7 @@ func (b *EventBroadcaster) Subscribe() (<-chan WebhookEvent, func()) {
 }
 
 // Publish sends an event to all subscribers. Non-blocking: slow clients miss events.
-func (b *EventBroadcaster) Publish(event WebhookEvent) {
+func (b *EventBus) Publish(event WebhookEvent) {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 

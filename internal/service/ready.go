@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"regexp"
 	"sync"
+	"time"
 
 	"github.com/warsmite/gamejanitor/internal/games"
 	"github.com/warsmite/gamejanitor/internal/models"
@@ -17,7 +18,7 @@ import (
 type ReadyWatcher struct {
 	db          *sql.DB
 	log         *slog.Logger
-	broadcaster *EventBroadcaster
+	broadcaster *EventBus
 	gameStore   *games.GameStore
 	querySvc    *QueryService
 
@@ -25,7 +26,7 @@ type ReadyWatcher struct {
 	watchers map[string]context.CancelFunc
 }
 
-func NewReadyWatcher(db *sql.DB, broadcaster *EventBroadcaster, gameStore *games.GameStore, log *slog.Logger) *ReadyWatcher {
+func NewReadyWatcher(db *sql.DB, broadcaster *EventBus, gameStore *games.GameStore, log *slog.Logger) *ReadyWatcher {
 	return &ReadyWatcher{
 		db:          db,
 		log:         log,
@@ -179,7 +180,7 @@ func (w *ReadyWatcher) markInstalled(gameserverID string) {
 }
 
 func (w *ReadyWatcher) promote(gameserverID string) {
-	setGameserverStatus(w.db, w.log, w.broadcaster, gameserverID, StatusRunning, "")
+	w.broadcaster.Publish(GameserverReadyEvent{GameserverID: gameserverID, Timestamp: time.Now()})
 	if w.querySvc != nil {
 		w.querySvc.StartPolling(gameserverID)
 	}

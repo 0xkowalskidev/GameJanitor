@@ -23,14 +23,14 @@ type GameserverService struct {
 	db           *sql.DB
 	dispatcher   *worker.Dispatcher
 	log          *slog.Logger
-	broadcaster  *EventBroadcaster
+	broadcaster  *EventBus
 	readyWatcher *ReadyWatcher
 	settingsSvc  *SettingsService
 	gameStore    *games.GameStore
 	dataDir      string
 }
 
-func NewGameserverService(db *sql.DB, dispatcher *worker.Dispatcher, broadcaster *EventBroadcaster, settingsSvc *SettingsService, gameStore *games.GameStore, dataDir string, log *slog.Logger) *GameserverService {
+func NewGameserverService(db *sql.DB, dispatcher *worker.Dispatcher, broadcaster *EventBus, settingsSvc *SettingsService, gameStore *games.GameStore, dataDir string, log *slog.Logger) *GameserverService {
 	return &GameserverService{db: db, dispatcher: dispatcher, broadcaster: broadcaster, settingsSvc: settingsSvc, gameStore: gameStore, dataDir: dataDir, log: log}
 }
 

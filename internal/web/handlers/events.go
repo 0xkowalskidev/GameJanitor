@@ -11,11 +11,11 @@ import (
 )
 
 type EventHandlers struct {
-	broadcaster *service.EventBroadcaster
+	broadcaster *service.EventBus
 	log         *slog.Logger
 }
 
-func NewEventHandlers(broadcaster *service.EventBroadcaster, log *slog.Logger) *EventHandlers {
+func NewEventHandlers(broadcaster *service.EventBus, log *slog.Logger) *EventHandlers {
 	return &EventHandlers{broadcaster: broadcaster, log: log}
 }
 

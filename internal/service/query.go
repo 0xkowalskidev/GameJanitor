@@ -33,14 +33,14 @@ type QueryPlayer struct {
 type QueryService struct {
 	db          *sql.DB
 	log         *slog.Logger
-	broadcaster *EventBroadcaster
+	broadcaster *EventBus
 	gameStore   *games.GameStore
 	mu          sync.RWMutex
 	cache       map[string]*QueryData
 	pollers     map[string]context.CancelFunc
 }
 
-func NewQueryService(db *sql.DB, broadcaster *EventBroadcaster, gameStore *games.GameStore, log *slog.Logger) *QueryService {
+func NewQueryService(db *sql.DB, broadcaster *EventBus, gameStore *games.GameStore, log *slog.Logger) *QueryService {
 	return &QueryService{
 		db:          db,
 		log:         log,

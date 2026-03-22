@@ -45,7 +45,7 @@ func init() {
 }
 
 type services struct {
-	broadcaster   *service.EventBroadcaster
+	broadcaster   *service.EventBus
 	settingsSvc   *service.SettingsService
 	gameserverSvc *service.GameserverService
 	querySvc      *service.QueryService
@@ -57,11 +57,12 @@ type services struct {
 	scheduleSvc   *service.ScheduleService
 	authSvc        *service.AuthService
 	statusMgr      *service.StatusManager
+	statusSub      *service.StatusSubscriber
 	webhookWorker  *service.WebhookWorker
 }
 
 func initServices(database *sql.DB, dispatcher *worker.Dispatcher, localWorker worker.Worker, registry *worker.Registry, gameStore *games.GameStore, cfg config.Config, logger *slog.Logger) (*services, error) {
-	broadcaster := service.NewEventBroadcaster()
+	broadcaster := service.NewEventBus()
 	settingsSvc := service.NewSettingsService(database, logger)
 	gameserverSvc := service.NewGameserverService(database, dispatcher, broadcaster, settingsSvc, gameStore, cfg.DataDir, logger)
 	querySvc := service.NewQueryService(database, broadcaster, gameStore, logger)
@@ -97,6 +98,7 @@ func initServices(database *sql.DB, dispatcher *worker.Dispatcher, localWorker w
 	scheduleSvc := service.NewScheduleService(database, scheduler, logger)
 	authSvc := service.NewAuthService(database, logger)
 	statusMgr := service.NewStatusManager(database, localWorker, broadcaster, querySvc, readyWatcher, dispatcher, registry, gameserverSvc.Start, logger)
+	statusSub := service.NewStatusSubscriber(database, broadcaster, logger)
 	webhookWorker := service.NewWebhookWorker(database, broadcaster, logger)
 
 	return &services{
@@ -112,6 +114,7 @@ func initServices(database *sql.DB, dispatcher *worker.Dispatcher, localWorker w
 		scheduleSvc:   scheduleSvc,
 		authSvc:       authSvc,
 		statusMgr:     statusMgr,
+		statusSub:     statusSub,
 		webhookWorker: webhookWorker,
 	}, nil
 }
@@ -250,6 +253,9 @@ func runServe(cmd *cobra.Command, args []string) error {
 		svcs.statusMgr.Start(ctx)
 	}
 	defer svcs.statusMgr.Stop()
+
+	svcs.statusSub.Start(ctx)
+	defer svcs.statusSub.Stop()
 
 	svcs.webhookWorker.Start(ctx)
 	defer svcs.webhookWorker.Stop()
