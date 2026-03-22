@@ -260,9 +260,9 @@ func matchEventFilter(eventType string, patterns []string) bool {
 }
 
 const (
-	maxDeliveryAttempts  = 10
+	maxDeliveryAttempts  = 24   // ~24 hours total with exponential backoff capped at 1 hour
 	deliveryPollInterval = 5 * time.Second
-	maxBackoffSeconds    = 3600
+	maxBackoffSeconds    = 3600 // 1 hour max between retries
 )
 
 func (w *WebhookWorker) deliverLoop(ctx context.Context) {
