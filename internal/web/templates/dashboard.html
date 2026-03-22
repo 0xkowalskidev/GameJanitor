@@ -97,8 +97,8 @@ function dashboard() {
   return {
     eventSource: null,
     connectSSE() {
-      this.eventSource = new EventSource('/api/events');
-      this.eventSource.addEventListener('status', (e) => {
+      this.eventSource = new EventSource('/api/events?types=status_changed');
+      this.eventSource.addEventListener('status_changed', (e) => {
         const data = JSON.parse(e.data);
         const card = document.getElementById('gs-' + data.gameserver_id);
         if (card && !card.dataset.deleting) {

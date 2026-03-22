@@ -38,8 +38,8 @@
         stats: null,
         _statsInterval: null,
         connectSSE() {
-          this.eventSource = new EventSource('/api/events');
-          this.eventSource.addEventListener('status', (e) => {
+          this.eventSource = new EventSource('/api/events?types=status_changed');
+          this.eventSource.addEventListener('status_changed', (e) => {
             const data = JSON.parse(e.data);
             if (data.gameserver_id === id) {
               this.refreshStatus();
