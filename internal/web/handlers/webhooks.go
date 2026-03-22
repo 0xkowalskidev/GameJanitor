@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net/http"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -213,6 +214,59 @@ func (h *WebhookHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 
 	h.log.Info("webhook endpoint deleted", "id", id)
 	respondNoContent(w)
+}
+
+type deliveryResponse struct {
+	ID            string     `json:"id"`
+	EventType     string     `json:"event_type"`
+	State         string     `json:"state"`
+	Attempts      int        `json:"attempts"`
+	LastAttemptAt *time.Time `json:"last_attempt_at"`
+	NextAttemptAt time.Time  `json:"next_attempt_at"`
+	LastError     string     `json:"last_error,omitempty"`
+	CreatedAt     time.Time  `json:"created_at"`
+}
+
+func (h *WebhookHandlers) Deliveries(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "webhookId")
+	ep, err := models.GetWebhookEndpoint(h.db, id)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to get webhook endpoint")
+		return
+	}
+	if ep == nil {
+		respondError(w, http.StatusNotFound, "webhook endpoint not found")
+		return
+	}
+
+	state := r.URL.Query().Get("state")
+	limit := 50
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 200 {
+			limit = n
+		}
+	}
+
+	deliveries, err := models.ListDeliveriesByEndpoint(h.db, id, state, limit)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to list deliveries")
+		return
+	}
+
+	result := make([]deliveryResponse, 0, len(deliveries))
+	for _, d := range deliveries {
+		result = append(result, deliveryResponse{
+			ID:            d.ID,
+			EventType:     d.EventType,
+			State:         d.State,
+			Attempts:      d.Attempts,
+			LastAttemptAt: d.LastAttemptAt,
+			NextAttemptAt: d.NextAttemptAt,
+			LastError:     d.LastError,
+			CreatedAt:     d.CreatedAt,
+		})
+	}
+	respondOK(w, result)
 }
 
 func (h *WebhookHandlers) Test(w http.ResponseWriter, r *http.Request) {

@@ -37,6 +37,35 @@ func CreateWebhookDelivery(db *sql.DB, d *WebhookDelivery) error {
 	return nil
 }
 
+func ListDeliveriesByEndpoint(db *sql.DB, endpointID string, state string, limit int) ([]WebhookDelivery, error) {
+	query := `SELECT id, webhook_endpoint_id, event_type, payload, state, attempts, last_attempt_at, next_attempt_at, last_error, created_at
+		 FROM webhook_deliveries WHERE webhook_endpoint_id = ?`
+	args := []any{endpointID}
+
+	if state != "" {
+		query += ` AND state = ?`
+		args = append(args, state)
+	}
+	query += ` ORDER BY created_at DESC LIMIT ?`
+	args = append(args, limit)
+
+	rows, err := db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("querying deliveries by endpoint: %w", err)
+	}
+	defer rows.Close()
+
+	var deliveries []WebhookDelivery
+	for rows.Next() {
+		var d WebhookDelivery
+		if err := rows.Scan(&d.ID, &d.WebhookEndpointID, &d.EventType, &d.Payload, &d.State, &d.Attempts, &d.LastAttemptAt, &d.NextAttemptAt, &d.LastError, &d.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scanning webhook delivery row: %w", err)
+		}
+		deliveries = append(deliveries, d)
+	}
+	return deliveries, rows.Err()
+}
+
 func GetPendingDeliveries(db *sql.DB, limit int) ([]WebhookDelivery, error) {
 	rows, err := db.Query(
 		`SELECT d.id, d.webhook_endpoint_id, d.event_type, d.payload, d.state, d.attempts, d.last_attempt_at, d.next_attempt_at, d.last_error, d.created_at

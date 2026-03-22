@@ -214,6 +214,7 @@ func NewRouter(
 			r.Patch("/{webhookId}", webhookHandlers.Update)
 			r.Delete("/{webhookId}", webhookHandlers.Delete)
 			r.Post("/{webhookId}/test", webhookHandlers.Test)
+			r.Get("/{webhookId}/deliveries", webhookHandlers.Deliveries)
 		})
 
 		r.Route("/tokens", func(r chi.Router) {
