@@ -63,7 +63,7 @@ type services struct {
 func initServices(database *sql.DB, dispatcher *worker.Dispatcher, localWorker worker.Worker, registry *worker.Registry, gameStore *games.GameStore, cfg config.Config, logger *slog.Logger) (*services, error) {
 	broadcaster := service.NewEventBus()
 	settingsSvc := service.NewSettingsService(database, logger)
-	gameserverSvc := service.NewGameserverService(database, dispatcher, broadcaster, settingsSvc, gameStore, cfg.DataDir, logger)
+	gameserverSvc := service.NewGameserverService(database, dispatcher, broadcaster, settingsSvc, gameStore, nil, cfg.DataDir, logger)
 	querySvc := service.NewQueryService(database, broadcaster, gameStore, logger)
 	readyWatcher := service.NewReadyWatcher(database, broadcaster, gameStore, logger)
 	readyWatcher.SetQueryService(querySvc)
@@ -92,6 +92,7 @@ func initServices(database *sql.DB, dispatcher *worker.Dispatcher, localWorker w
 		logger.Info("backup store: local", "path", cfg.DataDir)
 	}
 
+	gameserverSvc.SetBackupStore(backupStore)
 	backupSvc := service.NewBackupService(database, dispatcher, gameserverSvc, gameStore, backupStore, settingsSvc, broadcaster, logger)
 	scheduler := service.NewScheduler(database, backupSvc, gameserverSvc, consoleSvc, broadcaster, logger)
 	scheduleSvc := service.NewScheduleService(database, scheduler, logger)

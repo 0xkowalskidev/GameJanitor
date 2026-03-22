@@ -39,8 +39,14 @@ type settingsResponse struct {
 	RateLimitPerTokenFromEnv bool   `json:"rate_limit_per_token_from_env"`
 	RateLimitLogin           int    `json:"rate_limit_login"`
 	RateLimitLoginFromEnv    bool   `json:"rate_limit_login_from_env"`
-	TrustProxyHeaders        bool `json:"trust_proxy_headers"`
-	TrustProxyHeadersFromEnv bool `json:"trust_proxy_headers_from_env"`
+	TrustProxyHeaders            bool `json:"trust_proxy_headers"`
+	TrustProxyHeadersFromEnv     bool `json:"trust_proxy_headers_from_env"`
+	RequireMemoryLimit           bool `json:"require_memory_limit"`
+	RequireMemoryLimitFromEnv    bool `json:"require_memory_limit_from_env"`
+	RequireCPULimit              bool `json:"require_cpu_limit"`
+	RequireCPULimitFromEnv       bool `json:"require_cpu_limit_from_env"`
+	RequireStorageLimit          bool `json:"require_storage_limit"`
+	RequireStorageLimitFromEnv   bool `json:"require_storage_limit_from_env"`
 }
 
 func (h *SettingsAPIHandlers) Get(w http.ResponseWriter, r *http.Request) {
@@ -66,8 +72,14 @@ func (h *SettingsAPIHandlers) Get(w http.ResponseWriter, r *http.Request) {
 		RateLimitPerTokenFromEnv: h.settingsSvc.IsRateLimitPerTokenFromEnv(),
 		RateLimitLogin:           h.settingsSvc.GetRateLimitLogin(),
 		RateLimitLoginFromEnv:    h.settingsSvc.IsRateLimitLoginFromEnv(),
-		TrustProxyHeaders:        h.settingsSvc.GetTrustProxyHeaders(),
-		TrustProxyHeadersFromEnv: h.settingsSvc.IsTrustProxyHeadersFromEnv(),
+		TrustProxyHeaders:          h.settingsSvc.GetTrustProxyHeaders(),
+		TrustProxyHeadersFromEnv:   h.settingsSvc.IsTrustProxyHeadersFromEnv(),
+		RequireMemoryLimit:         h.settingsSvc.GetRequireMemoryLimit(),
+		RequireMemoryLimitFromEnv:  h.settingsSvc.IsRequireMemoryLimitFromEnv(),
+		RequireCPULimit:            h.settingsSvc.GetRequireCPULimit(),
+		RequireCPULimitFromEnv:     h.settingsSvc.IsRequireCPULimitFromEnv(),
+		RequireStorageLimit:        h.settingsSvc.GetRequireStorageLimit(),
+		RequireStorageLimitFromEnv: h.settingsSvc.IsRequireStorageLimitFromEnv(),
 	})
 }
 
@@ -152,7 +164,10 @@ func (h *SettingsAPIHandlers) settingDefs() map[string]settingDef {
 		"rate_limit_per_ip":    intSetting(svc.IsRateLimitPerIPFromEnv, "rate_limit_per_ip", 1, 0, "invalid rate_limit_per_ip value (must be >= 1)", svc.SetRateLimitPerIP),
 		"rate_limit_per_token": intSetting(svc.IsRateLimitPerTokenFromEnv, "rate_limit_per_token", 1, 0, "invalid rate_limit_per_token value (must be >= 1)", svc.SetRateLimitPerToken),
 		"rate_limit_login":     intSetting(svc.IsRateLimitLoginFromEnv, "rate_limit_login", 1, 0, "invalid rate_limit_login value (must be >= 1)", svc.SetRateLimitLogin),
-		"trust_proxy_headers": boolSetting(svc.IsTrustProxyHeadersFromEnv, "trust_proxy_headers", svc.SetTrustProxyHeaders),
+		"trust_proxy_headers":    boolSetting(svc.IsTrustProxyHeadersFromEnv, "trust_proxy_headers", svc.SetTrustProxyHeaders),
+		"require_memory_limit":   boolSetting(svc.IsRequireMemoryLimitFromEnv, "require_memory_limit", svc.SetRequireMemoryLimit),
+		"require_cpu_limit":      boolSetting(svc.IsRequireCPULimitFromEnv, "require_cpu_limit", svc.SetRequireCPULimit),
+		"require_storage_limit":  boolSetting(svc.IsRequireStorageLimitFromEnv, "require_storage_limit", svc.SetRequireStorageLimit),
 	}
 }
 

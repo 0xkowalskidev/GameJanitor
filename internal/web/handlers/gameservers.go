@@ -117,12 +117,17 @@ func (h *GameserverHandlers) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	gs.ID = id
 
-	if err := h.svc.UpdateGameserver(r.Context(), &gs); err != nil {
+	migrationTriggered, err := h.svc.UpdateGameserver(r.Context(), &gs)
+	if err != nil {
 		h.log.Error("updating gameserver", "id", id, "error", err)
 		respondError(w, serviceErrorStatus(err), err.Error())
 		return
 	}
-	respondOK(w, gs)
+	resp := map[string]any{"gameserver": gs}
+	if migrationTriggered {
+		resp["migration_triggered"] = true
+	}
+	respondOK(w, resp)
 }
 
 func (h *GameserverHandlers) Delete(w http.ResponseWriter, r *http.Request) {

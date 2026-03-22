@@ -27,16 +27,21 @@ type GameserverService struct {
 	readyWatcher *ReadyWatcher
 	settingsSvc  *SettingsService
 	gameStore    *games.GameStore
+	store        BackupStore
 	dataDir      string
 }
 
-func NewGameserverService(db *sql.DB, dispatcher *worker.Dispatcher, broadcaster *EventBus, settingsSvc *SettingsService, gameStore *games.GameStore, dataDir string, log *slog.Logger) *GameserverService {
-	return &GameserverService{db: db, dispatcher: dispatcher, broadcaster: broadcaster, settingsSvc: settingsSvc, gameStore: gameStore, dataDir: dataDir, log: log}
+func NewGameserverService(db *sql.DB, dispatcher *worker.Dispatcher, broadcaster *EventBus, settingsSvc *SettingsService, gameStore *games.GameStore, store BackupStore, dataDir string, log *slog.Logger) *GameserverService {
+	return &GameserverService{db: db, dispatcher: dispatcher, broadcaster: broadcaster, settingsSvc: settingsSvc, gameStore: gameStore, store: store, dataDir: dataDir, log: log}
 }
 
 // Called after both services are created to break the circular dependency.
 func (s *GameserverService) SetReadyWatcher(rw *ReadyWatcher) {
 	s.readyWatcher = rw
+}
+
+func (s *GameserverService) SetBackupStore(store BackupStore) {
+	s.store = store
 }
 
 func (s *GameserverService) ListGameservers(filter models.GameserverFilter) ([]models.Gameserver, error) {
@@ -267,14 +272,21 @@ func generatePassword(length int) (string, error) {
 	return hex.EncodeToString(b)[:length], nil
 }
 
-func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *models.Gameserver) error {
+// UpdateGameserver merges provided fields and writes to DB.
+// Returns migrationTriggered=true if resources changed and the server needs to move to a different node.
+func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *models.Gameserver) (migrationTriggered bool, err error) {
 	existing, err := models.GetGameserver(s.db, gs.ID)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if existing == nil {
-		return ErrNotFoundf("gameserver %s not found", gs.ID)
+		return false, ErrNotFoundf("gameserver %s not found", gs.ID)
 	}
+
+	// Snapshot old resource values for capacity check
+	oldMemory := existing.MemoryLimitMB
+	oldCPU := existing.CPULimit
+	oldStorage := ptrIntOr0(existing.StorageLimitMB)
 
 	// Check if install-triggering env vars changed before merging
 	installTriggered := false
@@ -298,7 +310,6 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *models.Gam
 	if gs.CPULimit != 0 {
 		existing.CPULimit = gs.CPULimit
 	}
-	// CPUEnforced is always settable (bool — zero value is meaningful)
 	existing.CPUEnforced = gs.CPUEnforced
 	if gs.BackupLimit != nil {
 		existing.BackupLimit = gs.BackupLimit
@@ -312,21 +323,84 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *models.Gam
 
 	// Input validation
 	if existing.MemoryLimitMB < 0 {
-		return ErrBadRequest("memory_limit_mb must be >= 0")
+		return false, ErrBadRequest("memory_limit_mb must be >= 0")
 	}
 	if existing.CPULimit < 0 {
-		return ErrBadRequest("cpu_limit must be >= 0")
+		return false, ErrBadRequest("cpu_limit must be >= 0")
 	}
 	if existing.StorageLimitMB != nil && *existing.StorageLimitMB < 0 {
-		return ErrBadRequest("storage_limit_mb must be >= 0")
+		return false, ErrBadRequest("storage_limit_mb must be >= 0")
 	}
 	if existing.BackupLimit != nil && *existing.BackupLimit < 0 {
-		return ErrBadRequest("backup_limit must be >= 0")
+		return false, ErrBadRequest("backup_limit must be >= 0")
 	}
 
-	s.log.Info("updating gameserver", "id", gs.ID)
-	if err := models.UpdateGameserver(s.db, existing); err != nil {
-		return err
+	// Enforce require_* settings
+	if s.settingsSvc.GetRequireMemoryLimit() && existing.MemoryLimitMB <= 0 {
+		return false, ErrBadRequest("memory_limit_mb must be > 0 (require_memory_limit is enabled)")
+	}
+	if s.settingsSvc.GetRequireCPULimit() && existing.CPULimit <= 0 {
+		return false, ErrBadRequest("cpu_limit must be > 0 (require_cpu_limit is enabled)")
+	}
+	if s.settingsSvc.GetRequireStorageLimit() && (existing.StorageLimitMB == nil || *existing.StorageLimitMB <= 0) {
+		return false, ErrBadRequest("storage_limit_mb must be > 0 (require_storage_limit is enabled)")
+	}
+
+	// Auto-migration check: if resources changed and gameserver is on a node, check capacity
+	resourcesChanged := existing.MemoryLimitMB != oldMemory || existing.CPULimit != oldCPU || ptrIntOr0(existing.StorageLimitMB) != oldStorage
+	needsMigration := false
+
+	if resourcesChanged && existing.NodeID != nil && *existing.NodeID != "" {
+		limitErr := s.checkWorkerLimitsExcluding(*existing.NodeID, existing.MemoryLimitMB, existing.CPULimit, ptrIntOr0(existing.StorageLimitMB), existing.ID)
+		if limitErr != nil {
+			// Current node can't fit — find a new one
+			var requiredTags []string
+			if existing.NodeTags != "" && existing.NodeTags != "[]" {
+				json.Unmarshal([]byte(existing.NodeTags), &requiredTags)
+			}
+			candidates := s.dispatcher.RankWorkersForPlacement(requiredTags)
+
+			foundNode := ""
+			for _, c := range candidates {
+				if c.NodeID == *existing.NodeID {
+					continue // skip current node
+				}
+				if err := s.checkWorkerLimits(c.NodeID, existing.MemoryLimitMB, existing.CPULimit, ptrIntOr0(existing.StorageLimitMB)); err == nil {
+					foundNode = c.NodeID
+					break
+				}
+			}
+
+			if foundNode == "" {
+				return false, fmt.Errorf("upgrade to %d MB memory / %.1f CPU failed: no node with sufficient capacity. Resource values unchanged.", existing.MemoryLimitMB, existing.CPULimit)
+			}
+
+			needsMigration = true
+			s.log.Info("auto-migration needed for resource upgrade", "id", existing.ID, "from_node", *existing.NodeID, "to_node", foundNode)
+
+			// Write new values first, then migrate async
+			if err := models.UpdateGameserver(s.db, existing); err != nil {
+				return false, err
+			}
+
+			go func() {
+				if err := s.MigrateGameserver(context.Background(), existing.ID, foundNode); err != nil {
+					s.log.Error("auto-migration failed", "id", existing.ID, "target_node", foundNode, "error", err)
+					s.broadcaster.Publish(GameserverErrorEvent{
+						GameserverID: existing.ID,
+						Reason:       fmt.Sprintf("Auto-migration failed: %s", err.Error()),
+						Timestamp:    time.Now(),
+					})
+				}
+			}()
+		}
+	}
+
+	if !needsMigration {
+		s.log.Info("updating gameserver", "id", gs.ID)
+		if err := models.UpdateGameserver(s.db, existing); err != nil {
+			return false, err
+		}
 	}
 
 	if installTriggered {
@@ -349,7 +423,7 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *models.Gam
 		MemoryLimitMB: existing.MemoryLimitMB,
 	})
 
-	return nil
+	return needsMigration, nil
 }
 
 // installTriggeringEnvChanged checks if any env var marked with triggers_install

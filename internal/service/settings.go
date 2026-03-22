@@ -43,7 +43,10 @@ const (
 	SettingRateLimitPerIP    = "rate_limit_per_ip"
 	SettingRateLimitPerToken = "rate_limit_per_token"
 	SettingRateLimitLogin    = "rate_limit_login"
-	SettingTrustProxyHeaders = "trust_proxy_headers"
+	SettingTrustProxyHeaders    = "trust_proxy_headers"
+	SettingRequireMemoryLimit  = "require_memory_limit"
+	SettingRequireCPULimit     = "require_cpu_limit"
+	SettingRequireStorageLimit = "require_storage_limit"
 
 	DefaultAuditRetention = 30
 
@@ -309,5 +312,43 @@ func (s *SettingsService) IsTrustProxyHeadersFromEnv() bool {
 
 func (s *SettingsService) SetTrustProxyHeaders(enabled bool) error {
 	return s.setBool(SettingTrustProxyHeaders, enabled)
+}
+
+// --- Require Resource Limits ---
+
+func (s *SettingsService) GetRequireMemoryLimit() bool {
+	return s.getBool("GJ_REQUIRE_MEMORY_LIMIT", SettingRequireMemoryLimit, false)
+}
+
+func (s *SettingsService) IsRequireMemoryLimitFromEnv() bool {
+	return os.Getenv("GJ_REQUIRE_MEMORY_LIMIT") != ""
+}
+
+func (s *SettingsService) SetRequireMemoryLimit(enabled bool) error {
+	return s.setBool(SettingRequireMemoryLimit, enabled)
+}
+
+func (s *SettingsService) GetRequireCPULimit() bool {
+	return s.getBool("GJ_REQUIRE_CPU_LIMIT", SettingRequireCPULimit, false)
+}
+
+func (s *SettingsService) IsRequireCPULimitFromEnv() bool {
+	return os.Getenv("GJ_REQUIRE_CPU_LIMIT") != ""
+}
+
+func (s *SettingsService) SetRequireCPULimit(enabled bool) error {
+	return s.setBool(SettingRequireCPULimit, enabled)
+}
+
+func (s *SettingsService) GetRequireStorageLimit() bool {
+	return s.getBool("GJ_REQUIRE_STORAGE_LIMIT", SettingRequireStorageLimit, false)
+}
+
+func (s *SettingsService) IsRequireStorageLimitFromEnv() bool {
+	return os.Getenv("GJ_REQUIRE_STORAGE_LIMIT") != ""
+}
+
+func (s *SettingsService) SetRequireStorageLimit(enabled bool) error {
+	return s.setBool(SettingRequireStorageLimit, enabled)
 }
 

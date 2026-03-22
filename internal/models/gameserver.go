@@ -194,6 +194,35 @@ func AllocatedStorageByNode(db *sql.DB, nodeID string) (int, error) {
 	return total, nil
 }
 
+// Excluding variants — used by auto-migration to check capacity without counting the gameserver being updated.
+
+func AllocatedMemoryByNodeExcluding(db *sql.DB, nodeID, excludeID string) (int, error) {
+	var total int
+	err := db.QueryRow("SELECT COALESCE(SUM(memory_limit_mb), 0) FROM gameservers WHERE node_id = ? AND id != ?", nodeID, excludeID).Scan(&total)
+	if err != nil {
+		return 0, fmt.Errorf("querying allocated memory for node %s excluding %s: %w", nodeID, excludeID, err)
+	}
+	return total, nil
+}
+
+func AllocatedCPUByNodeExcluding(db *sql.DB, nodeID, excludeID string) (float64, error) {
+	var total float64
+	err := db.QueryRow("SELECT COALESCE(SUM(cpu_limit), 0) FROM gameservers WHERE node_id = ? AND id != ?", nodeID, excludeID).Scan(&total)
+	if err != nil {
+		return 0, fmt.Errorf("querying allocated CPU for node %s excluding %s: %w", nodeID, excludeID, err)
+	}
+	return total, nil
+}
+
+func AllocatedStorageByNodeExcluding(db *sql.DB, nodeID, excludeID string) (int, error) {
+	var total int
+	err := db.QueryRow("SELECT COALESCE(SUM(storage_limit_mb), 0) FROM gameservers WHERE node_id = ? AND id != ?", nodeID, excludeID).Scan(&total)
+	if err != nil {
+		return 0, fmt.Errorf("querying allocated storage for node %s excluding %s: %w", nodeID, excludeID, err)
+	}
+	return total, nil
+}
+
 func DeleteGameserver(db *sql.DB, id string) error {
 	result, err := db.Exec("DELETE FROM gameservers WHERE id = ?", id)
 	if err != nil {

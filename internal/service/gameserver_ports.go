@@ -83,6 +83,47 @@ func (s *GameserverService) checkWorkerLimits(nodeID string, memoryNeeded int, c
 	return nil
 }
 
+// checkWorkerLimitsExcluding is like checkWorkerLimits but excludes one gameserver's allocation.
+// Used by auto-migration to check if a node can still fit after a resource update.
+func (s *GameserverService) checkWorkerLimitsExcluding(nodeID string, memoryNeeded int, cpuNeeded float64, storageNeeded int, excludeID string) error {
+	node, err := models.GetWorkerNode(s.db, nodeID)
+	if err != nil || node == nil {
+		return nil
+	}
+
+	if node.MaxMemoryMB != nil {
+		allocated, err := models.AllocatedMemoryByNodeExcluding(s.db, nodeID, excludeID)
+		if err != nil {
+			return fmt.Errorf("checking worker limits: %w", err)
+		}
+		if allocated+memoryNeeded > *node.MaxMemoryMB {
+			return fmt.Errorf("worker %s would exceed memory limit (%d MB allocated + %d MB needed > %d MB limit)", nodeID, allocated, memoryNeeded, *node.MaxMemoryMB)
+		}
+	}
+
+	if node.MaxCPU != nil {
+		allocated, err := models.AllocatedCPUByNodeExcluding(s.db, nodeID, excludeID)
+		if err != nil {
+			return fmt.Errorf("checking worker limits: %w", err)
+		}
+		if allocated+cpuNeeded > *node.MaxCPU {
+			return fmt.Errorf("worker %s would exceed CPU limit (%.1f allocated + %.1f needed > %.1f limit)", nodeID, allocated, cpuNeeded, *node.MaxCPU)
+		}
+	}
+
+	if node.MaxStorageMB != nil && storageNeeded > 0 {
+		allocated, err := models.AllocatedStorageByNodeExcluding(s.db, nodeID, excludeID)
+		if err != nil {
+			return fmt.Errorf("checking worker limits: %w", err)
+		}
+		if allocated+storageNeeded > *node.MaxStorageMB {
+			return fmt.Errorf("worker %s would exceed storage limit (%d MB allocated + %d MB needed > %d MB limit)", nodeID, allocated, storageNeeded, *node.MaxStorageMB)
+		}
+	}
+
+	return nil
+}
+
 func ptrIntOr0(p *int) int {
 	if p != nil {
 		return *p

@@ -1,7 +1,7 @@
 package service
 
 import (
-	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/warsmite/gamejanitor/internal/models"
+	"github.com/google/uuid"
 )
 
 // MigrateGameserver moves a gameserver from its current node to a different node.
@@ -86,32 +87,70 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 		}
 	}
 
-	// Tar volume from source — fully buffer before modifying target to avoid
-	// issues if source and target share a Docker daemon (same-host migration)
-	s.log.Info("transferring volume data", "id", gameserverID, "volume", gs.VolumeName)
+	// Transfer volume via backup store (avoids buffering entire volume in controller memory)
+	s.log.Info("transferring volume data via store", "id", gameserverID, "volume", gs.VolumeName)
+	migrationID := uuid.New().String()
+
+	// Tar + gzip from source → store
 	tarReader, err := sourceWorker.BackupVolume(ctx, gs.VolumeName)
 	if err != nil {
 		return fmt.Errorf("reading volume from source worker: %w", err)
 	}
-	var tarBuf bytes.Buffer
-	if _, err := io.Copy(&tarBuf, tarReader); err != nil {
+	pr, pw := io.Pipe()
+	var compressErr error
+	go func() {
+		gzWriter := gzip.NewWriter(pw)
+		if _, err := io.Copy(gzWriter, tarReader); err != nil {
+			compressErr = err
+			gzWriter.Close()
+			pw.CloseWithError(err)
+			tarReader.Close()
+			return
+		}
 		tarReader.Close()
-		return fmt.Errorf("buffering volume data: %w", err)
-	}
-	tarReader.Close()
-	s.log.Info("volume data buffered", "id", gameserverID, "size_bytes", tarBuf.Len())
+		gzWriter.Close()
+		pw.Close()
+	}()
 
-	// Create volume on target and restore
+	if err := s.store.Save(ctx, "migrations", migrationID, pr); err != nil {
+		return fmt.Errorf("saving migration data to store: %w", err)
+	}
+	if compressErr != nil {
+		return fmt.Errorf("compressing volume data: %w", compressErr)
+	}
+	s.log.Info("migration data stored", "id", gameserverID, "migration_id", migrationID)
+
+	// Store → restore on target
 	if err := targetWorker.CreateVolume(ctx, gs.VolumeName); err != nil {
 		return fmt.Errorf("creating volume on target worker: %w", err)
 	}
 
-	if err := targetWorker.RestoreVolume(ctx, gs.VolumeName, &tarBuf); err != nil {
-		// Clean up the volume we just created
+	reader, err := s.store.Load(ctx, "migrations", migrationID)
+	if err != nil {
+		return fmt.Errorf("loading migration data from store: %w", err)
+	}
+	gzReader, err := gzip.NewReader(reader)
+	if err != nil {
+		reader.Close()
+		return fmt.Errorf("decompressing migration data: %w", err)
+	}
+
+	if err := targetWorker.RestoreVolume(ctx, gs.VolumeName, gzReader); err != nil {
+		gzReader.Close()
+		reader.Close()
 		if rmErr := targetWorker.RemoveVolume(ctx, gs.VolumeName); rmErr != nil {
 			s.log.Error("failed to clean up target volume after failed restore", "volume", gs.VolumeName, "error", rmErr)
 		}
+		// Don't delete migration data on failure — operator can retry manually
+		s.log.Error("migration restore failed, data preserved in store", "migration_id", migrationID)
 		return fmt.Errorf("restoring volume on target worker: %w", err)
+	}
+	gzReader.Close()
+	reader.Close()
+
+	// Cleanup migration data on success
+	if err := s.store.Delete(ctx, "migrations", migrationID); err != nil {
+		s.log.Warn("failed to clean up migration data from store", "migration_id", migrationID, "error", err)
 	}
 
 	// Reallocate ports on target node's range
