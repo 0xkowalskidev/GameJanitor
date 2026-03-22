@@ -10,7 +10,7 @@ Organized by refactor task, not by file.
 
 - **F4** `[TODO]` — **Resource cap enforcement** [MEDIUM]: Caps (MaxMemoryMB, MaxCPU, MaxBackups, MaxStorageMB) not validated on create before game defaults applied; MaxBackups/MaxStorageMB never enforced for scoped tokens on update; no bounds checking on cap values (negative/zero). Files: `gameserver.go:80,100,295-320`, `backup.go:301`
 
-- **F5** `[TODO]` — **API inconsistencies** [MEDIUM]: Inconsistent HTTP status codes (Delete returns 204 vs 200), response envelope varies (Backup Restore returns `{status:"restored"}`), Create returns full object in some handlers but not others. Files: `response.go`, `gameservers.go`, `backups.go`, `schedules.go`, `settings_api.go`
+- **F5** `[DONE]` — **API inconsistencies** [MEDIUM]: Inconsistent HTTP status codes (Delete returns 204 vs 200), response envelope varies (Backup Restore returns `{status:"restored"}`), Create returns full object in some handlers but not others. Files: `response.go`, `gameservers.go`, `backups.go`, `schedules.go`, `settings_api.go`
 
 - **F7** `[TODO]` — **Error messages leak internals** [HIGH]: Untyped `fmt.Errorf` errors propagate directly to API responses, exposing Docker errors, port range config, storage backend details, and JSON parse errors. Non-ServiceError types map to 500 with raw message. Files: `gameserver.go`, `gameserver_ports.go:143`, `backup.go:100,124`
 

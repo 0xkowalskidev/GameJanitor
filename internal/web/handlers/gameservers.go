@@ -46,7 +46,7 @@ func (h *GameserverHandlers) List(w http.ResponseWriter, r *http.Request) {
 	gameservers, err := h.svc.ListGameservers(filter)
 	if err != nil {
 		h.log.Error("listing gameservers", "error", err)
-		respondError(w, serviceErrorStatus(err), err.Error())
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 	if gameservers == nil {
@@ -60,7 +60,7 @@ func (h *GameserverHandlers) Get(w http.ResponseWriter, r *http.Request) {
 	gs, err := h.svc.GetGameserver(id)
 	if err != nil {
 		h.log.Error("getting gameserver", "id", id, "error", err)
-		respondError(w, serviceErrorStatus(err), err.Error())
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 	if gs == nil {
@@ -85,7 +85,7 @@ func (h *GameserverHandlers) Create(w http.ResponseWriter, r *http.Request) {
 	rawPassword, err := h.svc.CreateGameserver(r.Context(), &gs)
 	if err != nil {
 		h.log.Error("creating gameserver", "error", err)
-		respondError(w, serviceErrorStatus(err), err.Error())
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 
@@ -102,7 +102,7 @@ func (h *GameserverHandlers) RegenerateSFTPPassword(w http.ResponseWriter, r *ht
 	rawPassword, err := h.svc.RegenerateSFTPPassword(r.Context(), id)
 	if err != nil {
 		h.log.Error("regenerating sftp password", "id", id, "error", err)
-		respondError(w, serviceErrorStatus(err), err.Error())
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 	respondOK(w, map[string]string{"sftp_password": rawPassword})
@@ -120,7 +120,7 @@ func (h *GameserverHandlers) Update(w http.ResponseWriter, r *http.Request) {
 	migrationTriggered, err := h.svc.UpdateGameserver(r.Context(), &gs)
 	if err != nil {
 		h.log.Error("updating gameserver", "id", id, "error", err)
-		respondError(w, serviceErrorStatus(err), err.Error())
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 	// Re-read from DB to get final state
@@ -143,7 +143,7 @@ func (h *GameserverHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if err := h.svc.DeleteGameserver(r.Context(), id); err != nil {
 		h.log.Error("deleting gameserver", "id", id, "error", err)
-		respondError(w, serviceErrorStatus(err), err.Error())
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 	respondNoContent(w)
@@ -185,14 +185,14 @@ func (h *GameserverHandlers) Migrate(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.svc.MigrateGameserver(r.Context(), id, body.NodeID); err != nil {
 		h.log.Error("migrating gameserver", "id", id, "target_node", body.NodeID, "error", err)
-		respondError(w, serviceErrorStatus(err), err.Error())
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 
 	gs, err := h.svc.GetGameserver(id)
 	if err != nil {
 		h.log.Error("getting gameserver after migration", "id", id, "error", err)
-		respondError(w, serviceErrorStatus(err), err.Error())
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 	respondOK(w, gs)
@@ -238,7 +238,7 @@ func (h *GameserverHandlers) BulkAction(w http.ResponseWriter, r *http.Request) 
 	gameservers, err := h.svc.ListGameservers(filter)
 	if err != nil {
 		h.log.Error("listing gameservers for bulk action", "error", err)
-		respondError(w, serviceErrorStatus(err), err.Error())
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 
@@ -273,14 +273,14 @@ func (h *GameserverHandlers) doAction(w http.ResponseWriter, r *http.Request, ac
 	id := chi.URLParam(r, "id")
 	if err := action(id); err != nil {
 		h.log.Error("gameserver action failed", "id", id, "error", err)
-		respondError(w, serviceErrorStatus(err), err.Error())
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 
 	gs, err := h.svc.GetGameserver(id)
 	if err != nil {
 		h.log.Error("getting gameserver after action", "id", id, "error", err)
-		respondError(w, serviceErrorStatus(err), err.Error())
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 	respondOK(w, gs)
@@ -310,7 +310,7 @@ func (h *GameserverHandlers) Status(w http.ResponseWriter, r *http.Request) {
 	gs, err := h.svc.GetGameserver(id)
 	if err != nil {
 		h.log.Error("getting gameserver for status", "id", id, "error", err)
-		respondError(w, serviceErrorStatus(err), err.Error())
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 	if gs == nil {
@@ -399,7 +399,7 @@ func (h *GameserverHandlers) Logs(w http.ResponseWriter, r *http.Request) {
 		lines, histErr := h.consoleSvc.ReadHistoricalLogs(r.Context(), id, 0, tail)
 		if histErr != nil {
 			h.log.Error("reading logs", "id", id, "live_error", err, "historical_error", histErr)
-			respondError(w, serviceErrorStatus(err), err.Error())
+			respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 			return
 		}
 		if lines == nil {
@@ -432,7 +432,7 @@ func (h *GameserverHandlers) SendCommand(w http.ResponseWriter, r *http.Request)
 	output, err := h.consoleSvc.SendCommand(r.Context(), id, strings.TrimSpace(body.Command))
 	if err != nil {
 		h.log.Error("sending command", "gameserver_id", id, "error", err)
-		respondError(w, serviceErrorStatus(err), err.Error())
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 

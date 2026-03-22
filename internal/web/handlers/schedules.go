@@ -24,7 +24,7 @@ func (h *ScheduleHandlers) List(w http.ResponseWriter, r *http.Request) {
 	schedules, err := h.svc.ListSchedules(gsID)
 	if err != nil {
 		h.log.Error("listing schedules", "gameserver_id", gsID, "error", err)
-		respondError(w, serviceErrorStatus(err), err.Error())
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 	if schedules == nil {
@@ -38,7 +38,7 @@ func (h *ScheduleHandlers) Get(w http.ResponseWriter, r *http.Request) {
 	schedule, err := h.svc.GetSchedule(id)
 	if err != nil {
 		h.log.Error("getting schedule", "id", id, "error", err)
-		respondError(w, serviceErrorStatus(err), err.Error())
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 	if schedule == nil {
@@ -88,7 +88,7 @@ func (h *ScheduleHandlers) Create(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.svc.CreateSchedule(r.Context(), schedule); err != nil {
 		h.log.Error("creating schedule", "error", err)
-		respondError(w, serviceErrorStatus(err), err.Error())
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 
@@ -101,7 +101,7 @@ func (h *ScheduleHandlers) Update(w http.ResponseWriter, r *http.Request) {
 	existing, err := h.svc.GetSchedule(id)
 	if err != nil {
 		h.log.Error("getting schedule for update", "id", id, "error", err)
-		respondError(w, serviceErrorStatus(err), err.Error())
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 	if existing == nil {
@@ -139,7 +139,7 @@ func (h *ScheduleHandlers) Update(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.svc.UpdateSchedule(r.Context(), existing); err != nil {
 		h.log.Error("updating schedule", "id", id, "error", err)
-		respondError(w, serviceErrorStatus(err), err.Error())
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 
@@ -150,7 +150,7 @@ func (h *ScheduleHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "scheduleId")
 	if err := h.svc.DeleteSchedule(r.Context(), id); err != nil {
 		h.log.Error("deleting schedule", "id", id, "error", err)
-		respondError(w, serviceErrorStatus(err), err.Error())
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 	respondNoContent(w)

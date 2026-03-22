@@ -26,7 +26,7 @@ func (h *BackupHandlers) List(w http.ResponseWriter, r *http.Request) {
 	backups, err := h.svc.ListBackups(gsID)
 	if err != nil {
 		h.log.Error("listing backups", "gameserver_id", gsID, "error", err)
-		respondError(w, serviceErrorStatus(err), err.Error())
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 	if backups == nil {
@@ -49,7 +49,7 @@ func (h *BackupHandlers) Create(w http.ResponseWriter, r *http.Request) {
 	backup, err := h.svc.CreateBackup(r.Context(), gsID, req.Name)
 	if err != nil {
 		h.log.Error("creating backup", "gameserver_id", gsID, "error", err)
-		respondError(w, serviceErrorStatus(err), err.Error())
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 
@@ -60,7 +60,7 @@ func (h *BackupHandlers) Restore(w http.ResponseWriter, r *http.Request) {
 	backupID := chi.URLParam(r, "backupId")
 	if err := h.svc.RestoreBackup(r.Context(), backupID); err != nil {
 		h.log.Error("restoring backup", "backup_id", backupID, "error", err)
-		respondError(w, serviceErrorStatus(err), err.Error())
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 	backup, _ := h.svc.GetBackup(backupID)
@@ -73,7 +73,7 @@ func (h *BackupHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	reader, backup, err := h.svc.DownloadBackup(r.Context(), backupID)
 	if err != nil {
 		h.log.Error("downloading backup", "backup_id", backupID, "error", err)
-		respondError(w, serviceErrorStatus(err), err.Error())
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 	defer reader.Close()
@@ -94,7 +94,7 @@ func (h *BackupHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 	backupID := chi.URLParam(r, "backupId")
 	if err := h.svc.DeleteBackup(r.Context(), backupID); err != nil {
 		h.log.Error("deleting backup", "backup_id", backupID, "error", err)
-		respondError(w, serviceErrorStatus(err), err.Error())
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 	respondNoContent(w)

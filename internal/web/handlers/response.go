@@ -50,3 +50,14 @@ func serviceErrorStatus(err error) int {
 	}
 	return http.StatusInternalServerError
 }
+
+// serviceErrorMessage returns a safe error message for API responses.
+// ServiceErrors are user-facing and safe to expose. Other errors are internal
+// and get replaced with a generic message to avoid leaking implementation details.
+func serviceErrorMessage(err error) string {
+	var svcErr *service.ServiceError
+	if errors.As(err, &svcErr) {
+		return svcErr.Error()
+	}
+	return "internal server error"
+}

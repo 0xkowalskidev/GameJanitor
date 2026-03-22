@@ -24,7 +24,7 @@ func (h *AuthHandlers) ListTokens(w http.ResponseWriter, r *http.Request) {
 	tokens, err := h.authSvc.ListTokens()
 	if err != nil {
 		h.log.Error("listing tokens", "error", err)
-		respondError(w, serviceErrorStatus(err), err.Error())
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 	if tokens == nil {
@@ -58,7 +58,7 @@ func (h *AuthHandlers) CreateToken(w http.ResponseWriter, r *http.Request) {
 		rawToken, token, err := h.authSvc.CreateAdminToken(req.Name)
 		if err != nil {
 			h.log.Error("creating admin token", "error", err)
-			respondError(w, serviceErrorStatus(err), err.Error())
+			respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 			return
 		}
 		respondCreated(w, map[string]any{
@@ -83,7 +83,7 @@ func (h *AuthHandlers) CreateToken(w http.ResponseWriter, r *http.Request) {
 	rawToken, token, err := h.authSvc.CreateCustomToken(req.Name, req.GameserverIDs, req.Permissions, expiresAt)
 	if err != nil {
 		h.log.Error("creating token", "error", err)
-		respondError(w, serviceErrorStatus(err), err.Error())
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 
@@ -98,7 +98,7 @@ func (h *AuthHandlers) DeleteToken(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "tokenId")
 	if err := h.authSvc.DeleteToken(id); err != nil {
 		h.log.Error("deleting token", "id", id, "error", err)
-		respondError(w, serviceErrorStatus(err), err.Error())
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 	respondNoContent(w)
@@ -108,7 +108,7 @@ func (h *AuthHandlers) ListWorkerTokens(w http.ResponseWriter, r *http.Request) 
 	tokens, err := h.authSvc.ListTokens()
 	if err != nil {
 		h.log.Error("listing worker tokens", "error", err)
-		respondError(w, serviceErrorStatus(err), err.Error())
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 
@@ -136,7 +136,7 @@ func (h *AuthHandlers) CreateWorkerToken(w http.ResponseWriter, r *http.Request)
 	rawToken, token, err := h.authSvc.CreateWorkerToken(req.Name)
 	if err != nil {
 		h.log.Error("creating worker token", "error", err)
-		respondError(w, serviceErrorStatus(err), err.Error())
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 
@@ -151,7 +151,7 @@ func (h *AuthHandlers) DeleteWorkerToken(w http.ResponseWriter, r *http.Request)
 	id := chi.URLParam(r, "tokenId")
 	if err := h.authSvc.DeleteToken(id); err != nil {
 		h.log.Error("deleting worker token", "id", id, "error", err)
-		respondError(w, serviceErrorStatus(err), err.Error())
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 	respondNoContent(w)

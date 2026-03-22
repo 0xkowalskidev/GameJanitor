@@ -189,7 +189,7 @@ func (h *WorkerHandlers) SetPortRange(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.workerNodeSvc.SetWorkerNodePortRange(workerID, &req.PortRangeStart, &req.PortRangeEnd); err != nil {
-		respondError(w, serviceErrorStatus(err), err.Error())
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 
@@ -201,7 +201,7 @@ func (h *WorkerHandlers) ClearPortRange(w http.ResponseWriter, r *http.Request) 
 	workerID := chi.URLParam(r, "workerID")
 
 	if err := h.workerNodeSvc.SetWorkerNodePortRange(workerID, nil, nil); err != nil {
-		respondError(w, serviceErrorStatus(err), err.Error())
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 
@@ -223,7 +223,7 @@ func (h *WorkerHandlers) SetLimits(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.workerNodeSvc.SetWorkerNodeLimits(workerID, req.MaxMemoryMB, req.MaxCPU, req.MaxStorageMB); err != nil {
-		respondError(w, serviceErrorStatus(err), err.Error())
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 
@@ -235,7 +235,7 @@ func (h *WorkerHandlers) ClearLimits(w http.ResponseWriter, r *http.Request) {
 	workerID := chi.URLParam(r, "workerID")
 
 	if err := h.workerNodeSvc.SetWorkerNodeLimits(workerID, nil, nil, nil); err != nil {
-		respondError(w, serviceErrorStatus(err), err.Error())
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 
@@ -247,7 +247,7 @@ func (h *WorkerHandlers) Cordon(w http.ResponseWriter, r *http.Request) {
 	workerID := chi.URLParam(r, "workerID")
 
 	if err := h.workerNodeSvc.SetWorkerNodeCordoned(workerID, true); err != nil {
-		respondError(w, serviceErrorStatus(err), err.Error())
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 
@@ -259,7 +259,7 @@ func (h *WorkerHandlers) Uncordon(w http.ResponseWriter, r *http.Request) {
 	workerID := chi.URLParam(r, "workerID")
 
 	if err := h.workerNodeSvc.SetWorkerNodeCordoned(workerID, false); err != nil {
-		respondError(w, serviceErrorStatus(err), err.Error())
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 
@@ -280,7 +280,7 @@ func (h *WorkerHandlers) SetTags(w http.ResponseWriter, r *http.Request) {
 
 	tagsJSON, _ := json.Marshal(req.Tags)
 	if err := h.workerNodeSvc.SetWorkerNodeTags(workerID, string(tagsJSON)); err != nil {
-		respondError(w, serviceErrorStatus(err), err.Error())
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 
@@ -292,7 +292,7 @@ func (h *WorkerHandlers) ClearTags(w http.ResponseWriter, r *http.Request) {
 	workerID := chi.URLParam(r, "workerID")
 
 	if err := h.workerNodeSvc.SetWorkerNodeTags(workerID, "[]"); err != nil {
-		respondError(w, serviceErrorStatus(err), err.Error())
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 
