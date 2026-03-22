@@ -294,6 +294,7 @@ func (m *StatusManager) onWorkerRegistered(nodeID string, w worker.Worker) {
 	m.broadcaster.Publish(WorkerEvent{
 		Type:      EventWorkerConnected,
 		Timestamp: time.Now(),
+		Actor:     SystemActor,
 		WorkerID:  nodeID,
 	})
 
@@ -322,6 +323,7 @@ func (m *StatusManager) onWorkerUnregistered(nodeID string) {
 	m.broadcaster.Publish(WorkerEvent{
 		Type:      EventWorkerDisconnected,
 		Timestamp: time.Now(),
+		Actor:     SystemActor,
 		WorkerID:  nodeID,
 	})
 

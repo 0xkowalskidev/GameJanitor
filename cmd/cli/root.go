@@ -28,7 +28,6 @@ func init() {
 	tokensCmd.GroupID = "server"
 	workerTokensCmd.GroupID = "server"
 	workersCmd.GroupID = "server"
-	auditCmd.GroupID = "server"
 	gamesCmd.GroupID = "resources"
 	gameserversCmd.GroupID = "resources"
 	schedulesCmd.GroupID = "resources"
@@ -44,7 +43,6 @@ func init() {
 	rootCmd.AddCommand(gameserversCmd)
 	rootCmd.AddCommand(schedulesCmd)
 	rootCmd.AddCommand(backupsCmd)
-	rootCmd.AddCommand(auditCmd)
 }
 
 func Execute() error {

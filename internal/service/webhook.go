@@ -46,7 +46,7 @@ type WebhookGameserver struct {
 }
 
 type gameserverEventData struct {
-	ActorTokenID  *string `json:"actor_token_id,omitempty"`
+	Actor         Actor   `json:"actor"`
 	GameserverID  string  `json:"gameserver_id"`
 	Name          string  `json:"name"`
 	GameID        string  `json:"game_id"`
@@ -55,11 +55,11 @@ type gameserverEventData struct {
 }
 
 type backupEventData struct {
-	ActorTokenID *string `json:"actor_token_id,omitempty"`
-	GameserverID string  `json:"gameserver_id"`
-	BackupID     string  `json:"backup_id"`
-	BackupName   string  `json:"backup_name,omitempty"`
-	Error        string  `json:"error,omitempty"`
+	Actor        Actor  `json:"actor"`
+	GameserverID string `json:"gameserver_id"`
+	BackupID     string `json:"backup_id"`
+	BackupName   string `json:"backup_name,omitempty"`
+	Error        string `json:"error,omitempty"`
 }
 
 type workerEventData struct {
@@ -168,7 +168,7 @@ func (w *WebhookWorker) enqueueEvent(event WebhookEvent) {
 
 	case GameserverEvent:
 		payloadData = gameserverEventData{
-			ActorTokenID:  ev.ActorTokenID,
+			Actor:         ev.Actor,
 			GameserverID:  ev.GameserverID,
 			Name:          ev.Name,
 			GameID:        ev.GameID,
@@ -178,7 +178,7 @@ func (w *WebhookWorker) enqueueEvent(event WebhookEvent) {
 
 	case BackupEvent:
 		payloadData = backupEventData{
-			ActorTokenID: ev.ActorTokenID,
+			Actor:        ev.Actor,
 			GameserverID: ev.GameserverID,
 			BackupID:     ev.BackupID,
 			BackupName:   ev.BackupName,

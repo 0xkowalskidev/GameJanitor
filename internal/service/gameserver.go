@@ -144,7 +144,7 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gam
 	s.broadcaster.Publish(GameserverEvent{
 		Type:          EventGameserverCreate,
 		Timestamp:     time.Now(),
-		ActorTokenID:  actorTokenID(ctx),
+		Actor:         ActorFromContext(ctx),
 		GameserverID:  gs.ID,
 		Name:          gs.Name,
 		GameID:        gs.GameID,
@@ -331,7 +331,7 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *models.Gam
 	s.broadcaster.Publish(GameserverEvent{
 		Type:          EventGameserverUpdate,
 		Timestamp:     time.Now(),
-		ActorTokenID:  actorTokenID(ctx),
+		Actor:         ActorFromContext(ctx),
 		GameserverID:  existing.ID,
 		Name:          existing.Name,
 		GameID:        existing.GameID,
@@ -435,7 +435,7 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 	s.broadcaster.Publish(GameserverEvent{
 		Type:          EventGameserverDelete,
 		Timestamp:     time.Now(),
-		ActorTokenID:  actorTokenID(ctx),
+		Actor:         ActorFromContext(ctx),
 		GameserverID:  gs.ID,
 		Name:          gs.Name,
 		GameID:        gs.GameID,

@@ -16,7 +16,6 @@ import (
 	"github.com/warsmite/gamejanitor/internal/db"
 	"github.com/warsmite/gamejanitor/internal/docker"
 	"github.com/warsmite/gamejanitor/internal/games"
-	"github.com/warsmite/gamejanitor/internal/models"
 	"github.com/warsmite/gamejanitor/internal/netinfo"
 	"github.com/warsmite/gamejanitor/internal/service"
 	gjsftp "github.com/warsmite/gamejanitor/internal/sftp"
@@ -306,31 +305,6 @@ func runServe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize router: %w", err)
 	}
-
-	// Prune old audit log entries on startup, then daily
-	go func() {
-		retentionDays := svcs.settingsSvc.GetAuditRetentionDays()
-		if retentionDays > 0 {
-			pruned, err := models.PruneAuditLogs(database, retentionDays)
-			if err != nil {
-				logger.Error("failed to prune audit logs on startup", "error", err)
-			} else if pruned > 0 {
-				logger.Info("pruned old audit log entries", "count", pruned, "retention_days", retentionDays)
-			}
-		}
-		ticker := time.NewTicker(24 * time.Hour)
-		defer ticker.Stop()
-		for range ticker.C {
-			days := svcs.settingsSvc.GetAuditRetentionDays()
-			if days > 0 {
-				if pruned, err := models.PruneAuditLogs(database, days); err != nil {
-					logger.Error("failed to prune audit logs", "error", err)
-				} else if pruned > 0 {
-					logger.Info("pruned old audit log entries", "count", pruned, "retention_days", days)
-				}
-			}
-		}
-	}()
 
 	// Start SFTP server if enabled
 	if sftpPort > 0 {

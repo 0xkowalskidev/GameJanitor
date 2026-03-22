@@ -139,6 +139,7 @@ func (s *Scheduler) executeTask(scheduleID string) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
+	ctx = SetActorInContext(ctx, Actor{Type: "schedule", ScheduleID: scheduleID})
 	s.log.Info("executing scheduled task", "schedule_id", scheduleID, "type", schedule.Type, "gameserver_id", schedule.GameserverID)
 
 	var taskErr error
@@ -168,6 +169,7 @@ func (s *Scheduler) executeTask(scheduleID string) {
 		s.broadcaster.Publish(ScheduledTaskEvent{
 			Type:         EventScheduleTaskFailed,
 			Timestamp:    time.Now(),
+			Actor:        Actor{Type: "schedule", ScheduleID: scheduleID},
 			GameserverID: schedule.GameserverID,
 			ScheduleID:   scheduleID,
 			TaskType:     schedule.Type,
@@ -178,6 +180,7 @@ func (s *Scheduler) executeTask(scheduleID string) {
 		s.broadcaster.Publish(ScheduledTaskEvent{
 			Type:         EventScheduleTaskCompleted,
 			Timestamp:    time.Now(),
+			Actor:        Actor{Type: "schedule", ScheduleID: scheduleID},
 			GameserverID: schedule.GameserverID,
 			ScheduleID:   scheduleID,
 			TaskType:     schedule.Type,

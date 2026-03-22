@@ -149,7 +149,7 @@ func (s *BackupService) CreateBackup(ctx context.Context, gameserverID string, n
 	s.broadcaster.Publish(BackupEvent{
 		Type:         EventBackupCreate,
 		Timestamp:    time.Now(),
-		ActorTokenID: actorTokenID(ctx),
+		Actor:        ActorFromContext(ctx),
 		GameserverID: gameserverID,
 		BackupID:     backupID,
 		BackupName:   name,
@@ -184,7 +184,7 @@ func (s *BackupService) RestoreBackup(ctx context.Context, backupID string) (err
 			s.broadcaster.Publish(BackupEvent{
 				Type:         EventBackupRestoreFailed,
 				Timestamp:    time.Now(),
-				ActorTokenID: actorTokenID(ctx),
+				Actor:        ActorFromContext(ctx),
 				GameserverID: gs.ID,
 				BackupID:     backupID,
 				Error:        err.Error(),
@@ -225,7 +225,7 @@ func (s *BackupService) RestoreBackup(ctx context.Context, backupID string) (err
 	s.broadcaster.Publish(BackupEvent{
 		Type:         EventBackupRestoreCompleted,
 		Timestamp:    time.Now(),
-		ActorTokenID: actorTokenID(ctx),
+		Actor:        ActorFromContext(ctx),
 		GameserverID: gs.ID,
 		BackupID:     backupID,
 	})
@@ -264,7 +264,7 @@ func (s *BackupService) DeleteBackup(ctx context.Context, backupID string) error
 	s.broadcaster.Publish(BackupEvent{
 		Type:         EventBackupDelete,
 		Timestamp:    time.Now(),
-		ActorTokenID: actorTokenID(ctx),
+		Actor:        ActorFromContext(ctx),
 		GameserverID: backup.GameserverID,
 		BackupID:     backupID,
 		BackupName:   backup.Name,

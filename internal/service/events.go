@@ -135,19 +135,39 @@ type GameserverErrorEvent struct {
 func (e GameserverErrorEvent) EventType() string        { return EventGameserverError }
 func (e GameserverErrorEvent) EventTimestamp() time.Time { return e.Timestamp }
 
-// actorTokenID extracts the token ID from context, or nil for system/async actions.
-func actorTokenID(ctx context.Context) *string {
-	token := TokenFromContext(ctx)
-	if token == nil {
-		return nil
+// Actor represents who/what initiated an action.
+type Actor struct {
+	Type       string `json:"type"`                  // "token", "schedule", "system", "anonymous"
+	TokenID    string `json:"token_id,omitempty"`
+	ScheduleID string `json:"schedule_id,omitempty"`
+}
+
+var SystemActor = Actor{Type: "system"}
+
+type actorContextKey struct{}
+
+// SetActorInContext stores an actor in the context for downstream event publishing.
+func SetActorInContext(ctx context.Context, actor Actor) context.Context {
+	return context.WithValue(ctx, actorContextKey{}, actor)
+}
+
+// ActorFromContext extracts the actor from context.
+// Returns anonymous actor if no actor is set (auth disabled).
+func ActorFromContext(ctx context.Context) Actor {
+	if a, ok := ctx.Value(actorContextKey{}).(Actor); ok {
+		return a
 	}
-	return &token.ID
+	// Fall back to token-based actor for backward compatibility with auth middleware
+	if token := TokenFromContext(ctx); token != nil {
+		return Actor{Type: "token", TokenID: token.ID}
+	}
+	return Actor{Type: "anonymous"}
 }
 
 type GameserverEvent struct {
 	Type          string    `json:"type"`
 	Timestamp     time.Time `json:"timestamp"`
-	ActorTokenID  *string   `json:"actor_token_id,omitempty"`
+	Actor         Actor     `json:"actor"`
 	GameserverID  string    `json:"gameserver_id"`
 	Name          string    `json:"name"`
 	GameID        string    `json:"game_id"`
@@ -161,7 +181,7 @@ func (e GameserverEvent) EventTimestamp() time.Time { return e.Timestamp }
 type BackupEvent struct {
 	Type         string    `json:"type"`
 	Timestamp    time.Time `json:"timestamp"`
-	ActorTokenID *string   `json:"actor_token_id,omitempty"`
+	Actor        Actor     `json:"actor"`
 	GameserverID string    `json:"gameserver_id"`
 	BackupID     string    `json:"backup_id"`
 	BackupName   string    `json:"backup_name,omitempty"`
@@ -174,6 +194,7 @@ func (e BackupEvent) EventTimestamp() time.Time { return e.Timestamp }
 type WorkerEvent struct {
 	Type      string    `json:"type"`
 	Timestamp time.Time `json:"timestamp"`
+	Actor     Actor     `json:"actor"`
 	WorkerID  string    `json:"worker_id"`
 }
 
@@ -183,6 +204,7 @@ func (e WorkerEvent) EventTimestamp() time.Time { return e.Timestamp }
 type ScheduledTaskEvent struct {
 	Type         string    `json:"type"`
 	Timestamp    time.Time `json:"timestamp"`
+	Actor        Actor     `json:"actor"`
 	GameserverID string    `json:"gameserver_id"`
 	ScheduleID   string    `json:"schedule_id"`
 	TaskType     string    `json:"task_type"`

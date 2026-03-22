@@ -52,6 +52,16 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 		return nil
 	}
 
+	s.broadcaster.Publish(GameserverEvent{
+		Type:         EventGameserverStart,
+		Timestamp:    time.Now(),
+		Actor:        ActorFromContext(ctx),
+		GameserverID: id,
+		Name:         gs.Name,
+		GameID:       gs.GameID,
+		NodeID:       gs.NodeID,
+	})
+
 	game := s.gameStore.GetGame(gs.GameID)
 	if game == nil {
 		return ErrNotFoundf("game %s not found for gameserver %s", gs.GameID, id)
@@ -166,6 +176,16 @@ func (s *GameserverService) Stop(ctx context.Context, id string) error {
 		return nil
 	}
 
+	s.broadcaster.Publish(GameserverEvent{
+		Type:         EventGameserverStop,
+		Timestamp:    time.Now(),
+		Actor:        ActorFromContext(ctx),
+		GameserverID: id,
+		Name:         gs.Name,
+		GameID:       gs.GameID,
+		NodeID:       gs.NodeID,
+	})
+
 	s.broadcaster.Publish(ContainerStoppingEvent{GameserverID: id, Timestamp: time.Now()})
 
 	if gs.ContainerID != nil {
@@ -204,6 +224,16 @@ func (s *GameserverService) Restart(ctx context.Context, id string) error {
 	if gs == nil {
 		return ErrNotFoundf("gameserver %s not found", id)
 	}
+
+	s.broadcaster.Publish(GameserverEvent{
+		Type:         EventGameserverRestart,
+		Timestamp:    time.Now(),
+		Actor:        ActorFromContext(ctx),
+		GameserverID: id,
+		Name:         gs.Name,
+		GameID:       gs.GameID,
+		NodeID:       gs.NodeID,
+	})
 
 	if gs.Status != StatusStopped && gs.Status != StatusError {
 		if err := s.Stop(ctx, id); err != nil {
