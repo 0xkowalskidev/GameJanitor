@@ -39,6 +39,7 @@ type workerAPIView struct {
 	MaxCPU            *float64 `json:"max_cpu"`
 	MaxStorageMB      *int     `json:"max_storage_mb"`
 	Cordoned          bool     `json:"cordoned"`
+	Tags              []string `json:"tags"`
 	Status            string   `json:"status"`
 	LastSeen          *string  `json:"last_seen"`
 }
@@ -74,6 +75,13 @@ func (h *WorkerHandlers) buildWorkerView(info worker.WorkerInfo, gsCount, allocM
 		v.MaxCPU = node.MaxCPU
 		v.MaxStorageMB = node.MaxStorageMB
 		v.Cordoned = node.Cordoned
+		var tags []string
+		if err := json.Unmarshal([]byte(node.Tags), &tags); err == nil {
+			v.Tags = tags
+		}
+	}
+	if v.Tags == nil {
+		v.Tags = []string{}
 	}
 	return v
 }
@@ -256,5 +264,38 @@ func (h *WorkerHandlers) Uncordon(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.log.Info("worker uncordoned via API", "worker_id", workerID)
+	h.getWorkerAndRespond(w, workerID)
+}
+
+func (h *WorkerHandlers) SetTags(w http.ResponseWriter, r *http.Request) {
+	workerID := chi.URLParam(r, "workerID")
+
+	var req struct {
+		Tags []string `json:"tags"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+
+	tagsJSON, _ := json.Marshal(req.Tags)
+	if err := h.workerNodeSvc.SetWorkerNodeTags(workerID, string(tagsJSON)); err != nil {
+		respondError(w, serviceErrorStatus(err), err.Error())
+		return
+	}
+
+	h.log.Info("worker tags set via API", "worker_id", workerID, "tags", req.Tags)
+	h.getWorkerAndRespond(w, workerID)
+}
+
+func (h *WorkerHandlers) ClearTags(w http.ResponseWriter, r *http.Request) {
+	workerID := chi.URLParam(r, "workerID")
+
+	if err := h.workerNodeSvc.SetWorkerNodeTags(workerID, "[]"); err != nil {
+		respondError(w, serviceErrorStatus(err), err.Error())
+		return
+	}
+
+	h.log.Info("worker tags cleared via API", "worker_id", workerID)
 	h.getWorkerAndRespond(w, workerID)
 }

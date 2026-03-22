@@ -2,6 +2,7 @@ package worker
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"math"
@@ -9,6 +10,19 @@ import (
 
 	"github.com/warsmite/gamejanitor/internal/models"
 )
+
+func hasAllTags(nodeTags, requiredTags []string) bool {
+	tagSet := make(map[string]bool, len(nodeTags))
+	for _, t := range nodeTags {
+		tagSet[t] = true
+	}
+	for _, req := range requiredTags {
+		if !tagSet[req] {
+			return false
+		}
+	}
+	return true
+}
 
 // PlacementCandidate is a worker ranked for gameserver placement.
 type PlacementCandidate struct {
@@ -78,7 +92,7 @@ func (d *Dispatcher) WorkerFor(gameserverID string) Worker {
 // Scores by minimum headroom percentage across memory and CPU limits.
 // Uses allocated (sum of limits for assigned gameservers), not live usage,
 // to avoid overcommit when stopped servers are started.
-func (d *Dispatcher) RankWorkersForPlacement() []PlacementCandidate {
+func (d *Dispatcher) RankWorkersForPlacement(requiredTags []string) []PlacementCandidate {
 	if d.registry == nil {
 		if d.local != nil {
 			return []PlacementCandidate{{Worker: d.local, NodeID: "", Score: 0}}
@@ -98,6 +112,19 @@ func (d *Dispatcher) RankWorkersForPlacement() []PlacementCandidate {
 	var candidates []PlacementCandidate
 
 	for _, info := range workers {
+		// Tag filtering: skip workers that don't have all required tags
+		if len(requiredTags) > 0 && d.db != nil {
+			node, err := models.GetWorkerNode(d.db, info.ID)
+			if err != nil || node == nil {
+				continue
+			}
+			var nodeTags []string
+			json.Unmarshal([]byte(node.Tags), &nodeTags)
+			if !hasAllTags(nodeTags, requiredTags) {
+				d.log.Debug("worker skipped: missing required tags", "worker_id", info.ID, "required", requiredTags, "has", nodeTags)
+				continue
+			}
+		}
 		allocMem, err := models.AllocatedMemoryByNode(d.db, info.ID)
 		if err != nil {
 			d.log.Warn("failed to query allocated memory for worker", "worker_id", info.ID, "error", err)

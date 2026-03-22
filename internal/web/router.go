@@ -198,6 +198,8 @@ func NewRouter(
 				r.Delete("/limits", workerHandlers.ClearLimits)
 				r.Post("/cordon", workerHandlers.Cordon)
 				r.Delete("/cordon", workerHandlers.Uncordon)
+				r.Patch("/tags", workerHandlers.SetTags)
+				r.Delete("/tags", workerHandlers.ClearTags)
 			})
 		})
 

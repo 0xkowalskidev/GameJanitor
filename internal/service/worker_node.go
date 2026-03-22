@@ -32,6 +32,10 @@ func (s *WorkerNodeService) SetWorkerNodeLimits(id string, maxMemoryMB *int, max
 	return models.SetWorkerNodeLimits(s.db, id, maxMemoryMB, maxCPU, maxStorageMB)
 }
 
+func (s *WorkerNodeService) SetWorkerNodeTags(id string, tags string) error {
+	return models.SetWorkerNodeTags(s.db, id, tags)
+}
+
 func (s *WorkerNodeService) ListGameserversByNode() ([]models.Gameserver, error) {
 	return models.ListGameservers(s.db, models.GameserverFilter{})
 }

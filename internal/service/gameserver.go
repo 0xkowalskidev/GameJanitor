@@ -89,8 +89,15 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gam
 		}
 	} else {
 		// Try candidates in ranked order until one passes limit check + port allocation
-		candidates := s.dispatcher.RankWorkersForPlacement()
+		var requiredTags []string
+		if gs.NodeTags != "" && gs.NodeTags != "[]" {
+			json.Unmarshal([]byte(gs.NodeTags), &requiredTags)
+		}
+		candidates := s.dispatcher.RankWorkersForPlacement(requiredTags)
 		if len(candidates) == 0 {
+			if len(requiredTags) > 0 {
+				return "", fmt.Errorf("no workers available with required tags %v", requiredTags)
+			}
 			return "", fmt.Errorf("no workers available — connect a worker node first")
 		}
 
@@ -298,6 +305,9 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *models.Gam
 	}
 	if gs.StorageLimitMB != nil {
 		existing.StorageLimitMB = gs.StorageLimitMB
+	}
+	if gs.NodeTags != "" && gs.NodeTags != "[]" {
+		existing.NodeTags = gs.NodeTags
 	}
 
 	// Input validation

@@ -16,13 +16,14 @@ type WorkerNode struct {
 	MaxCPU         *float64   `json:"max_cpu"`
 	MaxStorageMB   *int       `json:"max_storage_mb"`
 	Cordoned       bool       `json:"cordoned"`
+	Tags           string     `json:"tags"`
 	SFTPPort       int        `json:"sftp_port"`
 	LastSeen       *time.Time `json:"last_seen"`
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`
 }
 
-const workerNodeColumns = "id, lan_ip, external_ip, port_range_start, port_range_end, max_memory_mb, max_cpu, max_storage_mb, cordoned, sftp_port, last_seen, created_at, updated_at"
+const workerNodeColumns = "id, lan_ip, external_ip, port_range_start, port_range_end, max_memory_mb, max_cpu, max_storage_mb, cordoned, tags, sftp_port, last_seen, created_at, updated_at"
 
 // UpsertWorkerNode inserts or updates a worker node's IP and last_seen fields.
 // Does not touch port_range columns — those are managed separately via SetWorkerNodePortRange.
@@ -49,7 +50,7 @@ func GetWorkerNode(db *sql.DB, id string) (*WorkerNode, error) {
 	err := db.QueryRow(
 		"SELECT " + workerNodeColumns + " FROM worker_nodes WHERE id = ?",
 		id,
-	).Scan(&n.ID, &n.LanIP, &n.ExternalIP, &n.PortRangeStart, &n.PortRangeEnd, &n.MaxMemoryMB, &n.MaxCPU, &n.MaxStorageMB, &n.Cordoned, &n.SFTPPort, &n.LastSeen, &n.CreatedAt, &n.UpdatedAt)
+	).Scan(&n.ID, &n.LanIP, &n.ExternalIP, &n.PortRangeStart, &n.PortRangeEnd, &n.MaxMemoryMB, &n.MaxCPU, &n.MaxStorageMB, &n.Cordoned, &n.Tags, &n.SFTPPort, &n.LastSeen, &n.CreatedAt, &n.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -69,7 +70,7 @@ func ListWorkerNodes(db *sql.DB) ([]WorkerNode, error) {
 	var nodes []WorkerNode
 	for rows.Next() {
 		var n WorkerNode
-		if err := rows.Scan(&n.ID, &n.LanIP, &n.ExternalIP, &n.PortRangeStart, &n.PortRangeEnd, &n.MaxMemoryMB, &n.MaxCPU, &n.MaxStorageMB, &n.Cordoned, &n.SFTPPort, &n.LastSeen, &n.CreatedAt, &n.UpdatedAt); err != nil {
+		if err := rows.Scan(&n.ID, &n.LanIP, &n.ExternalIP, &n.PortRangeStart, &n.PortRangeEnd, &n.MaxMemoryMB, &n.MaxCPU, &n.MaxStorageMB, &n.Cordoned, &n.Tags, &n.SFTPPort, &n.LastSeen, &n.CreatedAt, &n.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scanning worker node row: %w", err)
 		}
 		nodes = append(nodes, n)
@@ -120,6 +121,24 @@ func SetWorkerNodeCordoned(db *sql.DB, id string, cordoned bool) error {
 	)
 	if err != nil {
 		return fmt.Errorf("setting cordoned for worker node %s: %w", id, err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("checking rows affected for worker node %s: %w", id, err)
+	}
+	if rows == 0 {
+		return fmt.Errorf("worker node %s not found", id)
+	}
+	return nil
+}
+
+func SetWorkerNodeTags(db *sql.DB, id string, tags string) error {
+	result, err := db.Exec(
+		"UPDATE worker_nodes SET tags = ?, updated_at = ? WHERE id = ?",
+		tags, time.Now(), id,
+	)
+	if err != nil {
+		return fmt.Errorf("setting tags for worker node %s: %w", id, err)
 	}
 	rows, err := result.RowsAffected()
 	if err != nil {
