@@ -7,8 +7,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/0xkowalskidev/gamejanitor/internal/db"
-	"github.com/0xkowalskidev/gamejanitor/internal/service"
+	"github.com/warsmite/gamejanitor/internal/db"
+	"github.com/warsmite/gamejanitor/internal/service"
 	"github.com/spf13/cobra"
 )
 

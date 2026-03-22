@@ -1,18 +1,19 @@
-module github.com/0xkowalskidev/gamejanitor
+module github.com/warsmite/gamejanitor
 
 go 1.25.5
 
 require (
-	github.com/0xkowalskidev/gjq v0.0.0-20260317015327-5194a9540aa5
 	github.com/docker/docker v27.5.1+incompatible
 	github.com/docker/go-connections v0.6.0
 	github.com/go-chi/chi/v5 v5.2.5
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/csrf v1.7.3
+	github.com/minio/minio-go/v7 v7.0.99
 	github.com/pkg/sftp v1.13.10
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/shirou/gopsutil/v4 v4.26.2
 	github.com/spf13/cobra v1.10.2
+	github.com/warsmite/gjq v0.1.6
 	golang.org/x/crypto v0.49.0
 	golang.org/x/time v0.15.0
 	google.golang.org/grpc v1.79.2
@@ -45,7 +46,6 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/minio/crc64nvme v1.1.1 // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
-	github.com/minio/minio-go/v7 v7.0.99 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
 	github.com/moby/term v0.5.2 // indirect
 	github.com/morikuni/aec v1.1.0 // indirect

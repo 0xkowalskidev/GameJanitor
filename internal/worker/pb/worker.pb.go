@@ -3253,7 +3253,7 @@ const file_proto_worker_proto_rawDesc = "" +
 	"\x11ControllerService\x12=\n" +
 	"\bRegister\x12\x17.worker.RegisterRequest\x1a\x18.worker.RegisterResponse\x12@\n" +
 	"\tHeartbeat\x12\x18.worker.HeartbeatRequest\x1a\x19.worker.HeartbeatResponse\x12H\n" +
-	"\x11ValidateSFTPLogin\x12\x18.worker.SFTPLoginRequest\x1a\x19.worker.SFTPLoginResponseB9Z7github.com/0xkowalskidev/gamejanitor/internal/worker/pbb\x06proto3"
+	"\x11ValidateSFTPLogin\x12\x18.worker.SFTPLoginRequest\x1a\x19.worker.SFTPLoginResponseB4Z2github.com/warsmite/gamejanitor/internal/worker/pbb\x06proto3"
 
 var (
 	file_proto_worker_proto_rawDescOnce sync.Once

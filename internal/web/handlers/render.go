@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0xkowalskidev/gamejanitor/internal/netinfo"
-	"github.com/0xkowalskidev/gamejanitor/internal/service"
-	"github.com/0xkowalskidev/gamejanitor/internal/web/templates"
+	"github.com/warsmite/gamejanitor/internal/netinfo"
+	"github.com/warsmite/gamejanitor/internal/service"
+	"github.com/warsmite/gamejanitor/internal/web/templates"
 	"github.com/gorilla/csrf"
 )
 

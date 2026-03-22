@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/0xkowalskidev/gamejanitor/internal/models"
+	"github.com/warsmite/gamejanitor/internal/models"
 	"golang.org/x/crypto/bcrypt"
 )
 

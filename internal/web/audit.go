@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0xkowalskidev/gamejanitor/internal/models"
+	"github.com/warsmite/gamejanitor/internal/models"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )

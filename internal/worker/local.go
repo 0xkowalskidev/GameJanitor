@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/0xkowalskidev/gamejanitor/internal/docker"
-	"github.com/0xkowalskidev/gamejanitor/internal/games"
+	"github.com/warsmite/gamejanitor/internal/docker"
+	"github.com/warsmite/gamejanitor/internal/games"
 )
 
 // LocalWorker implements Worker by delegating to the Docker client.

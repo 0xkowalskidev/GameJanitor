@@ -4,7 +4,7 @@ import (
 	"context"
 	"os"
 
-	"github.com/0xkowalskidev/gamejanitor/internal/worker"
+	"github.com/warsmite/gamejanitor/internal/worker"
 )
 
 // WorkerFileOperator adapts a worker.Worker to the FileOperator interface.

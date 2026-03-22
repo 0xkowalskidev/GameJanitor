@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/0xkowalskidev/gamejanitor/internal/docker"
-	"github.com/0xkowalskidev/gamejanitor/internal/models"
-	"github.com/0xkowalskidev/gamejanitor/internal/worker"
+	"github.com/warsmite/gamejanitor/internal/docker"
+	"github.com/warsmite/gamejanitor/internal/models"
+	"github.com/warsmite/gamejanitor/internal/worker"
 )
 
 type StatusManager struct {

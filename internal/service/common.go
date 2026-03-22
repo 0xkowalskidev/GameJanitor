@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/0xkowalskidev/gamejanitor/internal/models"
+	"github.com/warsmite/gamejanitor/internal/models"
 )
 
 // Gameserver status constants.

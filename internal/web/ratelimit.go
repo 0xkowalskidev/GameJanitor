@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/0xkowalskidev/gamejanitor/internal/service"
+	"github.com/warsmite/gamejanitor/internal/service"
 	"golang.org/x/time/rate"
 )
 

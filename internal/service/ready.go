@@ -7,9 +7,9 @@ import (
 	"regexp"
 	"sync"
 
-	"github.com/0xkowalskidev/gamejanitor/internal/games"
-	"github.com/0xkowalskidev/gamejanitor/internal/models"
-	"github.com/0xkowalskidev/gamejanitor/internal/worker"
+	"github.com/warsmite/gamejanitor/internal/games"
+	"github.com/warsmite/gamejanitor/internal/models"
+	"github.com/warsmite/gamejanitor/internal/worker"
 )
 
 // ReadyWatcher monitors container logs for a game's ready pattern

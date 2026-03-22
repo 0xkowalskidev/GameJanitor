@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/0xkowalskidev/gamejanitor/internal/models"
+	"github.com/warsmite/gamejanitor/internal/models"
 )
 
 // MigrateGameserver moves a gameserver from its current node to a different node.

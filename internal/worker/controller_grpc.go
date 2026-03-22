@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/0xkowalskidev/gamejanitor/internal/models"
+	"github.com/warsmite/gamejanitor/internal/models"
 	"golang.org/x/crypto/bcrypt"
-	"github.com/0xkowalskidev/gamejanitor/internal/worker/pb"
+	"github.com/warsmite/gamejanitor/internal/worker/pb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"

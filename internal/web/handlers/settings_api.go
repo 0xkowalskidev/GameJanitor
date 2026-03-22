@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/0xkowalskidev/gamejanitor/internal/service"
+	"github.com/warsmite/gamejanitor/internal/service"
 )
 
 type SettingsAPIHandlers struct {

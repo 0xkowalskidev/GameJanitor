@@ -1,6 +1,6 @@
 id: valheim
 name: "Valheim"
-base_image: ghcr.io/0xkowalskidev/gamejanitor/steamcmd
+base_image: ghcr.io/warsmite/gamejanitor/steamcmd
 recommended_memory_mb: 2048
 disabled_capabilities: ["command"]
 ready_pattern: 'Game server connected'

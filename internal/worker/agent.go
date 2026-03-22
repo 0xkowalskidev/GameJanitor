@@ -9,8 +9,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/0xkowalskidev/gamejanitor/internal/games"
-	"github.com/0xkowalskidev/gamejanitor/internal/worker/pb"
+	"github.com/warsmite/gamejanitor/internal/games"
+	"github.com/warsmite/gamejanitor/internal/worker/pb"
 )
 
 // Agent wraps a LocalWorker and exposes it as a gRPC service.

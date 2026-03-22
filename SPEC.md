@@ -57,7 +57,7 @@ Each game defines: base image, recommended memory, ports (name/port/protocol), e
 
 **Setup:** - Question: Does this script actually exist?
 ```sh
-curl -sSL https://raw.githubusercontent.com/0xkowalskidev/gamejanitor/master/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/warsmite/gamejanitor/master/install.sh | bash
 gamejanitor serve
 # Open http://localhost:8080
 ``` 

@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/0xkowalskidev/gamejanitor/cmd/cli"
+	"github.com/warsmite/gamejanitor/cmd/cli"
 )
 
 func main() {

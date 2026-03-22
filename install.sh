@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-REPO="0xkowalskidev/gamejanitor"
+REPO="warsmite/gamejanitor"
 INSTALL_DIR="/usr/local/bin"
 BINARY="gamejanitor"
 

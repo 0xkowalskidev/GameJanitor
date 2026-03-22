@@ -9,9 +9,9 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/0xkowalskidev/gamejanitor/internal/games"
-	"github.com/0xkowalskidev/gamejanitor/internal/models"
-	"github.com/0xkowalskidev/gamejanitor/internal/worker"
+	"github.com/warsmite/gamejanitor/internal/games"
+	"github.com/warsmite/gamejanitor/internal/models"
+	"github.com/warsmite/gamejanitor/internal/worker"
 	"github.com/google/uuid"
 )
 

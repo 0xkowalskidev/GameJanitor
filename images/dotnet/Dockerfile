@@ -1,4 +1,4 @@
-FROM ghcr.io/0xkowalskidev/gamejanitor/base
+FROM ghcr.io/warsmite/gamejanitor/base
 
 USER root
 

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/0xkowalskidev/gamejanitor/internal/games"
-	"github.com/0xkowalskidev/gamejanitor/internal/models"
+	"github.com/warsmite/gamejanitor/internal/games"
+	"github.com/warsmite/gamejanitor/internal/models"
 )
 
 func (s *GameserverService) UsedHostPorts(nodeID string, excludeID string) (map[int]bool, error) {

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/0xkowalskidev/gamejanitor/internal/models"
-	"github.com/0xkowalskidev/gamejanitor/internal/worker"
+	"github.com/warsmite/gamejanitor/internal/models"
+	"github.com/warsmite/gamejanitor/internal/worker"
 )
 
 func (s *GameserverService) GetContainerInfo(ctx context.Context, gameserverID string) (*worker.ContainerInfo, error) {

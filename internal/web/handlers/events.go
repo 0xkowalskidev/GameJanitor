@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/0xkowalskidev/gamejanitor/internal/service"
+	"github.com/warsmite/gamejanitor/internal/service"
 )
 
 type EventHandlers struct {

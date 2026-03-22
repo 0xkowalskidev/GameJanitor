@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0xkowalskidev/gamejanitor/internal/docker"
+	"github.com/warsmite/gamejanitor/internal/docker"
 )
 
 const fileopsImage = "alpine:latest"

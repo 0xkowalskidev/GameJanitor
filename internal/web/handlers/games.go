@@ -4,7 +4,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/0xkowalskidev/gamejanitor/internal/games"
+	"github.com/warsmite/gamejanitor/internal/games"
 	"github.com/go-chi/chi/v5"
 )
 

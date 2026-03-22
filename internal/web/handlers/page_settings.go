@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0xkowalskidev/gamejanitor/internal/models"
-	"github.com/0xkowalskidev/gamejanitor/internal/service"
-	"github.com/0xkowalskidev/gamejanitor/internal/worker"
+	"github.com/warsmite/gamejanitor/internal/models"
+	"github.com/warsmite/gamejanitor/internal/service"
+	"github.com/warsmite/gamejanitor/internal/worker"
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/csrf"
 )

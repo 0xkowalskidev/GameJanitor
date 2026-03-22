@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"path"
 
-	"github.com/0xkowalskidev/gamejanitor/internal/games"
-	"github.com/0xkowalskidev/gamejanitor/internal/service"
+	"github.com/warsmite/gamejanitor/internal/games"
+	"github.com/warsmite/gamejanitor/internal/service"
 	"github.com/go-chi/chi/v5"
 )
 

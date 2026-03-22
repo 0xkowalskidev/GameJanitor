@@ -6,7 +6,7 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/0xkowalskidev/gamejanitor/internal/models"
+	"github.com/warsmite/gamejanitor/internal/models"
 )
 
 // ResolveConnectionIP returns the connection IP for a gameserver on the given node.

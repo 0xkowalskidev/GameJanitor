@@ -14,7 +14,7 @@ Pterodactyl is business-first and painful to install. LinuxGSM is CLI-only. Game
 ## Ecosystem
 
 - **Gamejanitor** (this repo) — core server manager, always open source
-- **GJQ** — game janitor query library + CLI ([github.com/0xkowalskidev/gjq](https://github.com/0xkowalskidev/gjq))
+- **GJQ** — game janitor query library + CLI ([github.com/warsmite/gjq](https://github.com/warsmite/gjq))
 - **Server browser** — Battlemetrics-style public server browser (future, separate repo)
 
 ## Architecture
@@ -63,7 +63,7 @@ Hosting businesses don't need gamejanitor to manage users. They create scoped to
 Requires Docker. One-liner:
 
 ```sh
-curl -sSL https://raw.githubusercontent.com/0xkowalskidev/gamejanitor/master/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/warsmite/gamejanitor/master/install.sh | bash
 ```
 
 Then run:

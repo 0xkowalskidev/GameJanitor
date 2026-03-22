@@ -7,7 +7,7 @@ import (
 	"math"
 	"sort"
 
-	"github.com/0xkowalskidev/gamejanitor/internal/models"
+	"github.com/warsmite/gamejanitor/internal/models"
 )
 
 // PlacementCandidate is a worker ranked for gameserver placement.

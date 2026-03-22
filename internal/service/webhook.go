@@ -16,7 +16,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/0xkowalskidev/gamejanitor/internal/models"
+	"github.com/warsmite/gamejanitor/internal/models"
 	"github.com/google/uuid"
 )
 

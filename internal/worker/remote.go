@@ -8,7 +8,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/0xkowalskidev/gamejanitor/internal/worker/pb"
+	"github.com/warsmite/gamejanitor/internal/worker/pb"
 	"google.golang.org/grpc"
 )
 

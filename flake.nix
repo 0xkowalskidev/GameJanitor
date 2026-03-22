@@ -55,7 +55,7 @@
               echo "Usage: build-image <base|steamcmd|java|dotnet>"
               exit 1
             fi
-            docker build -t "ghcr.io/0xkowalskidev/gamejanitor/$image" "images/$image"
+            docker build -t "ghcr.io/warsmite/gamejanitor/$image" "images/$image"
           '';
 
           push-image = pkgs.writeShellScriptBin "push-image" ''
@@ -65,16 +65,16 @@
               exit 1
             fi
             echo "Building and pushing $image..."
-            docker build -t "ghcr.io/0xkowalskidev/gamejanitor/$image" "images/$image"
-            docker push "ghcr.io/0xkowalskidev/gamejanitor/$image"
+            docker build -t "ghcr.io/warsmite/gamejanitor/$image" "images/$image"
+            docker push "ghcr.io/warsmite/gamejanitor/$image"
           '';
 
           push-all-images = pkgs.writeShellScriptBin "push-all-images" ''
             # Build order matters: base must be built first since others depend on it
             for image in base steamcmd java dotnet; do
               echo "Building and pushing $image..."
-              docker build -t "ghcr.io/0xkowalskidev/gamejanitor/$image" "images/$image"
-              docker push "ghcr.io/0xkowalskidev/gamejanitor/$image"
+              docker build -t "ghcr.io/warsmite/gamejanitor/$image" "images/$image"
+              docker push "ghcr.io/warsmite/gamejanitor/$image"
             done
           '';
 
@@ -104,8 +104,8 @@
           '';
 
           gen-proto = pkgs.writeShellScriptBin "gen-proto" ''
-            protoc --go_out=. --go_opt=module=github.com/0xkowalskidev/gamejanitor \
-                   --go-grpc_out=. --go-grpc_opt=module=github.com/0xkowalskidev/gamejanitor \
+            protoc --go_out=. --go_opt=module=github.com/warsmite/gamejanitor \
+                   --go-grpc_out=. --go-grpc_opt=module=github.com/warsmite/gamejanitor \
                    proto/worker.proto
           '';
 
