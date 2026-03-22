@@ -210,7 +210,7 @@ func (s *BackupService) failBackup(ctx context.Context, gameserverID, backupID, 
 	})
 }
 
-func (s *BackupService) RestoreBackup(ctx context.Context, backupID string) (err error) {
+func (s *BackupService) RestoreBackup(ctx context.Context, backupID string) error {
 	backup, err := models.GetBackup(s.db, backupID)
 	if err != nil {
 		return fmt.Errorf("getting backup %s: %w", backupID, err)
@@ -227,71 +227,101 @@ func (s *BackupService) RestoreBackup(ctx context.Context, backupID string) (err
 		return ErrNotFoundf("gameserver %s not found", backup.GameserverID)
 	}
 
+	actor := ActorFromContext(ctx)
 	wasRunning := isRunningStatus(gs.Status)
 
-	s.log.Info("restoring backup", "backup_id", backupID, "gameserver_id", gs.ID, "was_running", wasRunning)
+	s.log.Info("restore initiated", "backup_id", backupID, "gameserver_id", gs.ID, "was_running", wasRunning)
 
-	defer func() {
-		if err != nil {
-			s.broadcaster.Publish(BackupEvent{
-				Type:         EventBackupRestoreFailed,
-				Timestamp:    time.Now(),
-				Actor:        ActorFromContext(ctx),
-				GameserverID: gs.ID,
-				BackupID:     backupID,
-				Error:        err.Error(),
-			})
-			s.broadcaster.Publish(GameserverErrorEvent{GameserverID: gs.ID, Reason: operationFailedReason("Backup restore failed", err), Timestamp: time.Now()})
-		}
-	}()
+	s.broadcaster.Publish(BackupEvent{
+		Type:         EventBackupRestore,
+		Timestamp:    time.Now(),
+		Actor:        actor,
+		GameserverID: gs.ID,
+		BackupID:     backupID,
+		BackupName:   backup.Name,
+	})
+
+	go s.runRestore(gs.ID, backupID, backup.Name, gs.VolumeName, wasRunning, actor)
+
+	return nil
+}
+
+func (s *BackupService) runRestore(gameserverID, backupID, backupName, volumeName string, wasRunning bool, actor Actor) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
 
 	// Stop gameserver if running
+	gs, err := models.GetGameserver(s.db, gameserverID)
+	if err != nil || gs == nil {
+		s.failRestore(gameserverID, backupID, backupName, actor, "gameserver not found")
+		return
+	}
 	if gs.Status != StatusStopped {
-		if err := s.gameserverSvc.Stop(ctx, gs.ID); err != nil {
-			return fmt.Errorf("stopping gameserver for restore: %w", err)
+		if err := s.gameserverSvc.Stop(ctx, gameserverID); err != nil {
+			s.failRestore(gameserverID, backupID, backupName, actor, fmt.Sprintf("stopping gameserver: %v", err))
+			return
 		}
 	}
 
-	w := s.dispatcher.WorkerFor(gs.ID)
+	w := s.dispatcher.WorkerFor(gameserverID)
 
 	// Load backup from store and decompress
-	reader, err := s.store.Load(ctx, backup.GameserverID, backup.ID)
+	reader, err := s.store.Load(ctx, gameserverID, backupID)
 	if err != nil {
-		return fmt.Errorf("loading backup from store: %w", err)
+		s.failRestore(gameserverID, backupID, backupName, actor, fmt.Sprintf("loading backup from store: %v", err))
+		return
 	}
-	defer reader.Close()
 
 	gzReader, err := gzip.NewReader(reader)
 	if err != nil {
-		return fmt.Errorf("creating gzip reader: %w", err)
-	}
-	defer gzReader.Close()
-
-	// Restore directly into volume (clears existing contents and extracts tar)
-	if err := w.RestoreVolume(ctx, gs.VolumeName, gzReader); err != nil {
-		return fmt.Errorf("restoring backup to volume: %w", err)
+		reader.Close()
+		s.failRestore(gameserverID, backupID, backupName, actor, fmt.Sprintf("decompressing backup: %v", err))
+		return
 	}
 
-	s.log.Info("backup restored", "backup_id", backupID, "gameserver_id", gs.ID)
+	if err := w.RestoreVolume(ctx, volumeName, gzReader); err != nil {
+		gzReader.Close()
+		reader.Close()
+		s.failRestore(gameserverID, backupID, backupName, actor, fmt.Sprintf("restoring volume: %v", err))
+		return
+	}
+	gzReader.Close()
+	reader.Close()
+
+	s.log.Info("backup restored", "backup_id", backupID, "gameserver_id", gameserverID)
 
 	s.broadcaster.Publish(BackupEvent{
 		Type:         EventBackupRestoreCompleted,
 		Timestamp:    time.Now(),
-		Actor:        ActorFromContext(ctx),
-		GameserverID: gs.ID,
+		Actor:        actor,
+		GameserverID: gameserverID,
 		BackupID:     backupID,
+		BackupName:   backupName,
 	})
 
 	if wasRunning {
-		s.log.Info("restarting gameserver after restore", "gameserver_id", gs.ID)
-		if err := s.gameserverSvc.Start(ctx, gs.ID); err != nil {
-			return fmt.Errorf("restarting gameserver after restore: %w", err)
+		s.log.Info("restarting gameserver after restore", "gameserver_id", gameserverID)
+		if err := s.gameserverSvc.Start(ctx, gameserverID); err != nil {
+			s.log.Error("failed to restart after restore", "gameserver_id", gameserverID, "error", err)
+			s.broadcaster.Publish(GameserverErrorEvent{GameserverID: gameserverID, Reason: fmt.Sprintf("Restart after restore failed: %v", err), Timestamp: time.Now()})
 		}
 	} else {
-		s.broadcaster.Publish(ContainerStoppedEvent{GameserverID: gs.ID, Timestamp: time.Now()})
+		s.broadcaster.Publish(ContainerStoppedEvent{GameserverID: gameserverID, Timestamp: time.Now()})
 	}
+}
 
-	return nil
+func (s *BackupService) failRestore(gameserverID, backupID, backupName string, actor Actor, reason string) {
+	s.log.Error("backup restore failed", "gameserver_id", gameserverID, "backup_id", backupID, "error", reason)
+	s.broadcaster.Publish(BackupEvent{
+		Type:         EventBackupRestoreFailed,
+		Timestamp:    time.Now(),
+		Actor:        actor,
+		GameserverID: gameserverID,
+		BackupID:     backupID,
+		BackupName:   backupName,
+		Error:        reason,
+	})
+	s.broadcaster.Publish(GameserverErrorEvent{GameserverID: gameserverID, Reason: operationFailedReason("Backup restore failed", fmt.Errorf("%s", reason)), Timestamp: time.Now()})
 }
 
 func (s *BackupService) DeleteBackup(ctx context.Context, backupID string) error {

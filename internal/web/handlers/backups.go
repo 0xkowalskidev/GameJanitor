@@ -64,7 +64,7 @@ func (h *BackupHandlers) Restore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	backup, _ := h.svc.GetBackup(backupID)
-	respondOK(w, backup)
+	respondAccepted(w, backup)
 }
 
 func (h *BackupHandlers) Download(w http.ResponseWriter, r *http.Request) {
