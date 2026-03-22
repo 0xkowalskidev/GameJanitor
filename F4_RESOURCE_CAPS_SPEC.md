@@ -545,3 +545,71 @@ Resource values need bounds checking:
 45. **SSE filtering** — `?types=` query param, default `status_changed`
 46. **Event storage** — `events` table with configurable retention (default 30 days)
 47. **Event history endpoint** — `GET /api/events` with type/gameserver/time filters
+
+---
+
+## Implementation Plan
+
+Data model first, then event system on top. Stop at the end of each phase for feedback.
+
+### Phase 1: Resource caps cleanup
+Changes: #1-8
+- Delete `max_memory_mb`, `max_cpu` from gameservers
+- Rename `max_storage_mb` → `storage_limit_mb`, `max_backups` → `backup_limit`
+- Delete cap enforcement code from `UpdateGameserver`
+- Add `cpu_enforced` field
+- Conditional CPU enforcement in `docker.go`
+- Input validation on resource values
+- Update dispatcher queries for new column names
+
+### Phase 2: Token rework
+Changes: #25-29
+- Single token type with permissions list
+- `[]` gameserver_ids = all access
+- Convenience presets (admin, worker, custom)
+- Update middleware to check permissions instead of scopes
+- Update all `IsAdmin` / `HasPermission` call sites
+
+### Phase 3: Constants
+Changes: #41-43
+- Create `permissions.go` with all permission constants
+- Update `events.go` with all event type constants
+- Migrate existing code to use constants
+
+### Phase 4: Event bus + event-driven status
+Changes: #30-32, #33, #37, #44
+- Rename `EventBroadcaster` → `EventBus`
+- Rework event types for action/outcome model
+- Create status subscriber — maps events to gameserver status
+- Replace 25+ `setGameserverStatus` calls with event publishes
+- `status_changed` as derived event from status subscriber
+- Simplify to 7 statuses
+
+### Phase 5: Action events + audit removal
+Changes: #34-36, #38-40
+- Add action events to service methods with actor model
+- Make backup creation async
+- Add outcome events for backup completion/failure
+- Replace `actor_token_id` with actor object
+- Remove audit middleware, table, model, handlers, routes
+
+### Phase 6: Node tags + dispatcher
+Changes: #12-15
+- Add `tags` to `worker_nodes`, `node_tags` to `gameservers`
+- Dispatcher tag filtering before resource ranking
+- API for managing node tags
+
+### Phase 7: Auto-migration + migration resilience
+Changes: #16-24
+- Snapshot + rollback on resource update
+- Capacity check excluding old allocation
+- Auto-migrate on overcommit with tag respect
+- Migration via backup store (replace in-memory buffer)
+- Store migrations under `migrations/` prefix
+- Clear error messages + webhook notification
+
+### Phase 8: Event storage + SSE + history
+Changes: #45-47
+- `events` table with configurable retention
+- SSE `?types=` filtering
+- `GET /api/events` endpoint
