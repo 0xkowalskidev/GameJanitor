@@ -18,7 +18,7 @@ type StatusEvent struct {
 	Timestamp    time.Time `json:"timestamp"`
 }
 
-func (e StatusEvent) EventType() string        { return "status_changed" }
+func (e StatusEvent) EventType() string        { return EventStatusChanged }
 func (e StatusEvent) EventTimestamp() time.Time { return e.Timestamp }
 
 type EventBroadcaster struct {

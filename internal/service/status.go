@@ -278,7 +278,7 @@ func (m *StatusManager) onWorkerRegistered(nodeID string, w worker.Worker) {
 	m.watchWorkerEvents(ctx, nodeID, w)
 
 	m.broadcaster.Publish(WorkerEvent{
-		Type:      "worker.connected",
+		Type:      EventWorkerConnected,
 		Timestamp: time.Now(),
 		WorkerID:  nodeID,
 	})
@@ -306,7 +306,7 @@ func (m *StatusManager) onWorkerUnregistered(nodeID string) {
 	m.workerMu.Unlock()
 
 	m.broadcaster.Publish(WorkerEvent{
-		Type:      "worker.disconnected",
+		Type:      EventWorkerDisconnected,
 		Timestamp: time.Now(),
 		WorkerID:  nodeID,
 	})

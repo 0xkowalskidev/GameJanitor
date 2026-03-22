@@ -5,6 +5,69 @@ import (
 	"time"
 )
 
+// Action events — user/schedule initiated, carry actor
+const (
+	EventGameserverCreate  = "gameserver.create"
+	EventGameserverUpdate  = "gameserver.update"
+	EventGameserverDelete  = "gameserver.delete"
+	EventGameserverStart   = "gameserver.start"
+	EventGameserverStop    = "gameserver.stop"
+	EventGameserverRestart = "gameserver.restart"
+	EventBackupCreate      = "backup.create"
+	EventBackupDelete      = "backup.delete"
+	EventBackupRestore     = "backup.restore"
+	EventScheduleCreate    = "schedule.create"
+	EventScheduleUpdate    = "schedule.update"
+	EventScheduleDelete    = "schedule.delete"
+)
+
+// Lifecycle outcome events — system, drive status changes
+const (
+	EventImagePulling      = "gameserver.image_pulling"
+	EventImagePulled       = "gameserver.image_pulled"
+	EventContainerCreating = "gameserver.container_creating"
+	EventContainerStarted  = "gameserver.container_started"
+	EventGameserverReady   = "gameserver.ready"
+	EventContainerStopping = "gameserver.container_stopping"
+	EventContainerStopped  = "gameserver.container_stopped"
+	EventContainerExited   = "gameserver.container_exited"
+	EventGameserverError   = "gameserver.error"
+)
+
+// Operation outcome events — system
+const (
+	EventStatusChanged          = "status_changed"
+	EventBackupCompleted        = "backup.completed"
+	EventBackupFailed           = "backup.failed"
+	EventBackupRestoreCompleted = "backup.restore.completed"
+	EventBackupRestoreFailed    = "backup.restore.failed"
+	EventWorkerConnected        = "worker.connected"
+	EventWorkerDisconnected     = "worker.disconnected"
+	EventScheduleTaskCompleted  = "schedule.task.completed"
+	EventScheduleTaskFailed     = "schedule.task.failed"
+)
+
+// AllEventTypes is every event type, used for webhook endpoint validation.
+var AllEventTypes = []string{
+	// Action events
+	EventGameserverCreate, EventGameserverUpdate, EventGameserverDelete,
+	EventGameserverStart, EventGameserverStop, EventGameserverRestart,
+	EventBackupCreate, EventBackupDelete, EventBackupRestore,
+	EventScheduleCreate, EventScheduleUpdate, EventScheduleDelete,
+	// Lifecycle outcomes
+	EventImagePulling, EventImagePulled,
+	EventContainerCreating, EventContainerStarted,
+	EventGameserverReady,
+	EventContainerStopping, EventContainerStopped, EventContainerExited,
+	EventGameserverError,
+	// Operation outcomes
+	EventStatusChanged,
+	EventBackupCompleted, EventBackupFailed,
+	EventBackupRestoreCompleted, EventBackupRestoreFailed,
+	EventWorkerConnected, EventWorkerDisconnected,
+	EventScheduleTaskCompleted, EventScheduleTaskFailed,
+}
+
 // actorTokenID extracts the token ID from context, or nil for system/async actions.
 func actorTokenID(ctx context.Context) *string {
 	token := TokenFromContext(ctx)

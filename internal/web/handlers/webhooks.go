@@ -335,14 +335,8 @@ func deliverWebhook(url string, body []byte, secret string) (int, error) {
 	return resp.StatusCode, nil
 }
 
-// Known event types for validation
-var knownEventTypes = []string{
-	"status_changed",
-	"gameserver.created", "gameserver.updated", "gameserver.deleted",
-	"backup.created", "backup.deleted", "backup.restore_completed", "backup.restore_failed",
-	"worker.connected", "worker.disconnected",
-	"schedule.task_completed", "schedule.task_failed",
-}
+// knownEventTypes references the central event type list for webhook validation.
+var knownEventTypes = service.AllEventTypes
 
 func validateEventFilter(events []string) error {
 	if len(events) == 0 {

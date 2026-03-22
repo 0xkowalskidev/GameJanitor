@@ -166,7 +166,7 @@ func (s *Scheduler) executeTask(scheduleID string) {
 	if taskErr != nil {
 		s.log.Error("scheduled task failed", "schedule_id", scheduleID, "type", schedule.Type, "error", taskErr)
 		s.broadcaster.Publish(ScheduledTaskEvent{
-			Type:         "schedule.task_failed",
+			Type:         EventScheduleTaskFailed,
 			Timestamp:    time.Now(),
 			GameserverID: schedule.GameserverID,
 			ScheduleID:   scheduleID,
@@ -176,7 +176,7 @@ func (s *Scheduler) executeTask(scheduleID string) {
 	} else {
 		s.log.Info("scheduled task completed", "schedule_id", scheduleID, "type", schedule.Type)
 		s.broadcaster.Publish(ScheduledTaskEvent{
-			Type:         "schedule.task_completed",
+			Type:         EventScheduleTaskCompleted,
 			Timestamp:    time.Now(),
 			GameserverID: schedule.GameserverID,
 			ScheduleID:   scheduleID,

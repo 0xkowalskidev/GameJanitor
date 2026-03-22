@@ -147,7 +147,7 @@ func (s *BackupService) CreateBackup(ctx context.Context, gameserverID string, n
 	s.log.Info("backup created", "gameserver_id", gameserverID, "backup_id", backupID, "size_bytes", sizeBytes)
 
 	s.broadcaster.Publish(BackupEvent{
-		Type:         "backup.created",
+		Type:         EventBackupCreate,
 		Timestamp:    time.Now(),
 		ActorTokenID: actorTokenID(ctx),
 		GameserverID: gameserverID,
@@ -183,7 +183,7 @@ func (s *BackupService) RestoreBackup(ctx context.Context, backupID string) (err
 	defer func() {
 		if err != nil {
 			s.broadcaster.Publish(BackupEvent{
-				Type:         "backup.restore_failed",
+				Type:         EventBackupRestoreFailed,
 				Timestamp:    time.Now(),
 				ActorTokenID: actorTokenID(ctx),
 				GameserverID: gs.ID,
@@ -227,7 +227,7 @@ func (s *BackupService) RestoreBackup(ctx context.Context, backupID string) (err
 	s.log.Info("backup restored", "backup_id", backupID, "gameserver_id", gs.ID)
 
 	s.broadcaster.Publish(BackupEvent{
-		Type:         "backup.restore_completed",
+		Type:         EventBackupRestoreCompleted,
 		Timestamp:    time.Now(),
 		ActorTokenID: actorTokenID(ctx),
 		GameserverID: gs.ID,
@@ -266,7 +266,7 @@ func (s *BackupService) DeleteBackup(ctx context.Context, backupID string) error
 	}
 
 	s.broadcaster.Publish(BackupEvent{
-		Type:         "backup.deleted",
+		Type:         EventBackupDelete,
 		Timestamp:    time.Now(),
 		ActorTokenID: actorTokenID(ctx),
 		GameserverID: backup.GameserverID,

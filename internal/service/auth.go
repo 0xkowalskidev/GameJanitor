@@ -34,7 +34,6 @@ const (
 	ScopeWorker = "worker"
 )
 
-var AllPermissions = []string{"start", "stop", "restart", "logs", "commands", "files", "backups", "configure", "delete"}
 
 type AuthService struct {
 	db  *sql.DB
@@ -255,15 +254,6 @@ func HasPermission(token *models.Token, gameserverID string, permission string) 
 	}
 	for _, p := range perms {
 		if p == permission {
-			return true
-		}
-	}
-	return false
-}
-
-func isValidPermission(p string) bool {
-	for _, valid := range AllPermissions {
-		if p == valid {
 			return true
 		}
 	}
