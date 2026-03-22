@@ -21,6 +21,7 @@ import (
 )
 
 type WebhookPayload struct {
+	Version   int       `json:"version"`
 	ID        string    `json:"id"`
 	Timestamp time.Time `json:"timestamp"`
 	EventType string    `json:"event_type"`
@@ -212,6 +213,7 @@ func (w *WebhookWorker) enqueueEvent(event WebhookEvent) {
 		}
 
 		payload := WebhookPayload{
+			Version:   1,
 			ID:        uuid.New().String(),
 			Timestamp: event.EventTimestamp(),
 			EventType: eventType,

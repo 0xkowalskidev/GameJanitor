@@ -228,6 +228,7 @@ func (h *WebhookHandlers) Test(w http.ResponseWriter, r *http.Request) {
 	}
 
 	payload := service.WebhookPayload{
+		Version:   1,
 		ID:        "test",
 		Timestamp: time.Now().UTC(),
 		EventType: "webhook.test",
