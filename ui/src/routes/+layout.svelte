@@ -2,7 +2,7 @@
   import '../styles/tokens.css';
   import { onMount, onDestroy } from 'svelte';
   import { ToastContainer, ConfirmModal } from '$lib/components';
-  import { connect, disconnect, enableAutoToasts, initAuth } from '$lib/stores';
+  import { connect, disconnect, enableAutoToasts, initAuth, gameserverStore } from '$lib/stores';
 
   let { children } = $props();
 
@@ -10,9 +10,11 @@
     initAuth();
     connect();
     enableAutoToasts();
+    gameserverStore.init();
   });
 
   onDestroy(() => {
+    gameserverStore.destroy();
     disconnect();
   });
 </script>

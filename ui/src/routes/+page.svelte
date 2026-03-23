@@ -1,16 +1,12 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
-  import { api, type Gameserver, type GameserverStats, type QueryData, type Game } from '$lib/api';
-  import { onEvent, toast } from '$lib/stores';
+  import { gameserverStore, toast } from '$lib/stores';
+  import { api } from '$lib/api';
   import { HeroPanel } from '$lib/components';
 
-  let gameservers = $state<Gameserver[]>([]);
-  let games = $state<Record<string, Game>>({});
-  let stats = $state<Record<string, GameserverStats | null>>({});
-  let queries = $state<Record<string, QueryData | null>>({});
-  let logs = $state<Record<string, string[]>>({});
   let search = $state('');
-  let loading = $state(true);
+
+  const gameservers = $derived(gameserverStore.list);
+  const loading = $derived(gameserverStore.loading);
 
   const filtered = $derived(
     search
@@ -21,101 +17,14 @@
   const statusSummary = $derived(() => {
     const counts: Record<string, number> = {};
     for (const gs of gameservers) {
-      const s = gs.status === 'started' || gs.status === 'installing' || gs.status === 'starting' || gs.status === 'stopping'
-        ? gs.status : gs.status;
-      counts[s] = (counts[s] || 0) + 1;
+      counts[gs.status] = (counts[gs.status] || 0) + 1;
     }
     return counts;
   });
 
-  let unsubs: (() => void)[] = [];
-
-  onMount(async () => {
-    try {
-      const [gs, gameList] = await Promise.all([
-        api.gameservers.list(),
-        api.games.list(),
-      ]);
-      gameservers = gs;
-      for (const g of gameList) {
-        games[g.id] = g;
-      }
-
-    } catch (e: any) {
-      toast(`Failed to load gameservers: ${e.message}`, 'error');
-    } finally {
-      loading = false;
-    }
-
-    // Initial stats/query/logs fetch for active servers
-    for (const gs of gameservers) {
-      if (gs.status !== 'stopped') {
-        api.gameservers.logs(gs.id, 4).then(r => { if (r?.lines) logs[gs.id] = r.lines.slice(-4); }).catch(() => {});
-      }
-      if (gs.status === 'running' || gs.status === 'started') {
-        api.gameservers.stats(gs.id).then(s => { if (s) stats[gs.id] = s; }).catch(() => {});
-        api.gameservers.query(gs.id).then(q => { if (q) queries[gs.id] = q; }).catch(() => {});
-      }
-    }
-
-    // SSE: update gameserver status in real-time
-    unsubs.push(onEvent('status_changed', (data: any) => {
-      const oldGs = gameservers.find(gs => gs.id === data.gameserver_id);
-      const wasInactive = !oldGs || oldGs.status === 'stopped';
-      const nowActive = data.new_status !== 'stopped';
-
-      gameservers = gameservers.map(gs =>
-        gs.id === data.gameserver_id
-          ? { ...gs, status: data.new_status, error_reason: data.error_reason || '' }
-          : gs
-      );
-
-      // Fetch logs when a server becomes active
-      if (wasInactive && nowActive) {
-        api.gameservers.logs(data.gameserver_id, 4).then(r => { if (r?.lines) logs[data.gameserver_id] = r.lines.slice(-4); }).catch(() => {});
-      }
-      // Clear data when stopped
-      if (data.new_status === 'stopped') {
-        logs[data.gameserver_id] = [];
-        stats[data.gameserver_id] = null;
-        queries[data.gameserver_id] = null;
-      }
-    }));
-
-    // SSE: receive stats from server-side polling
-    unsubs.push(onEvent('gameserver.stats', (data: any) => {
-      stats[data.gameserver_id] = {
-        cpu_percent: data.cpu_percent,
-        memory_usage_mb: data.memory_usage_mb,
-        memory_limit_mb: data.memory_limit_mb,
-        volume_size_bytes: data.volume_size_bytes,
-        storage_limit_mb: data.storage_limit_mb,
-      };
-    }));
-
-    // SSE: receive query data from server-side polling
-    unsubs.push(onEvent('gameserver.query', (data: any) => {
-      queries[data.gameserver_id] = {
-        players_online: data.players_online,
-        max_players: data.max_players,
-        players: data.players || [],
-        map: data.map,
-        version: data.version,
-      };
-    }));
-
-    // SSE: refresh log tail on lifecycle events
-    unsubs.push(onEvent('gameserver.*', (data: any) => {
-      if (!data.gameserver_id || data.type === 'gameserver.stats' || data.type === 'gameserver.query') return;
-      api.gameservers.logs(data.gameserver_id, 4).then(r => { if (r?.lines) logs[data.gameserver_id] = r.lines.slice(-4); }).catch(() => {});
-    }));
-  });
-
-  onDestroy(() => {
-    for (const unsub of unsubs) unsub();
-  });
-
-  function connectionAddress(gs: Gameserver): string {
+  function connectionAddress(gsId: string): string {
+    const gs = gameserverStore.get(gsId);
+    if (!gs) return '';
     try {
       const ports = typeof gs.ports === 'string' ? JSON.parse(gs.ports) : gs.ports;
       if (ports && ports.length > 0) {
@@ -183,14 +92,16 @@
   {:else}
     <div class="server-list">
       {#each filtered as gs (gs.id)}
+        {@const state = gameserverStore.getState(gs.id)}
+        {@const game = gameserverStore.gameFor(gs.game_id)}
         <HeroPanel
           gameserver={gs}
-          stats={stats[gs.id] || null}
-          query={queries[gs.id] || null}
-          connectionAddress={connectionAddress(gs)}
-          iconPath={games[gs.game_id]?.icon_path || ''}
-          gameName={games[gs.game_id]?.name || gs.game_id}
-          logLines={logs[gs.id] || []}
+          stats={state?.stats ?? null}
+          query={state?.query ?? null}
+          connectionAddress={connectionAddress(gs.id)}
+          iconPath={game?.icon_path || ''}
+          gameName={game?.name || gs.game_id}
+          logLines={state?.logLines?.slice(-4) ?? []}
           onaction={(action) => handleAction(gs.id, action as any)}
         />
       {/each}

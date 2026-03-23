@@ -1,18 +1,20 @@
 <script lang="ts">
   import { page } from '$app/stores';
   import { onMount, onDestroy } from 'svelte';
-  import { api, type Gameserver, type GameserverStats, type QueryData, type Event } from '$lib/api';
-  import { onGameserverEvent, toast } from '$lib/stores';
+  import { api, type Event } from '$lib/api';
+  import { gameserverStore, toast } from '$lib/stores';
+  import { onGameserverEvent } from '$lib/stores/sse';
   import { CopyBlock, TelemetryCell } from '$lib/components';
 
   const gsId = $derived($page.params.id as string);
 
-  let gameserver = $state<Gameserver | null>(null);
-  let stats = $state<GameserverStats | null>(null);
-  let query = $state<QueryData | null>(null);
-  let events = $state<Event[]>([]);
+  const gsState = $derived(gameserverStore.getState(gsId));
+  const gameserver = $derived(gsState?.gameserver ?? null);
+  const stats = $derived(gsState?.stats ?? null);
+  const query = $derived(gsState?.query ?? null);
+  const isRunning = $derived(gameserverStore.isRunning(gsId));
 
-  const isRunning = $derived(gameserver?.status === 'running' || gameserver?.status === 'started');
+  const hasStorageLimit = $derived(!!stats?.storage_limit_mb);
 
   // Derived telemetry values
   const memPercent = $derived(
@@ -20,14 +22,14 @@
   );
   const cpuPercent = $derived(stats ? Math.round(stats.cpu_percent) : 0);
   const storageMB = $derived(stats ? Math.round(stats.volume_size_bytes / (1024 * 1024)) : 0);
-  const hasStorageLimit = $derived(!!stats?.storage_limit_mb);
   const storagePercent = $derived(
     stats?.storage_limit_mb ? Math.round((storageMB / stats.storage_limit_mb) * 100) : (stats ? 100 : 0)
   );
 
-  function connectionAddress(gs: Gameserver): string {
+  function connectionAddress(): string {
+    if (!gameserver) return '';
     try {
-      const ports = typeof gs.ports === 'string' ? JSON.parse(gs.ports) : gs.ports;
+      const ports = typeof gameserver.ports === 'string' ? JSON.parse(gameserver.ports) : gameserver.ports;
       if (ports && ports.length > 0) {
         return `${ports[0].host_port || ports[0].container_port}`;
       }
@@ -35,64 +37,20 @@
     return '';
   }
 
-  let unsubs: (() => void)[] = [];
+  // Activity feed — page-specific state
+  let events = $state<Event[]>([]);
+  let unsub: (() => void) | null = null;
 
   onMount(async () => {
-    try {
-      gameserver = await api.gameservers.get(gsId);
-    } catch (e: any) {
-      toast(`Failed to load gameserver: ${e.message}`, 'error');
-      return;
-    }
-
-    // Load activity feed + initial stats/query
+    // Load activity feed
     try {
       const allEvents = await api.events.history({ gameserver_id: gsId, limit: 40 });
       events = allEvents.filter(e => e.event_type !== 'status_changed').slice(0, 20);
     } catch { /* non-fatal */ }
 
-    if (isRunning) {
-      const [s, q] = await Promise.all([
-        api.gameservers.stats(gsId).catch(() => null),
-        api.gameservers.query(gsId).catch(() => null),
-      ]);
-      stats = s;
-      query = q;
-    }
-
-    // SSE: receive stats + query from server-side polling
-    unsubs.push(onGameserverEvent(gsId, (data: any) => {
-      if (data.type === 'status_changed') {
-        if (gameserver) {
-          gameserver = { ...gameserver, status: data.new_status, error_reason: data.error_reason || '' };
-        }
-        return;
-      }
-
-      if (data.type === 'gameserver.stats') {
-        stats = {
-          cpu_percent: data.cpu_percent,
-          memory_usage_mb: data.memory_usage_mb,
-          memory_limit_mb: data.memory_limit_mb,
-          volume_size_bytes: data.volume_size_bytes,
-          storage_limit_mb: data.storage_limit_mb,
-        };
-        return;
-      }
-
-      if (data.type === 'gameserver.query') {
-        query = {
-          players_online: data.players_online,
-          max_players: data.max_players,
-          players: data.players || [],
-          map: data.map,
-          version: data.version,
-        };
-        return;
-      }
-
-      // Activity feed — skip stats/query noise
-      if (data.type === 'gameserver.stats' || data.type === 'gameserver.query') return;
+    // SSE: activity feed only — stats/query/status handled by store
+    unsub = onGameserverEvent(gsId, (data: any) => {
+      if (data.type === 'status_changed' || data.type === 'gameserver.stats' || data.type === 'gameserver.query') return;
 
       const event: Event = {
         id: crypto.randomUUID(),
@@ -103,11 +61,11 @@
         created_at: new Date().toISOString(),
       };
       events = [event, ...events.slice(0, 19)];
-    }));
+    });
   });
 
   onDestroy(() => {
-    for (const unsub of unsubs) unsub();
+    unsub?.();
   });
 
   function eventLabel(type: string, data?: any): string {
@@ -173,7 +131,7 @@
     <!-- Connection info — full width -->
     <div class="panel full-width" style="padding: 0;">
       <div class="connect-row">
-        <CopyBlock label="Connect" value={connectionAddress(gameserver)} primary={true} />
+        <CopyBlock label="Connect" value={connectionAddress()} primary={true} />
         <CopyBlock label="SFTP" value={`sftp://${gameserver.sftp_username}@localhost:2222`} />
       </div>
     </div>
@@ -296,13 +254,11 @@
     color: var(--text-tertiary);
   }
 
-  /* Connection row */
   .connect-row {
     display: flex; gap: 12px;
     padding: 14px 18px;
   }
 
-  /* Telemetry grid */
   .tele-grid {
     display: grid; grid-template-columns: repeat(3, 1fr);
     padding: 14px 18px 18px;
@@ -312,7 +268,6 @@
   .tele-grid > :global(div:first-child) { padding-left: 0; }
   .tele-grid > :global(div:last-child) { padding-right: 0; }
 
-  /* Query */
   .query-content { padding: 14px 18px 18px; }
   .query-row {
     display: flex; justify-content: space-between; align-items: center;
@@ -336,7 +291,6 @@
   }
   .player-tag:hover { border-color: var(--border); }
 
-  /* Activity feed */
   .feed-content { padding: 0 18px 14px; }
   .feed-list { max-height: 280px; overflow-y: auto; }
   .feed-list::-webkit-scrollbar { width: 4px; }
