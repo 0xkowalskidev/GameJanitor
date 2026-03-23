@@ -298,12 +298,18 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) (er
 	}
 	updateBinds := []string{scriptDir + ":/scripts:ro"}
 
+	// Merge env vars so the update script has access to config (VERSION, EULA, etc.)
+	env, err := mergeEnv(game, gs)
+	if err != nil {
+		return fmt.Errorf("merging env for update: %w", err)
+	}
+
 	// Run update-server in temp container
 	tempName := naming.UpdateContainerName(id)
 	tempID, err := w.CreateContainer(ctx, worker.ContainerOptions{
 		Name:       tempName,
 		Image:      game.BaseImage,
-		Env:        []string{},
+		Env:        env,
 		VolumeName: gs.VolumeName,
 		Binds:      updateBinds,
 	})
