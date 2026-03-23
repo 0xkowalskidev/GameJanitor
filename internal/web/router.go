@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/warsmite/gamejanitor/internal/config"
 	"github.com/warsmite/gamejanitor/internal/games"
 	"github.com/warsmite/gamejanitor/internal/netinfo"
 	"github.com/warsmite/gamejanitor/internal/service"
@@ -21,34 +22,33 @@ import (
 	"github.com/gorilla/csrf"
 )
 
-func NewRouter(
-	gameStore *games.GameStore,
-	gameserverSvc *service.GameserverService,
-	consoleSvc *service.ConsoleService,
-	fileSvc *service.FileService,
-	scheduleSvc *service.ScheduleService,
-	backupSvc *service.BackupService,
-	querySvc *service.QueryService,
-	settingsSvc *service.SettingsService,
-	authSvc *service.AuthService,
-	broadcaster *service.EventBus,
-	netInfo *netinfo.Info,
-	registry *worker.Registry,
-	db *sql.DB,
-	logPath string,
-	dataDir string,
-	bindAddress string,
-	port int,
-	sftpPort int,
-	role string,
-	log *slog.Logger,
-) (http.Handler, error) {
-	renderer, err := handlers.NewRenderer(netInfo, settingsSvc, bindAddress, port, sftpPort, role)
+type RouterOptions struct {
+	Config        config.Config
+	Role          string // "standalone", "controller", "controller+worker"
+	LogPath       string
+	GameStore     *games.GameStore
+	GameserverSvc *service.GameserverService
+	ConsoleSvc    *service.ConsoleService
+	FileSvc       *service.FileService
+	ScheduleSvc   *service.ScheduleService
+	BackupSvc     *service.BackupService
+	QuerySvc      *service.QueryService
+	SettingsSvc   *service.SettingsService
+	AuthSvc       *service.AuthService
+	Broadcaster   *service.EventBus
+	NetInfo       *netinfo.Info
+	Registry      *worker.Registry
+	DB            *sql.DB
+	Log           *slog.Logger
+}
+
+func NewRouter(opts RouterOptions) (http.Handler, error) {
+	renderer, err := handlers.NewRenderer(opts.Config, opts.Role, opts.NetInfo, opts.SettingsSvc)
 	if err != nil {
 		return nil, fmt.Errorf("initializing template renderer: %w", err)
 	}
 
-	csrfKey, err := loadOrCreateCSRFKey(dataDir)
+	csrfKey, err := loadOrCreateCSRFKey(opts.Config.DataDir)
 	if err != nil {
 		return nil, fmt.Errorf("initializing CSRF key: %w", err)
 	}
@@ -59,7 +59,7 @@ func NewRouter(
 	r.Use(middleware.RequestID)
 	r.Use(securityHeaders)
 
-	rateLimitStore := NewRateLimitStore(settingsSvc, log)
+	rateLimitStore := NewRateLimitStore(opts.SettingsSvc, opts.Log)
 	r.Use(rateLimitStore.PerIPMiddleware())
 
 	r.NotFound(func(w http.ResponseWriter, req *http.Request) {
@@ -76,44 +76,44 @@ func NewRouter(
 	r.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
 
 	// Game assets served from the embedded/override game store
-	r.Handle("/static/games/*", http.StripPrefix("/static/games/", http.FileServer(http.FS(gameStore.AssetsFS()))))
+	r.Handle("/static/games/*", http.StripPrefix("/static/games/", http.FileServer(http.FS(opts.GameStore.AssetsFS()))))
 
 	// Auth middleware — applied to both API and page routes
-	authMiddleware := AuthMiddleware(authSvc, settingsSvc)
+	authMiddleware := AuthMiddleware(opts.AuthSvc, opts.SettingsSvc)
 
 	// API handlers (JSON) — no CSRF (uses JSON bodies, not forms)
-	gameHandlers := handlers.NewGameHandlers(gameStore, log)
-	minecraftVersions := handlers.NewMinecraftVersionsHandler(log)
-	gameserverHandlers := handlers.NewGameserverHandlers(gameserverSvc, consoleSvc, querySvc, log)
-	eventHandlers := handlers.NewEventHandlers(broadcaster, db, log)
-	scheduleHandlers := handlers.NewScheduleHandlers(scheduleSvc, log)
-	backupHandlers := handlers.NewBackupHandlers(backupSvc, log)
-	fileHandlers := handlers.NewFileHandlers(fileSvc, log)
-	logHandlers := handlers.NewLogHandlers(logPath, log)
-	statusHandlers := handlers.NewStatusHandlers(gameserverSvc, querySvc, log)
-	authHandlers := handlers.NewAuthHandlers(authSvc, log)
-	workerNodeSvc := service.NewWorkerNodeService(db, log)
-	workerHandlers := handlers.NewWorkerHandlers(registry, workerNodeSvc, gameserverSvc, log)
-	settingsAPIHandlers := handlers.NewSettingsAPIHandlers(settingsSvc, log)
-	webhookHandlers := handlers.NewWebhookHandlers(db, log)
-	requireAdmin := RequireAdmin(settingsSvc)
-	requireAccess := RequireGameserverAccess(settingsSvc)
-	requireStart := RequirePermission(settingsSvc, service.PermGameserverStart)
-	requireStop := RequirePermission(settingsSvc, service.PermGameserverStop)
-	requireRestart := RequirePermission(settingsSvc, service.PermGameserverRestart)
-	requireLogs := RequirePermission(settingsSvc, service.PermGameserverLogs)
-	requireCommands := RequirePermission(settingsSvc, service.PermGameserverCommand)
-	requireFilesRead := RequirePermission(settingsSvc, service.PermGameserverFilesRead)
-	requireFilesWrite := RequirePermission(settingsSvc, service.PermGameserverFilesWrite)
-	requireBackupCreate := RequirePermission(settingsSvc, service.PermBackupCreate)
-	requireBackupDelete := RequirePermission(settingsSvc, service.PermBackupDelete)
-	requireBackupRestore := RequirePermission(settingsSvc, service.PermBackupRestore)
-	requireBackupDownload := RequirePermission(settingsSvc, service.PermBackupDownload)
-	requireScheduleCreate := RequirePermission(settingsSvc, service.PermScheduleCreate)
-	requireScheduleUpdate := RequirePermission(settingsSvc, service.PermScheduleUpdate)
-	requireScheduleDelete := RequirePermission(settingsSvc, service.PermScheduleDelete)
-	requireConfigure := RequirePermission(settingsSvc, service.PermGameserverEditEnv)
-	requireDelete := RequirePermission(settingsSvc, service.PermGameserverDelete)
+	gameHandlers := handlers.NewGameHandlers(opts.GameStore, opts.Log)
+	minecraftVersions := handlers.NewMinecraftVersionsHandler(opts.Log)
+	gameserverHandlers := handlers.NewGameserverHandlers(opts.GameserverSvc, opts.ConsoleSvc, opts.QuerySvc, opts.Log)
+	eventHandlers := handlers.NewEventHandlers(opts.Broadcaster, opts.DB, opts.Log)
+	scheduleHandlers := handlers.NewScheduleHandlers(opts.ScheduleSvc, opts.Log)
+	backupHandlers := handlers.NewBackupHandlers(opts.BackupSvc, opts.Log)
+	fileHandlers := handlers.NewFileHandlers(opts.FileSvc, opts.Log)
+	logHandlers := handlers.NewLogHandlers(opts.LogPath, opts.Log)
+	statusHandlers := handlers.NewStatusHandlers(opts.GameserverSvc, opts.QuerySvc, opts.Log)
+	authHandlers := handlers.NewAuthHandlers(opts.AuthSvc, opts.Log)
+	workerNodeSvc := service.NewWorkerNodeService(opts.DB, opts.Log)
+	workerHandlers := handlers.NewWorkerHandlers(opts.Registry, workerNodeSvc, opts.GameserverSvc, opts.Log)
+	settingsAPIHandlers := handlers.NewSettingsAPIHandlers(opts.SettingsSvc, opts.Log)
+	webhookHandlers := handlers.NewWebhookHandlers(opts.DB, opts.Log)
+	requireAdmin := RequireAdmin(opts.SettingsSvc)
+	requireAccess := RequireGameserverAccess(opts.SettingsSvc)
+	requireStart := RequirePermission(opts.SettingsSvc, service.PermGameserverStart)
+	requireStop := RequirePermission(opts.SettingsSvc, service.PermGameserverStop)
+	requireRestart := RequirePermission(opts.SettingsSvc, service.PermGameserverRestart)
+	requireLogs := RequirePermission(opts.SettingsSvc, service.PermGameserverLogs)
+	requireCommands := RequirePermission(opts.SettingsSvc, service.PermGameserverCommand)
+	requireFilesRead := RequirePermission(opts.SettingsSvc, service.PermGameserverFilesRead)
+	requireFilesWrite := RequirePermission(opts.SettingsSvc, service.PermGameserverFilesWrite)
+	requireBackupCreate := RequirePermission(opts.SettingsSvc, service.PermBackupCreate)
+	requireBackupDelete := RequirePermission(opts.SettingsSvc, service.PermBackupDelete)
+	requireBackupRestore := RequirePermission(opts.SettingsSvc, service.PermBackupRestore)
+	requireBackupDownload := RequirePermission(opts.SettingsSvc, service.PermBackupDownload)
+	requireScheduleCreate := RequirePermission(opts.SettingsSvc, service.PermScheduleCreate)
+	requireScheduleUpdate := RequirePermission(opts.SettingsSvc, service.PermScheduleUpdate)
+	requireScheduleDelete := RequirePermission(opts.SettingsSvc, service.PermScheduleDelete)
+	requireConfigure := RequirePermission(opts.SettingsSvc, service.PermGameserverEditEnv)
+	requireDelete := RequirePermission(opts.SettingsSvc, service.PermGameserverDelete)
 
 
 	r.Route("/api", func(r chi.Router) {
@@ -189,7 +189,7 @@ func NewRouter(
 		r.Get("/events/history", eventHandlers.History)
 
 		r.Route("/workers", func(r chi.Router) {
-			r.Use(RequireClusterPermission(settingsSvc, service.PermNodesManage))
+			r.Use(RequireClusterPermission(opts.SettingsSvc, service.PermNodesManage))
 			r.Get("/", workerHandlers.List)
 			r.Route("/{workerID}", func(r chi.Router) {
 				r.Get("/", workerHandlers.Get)
@@ -205,12 +205,12 @@ func NewRouter(
 		})
 
 		r.Route("/settings", func(r chi.Router) {
-			r.With(RequireClusterPermission(settingsSvc, service.PermSettingsView)).Get("/", settingsAPIHandlers.Get)
-			r.With(RequireClusterPermission(settingsSvc, service.PermSettingsEdit)).Patch("/", settingsAPIHandlers.Update)
+			r.With(RequireClusterPermission(opts.SettingsSvc, service.PermSettingsView)).Get("/", settingsAPIHandlers.Get)
+			r.With(RequireClusterPermission(opts.SettingsSvc, service.PermSettingsEdit)).Patch("/", settingsAPIHandlers.Update)
 		})
 
 		r.Route("/webhooks", func(r chi.Router) {
-			r.Use(RequireClusterPermission(settingsSvc, service.PermWebhooksManage))
+			r.Use(RequireClusterPermission(opts.SettingsSvc, service.PermWebhooksManage))
 			r.Get("/", webhookHandlers.List)
 			r.Post("/", webhookHandlers.Create)
 			r.Get("/{webhookId}", webhookHandlers.Get)
@@ -221,14 +221,14 @@ func NewRouter(
 		})
 
 		r.Route("/tokens", func(r chi.Router) {
-			r.Use(RequireClusterPermission(settingsSvc, service.PermTokensManage))
+			r.Use(RequireClusterPermission(opts.SettingsSvc, service.PermTokensManage))
 			r.Get("/", authHandlers.ListTokens)
 			r.Post("/", authHandlers.CreateToken)
 			r.Delete("/{tokenId}", authHandlers.DeleteToken)
 		})
 
 		r.Route("/worker-tokens", func(r chi.Router) {
-			r.Use(RequireClusterPermission(settingsSvc, service.PermTokensManage))
+			r.Use(RequireClusterPermission(opts.SettingsSvc, service.PermTokensManage))
 			r.Get("/", authHandlers.ListWorkerTokens)
 			r.Post("/", authHandlers.CreateWorkerToken)
 			r.Delete("/{tokenId}", authHandlers.DeleteWorkerToken)
@@ -255,7 +255,7 @@ func NewRouter(
 	}
 
 	// Auth page handlers — login/logout outside auth middleware
-	pageAuth := handlers.NewPageAuthHandlers(authSvc, settingsSvc, gameserverSvc, renderer, log)
+	pageAuth := handlers.NewPageAuthHandlers(opts.AuthSvc, opts.SettingsSvc, opts.GameserverSvc, renderer, opts.Log)
 	r.Group(func(r chi.Router) {
 		r.Use(plaintextMiddleware)
 		r.Use(csrfMiddleware)
@@ -266,15 +266,15 @@ func NewRouter(
 	})
 
 	// Page handlers (HTML)
-	pageDashboard := handlers.NewPageDashboardHandlers(gameStore, gameserverSvc, querySvc, settingsSvc, registry, renderer, log)
-	pageGames := handlers.NewPageGameHandlers(gameStore, gameserverSvc, renderer, log)
-	pageGameservers := handlers.NewPageGameserverHandlers(gameStore, gameserverSvc, scheduleSvc, querySvc, settingsSvc, registry, renderer, db, log)
-	pageSettings := handlers.NewPageSettingsHandlers(settingsSvc, workerNodeSvc, authSvc, db, registry, renderer, dataDir, log)
-	pageActions := handlers.NewPageActionHandlers(gameStore, gameserverSvc, renderer, log)
-	pageConsole := handlers.NewPageConsoleHandlers(consoleSvc, gameStore, gameserverSvc, renderer, log)
-	pageFiles := handlers.NewPageFileHandlers(fileSvc, gameStore, gameserverSvc, renderer, log)
-	pageSchedules := handlers.NewPageScheduleHandlers(scheduleSvc, gameStore, gameserverSvc, renderer, log)
-	pageBackups := handlers.NewPageBackupHandlers(backupSvc, gameStore, gameserverSvc, renderer, log)
+	pageDashboard := handlers.NewPageDashboardHandlers(opts.GameStore, opts.GameserverSvc, opts.QuerySvc, opts.SettingsSvc, opts.Registry, renderer, opts.Log)
+	pageGames := handlers.NewPageGameHandlers(opts.GameStore, opts.GameserverSvc, renderer, opts.Log)
+	pageGameservers := handlers.NewPageGameserverHandlers(opts.GameStore, opts.GameserverSvc, opts.ScheduleSvc, opts.QuerySvc, opts.SettingsSvc, opts.Registry, renderer, opts.DB, opts.Log)
+	pageSettings := handlers.NewPageSettingsHandlers(opts.SettingsSvc, workerNodeSvc, opts.AuthSvc, opts.DB, opts.Registry, renderer, opts.Config.DataDir, opts.Log)
+	pageActions := handlers.NewPageActionHandlers(opts.GameStore, opts.GameserverSvc, renderer, opts.Log)
+	pageConsole := handlers.NewPageConsoleHandlers(opts.ConsoleSvc, opts.GameStore, opts.GameserverSvc, renderer, opts.Log)
+	pageFiles := handlers.NewPageFileHandlers(opts.FileSvc, opts.GameStore, opts.GameserverSvc, renderer, opts.Log)
+	pageSchedules := handlers.NewPageScheduleHandlers(opts.ScheduleSvc, opts.GameStore, opts.GameserverSvc, renderer, opts.Log)
+	pageBackups := handlers.NewPageBackupHandlers(opts.BackupSvc, opts.GameStore, opts.GameserverSvc, renderer, opts.Log)
 
 	r.Group(func(r chi.Router) {
 		r.Use(plaintextMiddleware)

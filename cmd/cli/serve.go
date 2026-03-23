@@ -119,7 +119,7 @@ func initServices(database *sql.DB, dispatcher *worker.Dispatcher, localWorker w
 	// Apply config file runtime settings to DB on every startup
 	settingsSvc.ApplyConfig(cfg.Settings)
 
-	gameserverSvc := service.NewGameserverService(database, dispatcher, broadcaster, settingsSvc, gameStore, nil, cfg.DataDir, logger)
+	gameserverSvc := service.NewGameserverService(database, dispatcher, broadcaster, settingsSvc, gameStore, cfg.DataDir, logger)
 	querySvc := service.NewQueryService(database, broadcaster, gameStore, logger)
 	readyWatcher := service.NewReadyWatcher(database, broadcaster, gameStore, logger)
 	readyWatcher.SetQueryService(querySvc)
@@ -349,7 +349,25 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 	netInfo := netinfo.Detect(logger)
 
-	router, err := web.NewRouter(gameStore, svcs.gameserverSvc, svcs.consoleSvc, svcs.fileSvc, svcs.scheduleSvc, svcs.backupSvc, svcs.querySvc, svcs.settingsSvc, svcs.authSvc, svcs.broadcaster, netInfo, registry, database, logPath, cfg.DataDir, cfg.Bind, cfg.Port, cfg.SFTPPort, role, logger)
+	router, err := web.NewRouter(web.RouterOptions{
+		Config:        cfg,
+		Role:          role,
+		LogPath:       logPath,
+		GameStore:     gameStore,
+		GameserverSvc: svcs.gameserverSvc,
+		ConsoleSvc:    svcs.consoleSvc,
+		FileSvc:       svcs.fileSvc,
+		ScheduleSvc:   svcs.scheduleSvc,
+		BackupSvc:     svcs.backupSvc,
+		QuerySvc:      svcs.querySvc,
+		SettingsSvc:   svcs.settingsSvc,
+		AuthSvc:       svcs.authSvc,
+		Broadcaster:   svcs.broadcaster,
+		NetInfo:       netInfo,
+		Registry:      registry,
+		DB:            database,
+		Log:           logger,
+	})
 	if err != nil {
 		return fmt.Errorf("failed to initialize router: %w", err)
 	}

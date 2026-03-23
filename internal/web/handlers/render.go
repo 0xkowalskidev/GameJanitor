@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/warsmite/gamejanitor/internal/config"
 	"github.com/warsmite/gamejanitor/internal/netinfo"
 	"github.com/warsmite/gamejanitor/internal/service"
 	"github.com/warsmite/gamejanitor/internal/web/templates"
@@ -17,15 +18,13 @@ import (
 
 type Renderer struct {
 	templates   map[string]*template.Template
+	cfg         config.Config
+	role        string
 	netInfo     *netinfo.Info
 	settingsSvc *service.SettingsService
-	bindAddress string
-	port        int
-	sftpPort    int
-	role        string
 }
 
-func NewRenderer(netInfo *netinfo.Info, settingsSvc *service.SettingsService, bindAddress string, port int, sftpPort int, role string) (*Renderer, error) {
+func NewRenderer(cfg config.Config, role string, netInfo *netinfo.Info, settingsSvc *service.SettingsService) (*Renderer, error) {
 	funcMap := template.FuncMap{
 		"statusColor": statusColor,
 		"formatTime":  formatTime,
@@ -50,7 +49,7 @@ func NewRenderer(netInfo *netinfo.Info, settingsSvc *service.SettingsService, bi
 		return nil, fmt.Errorf("parsing base templates: %w", err)
 	}
 
-	r := &Renderer{templates: make(map[string]*template.Template), netInfo: netInfo, settingsSvc: settingsSvc, bindAddress: bindAddress, port: port, sftpPort: sftpPort, role: role}
+	r := &Renderer{templates: make(map[string]*template.Template), cfg: cfg, role: role, netInfo: netInfo, settingsSvc: settingsSvc}
 
 	// Discover all page templates automatically (excludes layout.html and partials/)
 	var pages []string
@@ -113,9 +112,9 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string,
 		m["ConnectionAddress"] = connAddr
 		m["ConnectionAddressConfigured"] = connAddr != ""
 		m["ConnectionAddressFromEnv"] = false
-		m["BindAddress"] = r.bindAddress
-		m["Port"] = r.port
-		m["SFTPPort"] = r.sftpPort
+		m["BindAddress"] = r.cfg.Bind
+		m["Port"] = r.cfg.Port
+		m["SFTPPort"] = r.cfg.SFTPPort
 		m["Role"] = r.role
 		m["AuthEnabled"] = r.settingsSvc.GetBool(service.SettingAuthEnabled)
 	}
@@ -175,7 +174,7 @@ func (r *Renderer) RenderError(w http.ResponseWriter, req *http.Request, statusC
 	data["ConnectionAddress"] = connAddr
 	data["ConnectionAddressConfigured"] = connAddr != ""
 	data["ConnectionAddressFromEnv"] = false
-	data["SFTPPort"] = r.sftpPort
+	data["SFTPPort"] = r.cfg.SFTPPort
 	data["Role"] = r.role
 	data["AuthEnabled"] = r.settingsSvc.GetBool(service.SettingAuthEnabled)
 
