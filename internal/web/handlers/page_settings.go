@@ -33,29 +33,29 @@ func NewPageSettingsHandlers(settingsSvc *service.SettingsService, workerNodeSvc
 func (h *PageSettingsHandlers) SettingsPage(w http.ResponseWriter, r *http.Request) {
 	data := map[string]any{
 		"DataDir":                h.dataDir,
-		"PortRangeStart":         h.settingsSvc.GetPortRangeStart(),
-		"PortRangeEnd":           h.settingsSvc.GetPortRangeEnd(),
-		"PortRangeFromEnv":       h.settingsSvc.IsPortRangeFromEnv(),
-		"PreferredPortMode":      h.settingsSvc.GetPreferredPortMode(),
-		"PortModeFromEnv":        h.settingsSvc.IsPortModeFromEnv(),
-		"MaxBackups":             h.settingsSvc.GetMaxBackups(),
-		"MaxBackupsFromEnv":      h.settingsSvc.IsMaxBackupsFromEnv(),
-		"AuthEnabled":            h.settingsSvc.GetAuthEnabled(),
-		"AuthFromEnv":            h.settingsSvc.IsAuthEnabledFromEnv(),
-		"LocalhostBypass":        h.settingsSvc.GetLocalhostBypass(),
-		"LocalhostBypassFromEnv": h.settingsSvc.IsLocalhostBypassFromEnv(),
-		"AuditRetentionDays":       h.settingsSvc.GetAuditRetentionDays(),
-		"AuditRetentionFromEnv":    h.settingsSvc.IsAuditRetentionFromEnv(),
-		"RateLimitEnabled":         h.settingsSvc.GetRateLimitEnabled(),
-		"RateLimitEnabledFromEnv":  h.settingsSvc.IsRateLimitEnabledFromEnv(),
-		"RateLimitPerIP":           h.settingsSvc.GetRateLimitPerIP(),
-		"RateLimitPerIPFromEnv":    h.settingsSvc.IsRateLimitPerIPFromEnv(),
-		"RateLimitPerToken":        h.settingsSvc.GetRateLimitPerToken(),
-		"RateLimitPerTokenFromEnv": h.settingsSvc.IsRateLimitPerTokenFromEnv(),
-		"RateLimitLogin":           h.settingsSvc.GetRateLimitLogin(),
-		"RateLimitLoginFromEnv":    h.settingsSvc.IsRateLimitLoginFromEnv(),
-		"TrustProxyHeaders":        h.settingsSvc.GetTrustProxyHeaders(),
-		"TrustProxyHeadersFromEnv": h.settingsSvc.IsTrustProxyHeadersFromEnv(),
+		"PortRangeStart":         h.settingsSvc.GetInt(service.SettingPortRangeStart),
+		"PortRangeEnd":           h.settingsSvc.GetInt(service.SettingPortRangeEnd),
+		"PortRangeFromEnv":       false,
+		"PreferredPortMode":      h.settingsSvc.GetString(service.SettingPortMode),
+		"PortModeFromEnv":        false,
+		"MaxBackups":             h.settingsSvc.GetInt(service.SettingMaxBackups),
+		"MaxBackupsFromEnv":      false,
+		"AuthEnabled":            h.settingsSvc.GetBool(service.SettingAuthEnabled),
+		"AuthFromEnv":            false,
+		"LocalhostBypass":        h.settingsSvc.GetBool(service.SettingLocalhostBypass),
+		"LocalhostBypassFromEnv": false,
+		"AuditRetentionDays":       h.settingsSvc.GetInt(service.SettingEventRetention),
+		"AuditRetentionFromEnv":    false,
+		"RateLimitEnabled":         h.settingsSvc.GetBool(service.SettingRateLimitEnabled),
+		"RateLimitEnabledFromEnv":  false,
+		"RateLimitPerIP":           h.settingsSvc.GetInt(service.SettingRateLimitPerIP),
+		"RateLimitPerIPFromEnv":    false,
+		"RateLimitPerToken":        h.settingsSvc.GetInt(service.SettingRateLimitPerToken),
+		"RateLimitPerTokenFromEnv": false,
+		"RateLimitLogin":           h.settingsSvc.GetInt(service.SettingRateLimitLogin),
+		"RateLimitLoginFromEnv":    false,
+		"TrustProxyHeaders":        h.settingsSvc.GetBool(service.SettingTrustProxyHeaders),
+		"TrustProxyHeadersFromEnv": false,
 		"WebhookEndpoints": h.webhookEndpoints(),
 	}
 
@@ -100,8 +100,8 @@ type workerView struct {
 
 func (h *PageSettingsHandlers) workerViews() []workerView {
 	infos := h.registry.ListWorkers()
-	defaultStart := h.settingsSvc.GetPortRangeStart()
-	defaultEnd := h.settingsSvc.GetPortRangeEnd()
+	defaultStart := h.settingsSvc.GetInt(service.SettingPortRangeStart)
+	defaultEnd := h.settingsSvc.GetInt(service.SettingPortRangeEnd)
 
 	// Count gameservers and allocated memory per node
 	gsCountByNode := make(map[string]int)
@@ -209,7 +209,7 @@ func (h *PageSettingsHandlers) SetConnectionAddress(w http.ResponseWriter, r *ht
 		return
 	}
 
-	if err := h.settingsSvc.SetConnectionAddress(address); err != nil {
+	if err := h.settingsSvc.Set(service.SettingConnectionAddress, address); err != nil {
 		h.log.Error("setting connection address", "error", err)
 		http.Error(w, "Failed to save connection address", http.StatusInternalServerError)
 		return
@@ -227,7 +227,7 @@ func (h *PageSettingsHandlers) SetConnectionAddress(w http.ResponseWriter, r *ht
 }
 
 func (h *PageSettingsHandlers) ClearConnectionAddress(w http.ResponseWriter, r *http.Request) {
-	if err := h.settingsSvc.ClearConnectionAddress(); err != nil {
+	if err := h.settingsSvc.Clear(service.SettingConnectionAddress); err != nil {
 		h.log.Error("clearing connection address", "error", err)
 		http.Error(w, "Failed to clear connection address", http.StatusInternalServerError)
 		return
@@ -391,7 +391,7 @@ func (h *PageSettingsHandlers) UncordonWorker(w http.ResponseWriter, r *http.Req
 }
 
 func (h *PageSettingsHandlers) SavePortRange(w http.ResponseWriter, r *http.Request) {
-	if h.settingsSvc.IsPortRangeFromEnv() {
+	if false {
 		http.Error(w, "Port range is controlled by environment variable", http.StatusBadRequest)
 		return
 	}
@@ -416,12 +416,12 @@ func (h *PageSettingsHandlers) SavePortRange(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if err := h.settingsSvc.SetPortRangeStart(start); err != nil {
+	if err := h.settingsSvc.Set(service.SettingPortRangeStart, start); err != nil {
 		h.log.Error("setting port range start", "error", err)
 		http.Error(w, "Failed to save port range", http.StatusInternalServerError)
 		return
 	}
-	if err := h.settingsSvc.SetPortRangeEnd(end); err != nil {
+	if err := h.settingsSvc.Set(service.SettingPortRangeEnd, end); err != nil {
 		h.log.Error("setting port range end", "error", err)
 		http.Error(w, "Failed to save port range", http.StatusInternalServerError)
 		return
@@ -433,7 +433,7 @@ func (h *PageSettingsHandlers) SavePortRange(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *PageSettingsHandlers) SavePortMode(w http.ResponseWriter, r *http.Request) {
-	if h.settingsSvc.IsPortModeFromEnv() {
+	if false {
 		http.Error(w, "Port mode is controlled by environment variable", http.StatusBadRequest)
 		return
 	}
@@ -444,7 +444,7 @@ func (h *PageSettingsHandlers) SavePortMode(w http.ResponseWriter, r *http.Reque
 	}
 
 	mode := r.FormValue("port_mode")
-	if err := h.settingsSvc.SetPreferredPortMode(mode); err != nil {
+	if err := h.settingsSvc.Set(service.SettingPortMode, mode); err != nil {
 		h.log.Error("setting port mode", "error", err)
 		http.Error(w, "Failed to save port mode", http.StatusInternalServerError)
 		return
@@ -500,38 +500,49 @@ func (h *PageSettingsHandlers) boolToggleHandler(envLocked func() bool, setter f
 	}
 }
 
+// neverLocked replaces the old env-locked checks — settings are never locked now.
+func neverLocked() bool { return false }
+
+func (h *PageSettingsHandlers) setInt(key string) func(int) error {
+	return func(v int) error { return h.settingsSvc.Set(key, v) }
+}
+
+func (h *PageSettingsHandlers) setBool(key string) func(bool) error {
+	return func(v bool) error { return h.settingsSvc.Set(key, v) }
+}
+
 func (h *PageSettingsHandlers) SaveMaxBackups(w http.ResponseWriter, r *http.Request) {
-	h.saveIntHandler(h.settingsSvc.IsMaxBackupsFromEnv, "max_backups", 0, h.settingsSvc.SetMaxBackups,
+	h.saveIntHandler(neverLocked, "max_backups", 0, h.setInt(service.SettingMaxBackups),
 		"Max backups", "Invalid max backups value", "max backups updated").ServeHTTP(w, r)
 }
 
 func (h *PageSettingsHandlers) SaveAuditRetention(w http.ResponseWriter, r *http.Request) {
-	h.saveIntHandler(h.settingsSvc.IsAuditRetentionFromEnv, "audit_retention_days", 0, h.settingsSvc.SetAuditRetentionDays,
+	h.saveIntHandler(neverLocked, "audit_retention_days", 0, h.setInt(service.SettingEventRetention),
 		"Audit retention", "Invalid audit retention value", "audit retention updated").ServeHTTP(w, r)
 }
 
 func (h *PageSettingsHandlers) SetRateLimitEnabled(enabled bool) http.HandlerFunc {
-	return h.boolToggleHandler(h.settingsSvc.IsRateLimitEnabledFromEnv, h.settingsSvc.SetRateLimitEnabled,
+	return h.boolToggleHandler(neverLocked, h.setBool(service.SettingRateLimitEnabled),
 		"Rate limiting", "rate limiting updated", enabled)
 }
 
 func (h *PageSettingsHandlers) SaveRateLimitPerIP(w http.ResponseWriter, r *http.Request) {
-	h.saveIntHandler(h.settingsSvc.IsRateLimitPerIPFromEnv, "rate_limit_per_ip", 1, h.settingsSvc.SetRateLimitPerIP,
+	h.saveIntHandler(neverLocked, "rate_limit_per_ip", 1, h.setInt(service.SettingRateLimitPerIP),
 		"Rate limit per IP", "Invalid rate limit value (must be >= 1)", "rate limit per ip updated").ServeHTTP(w, r)
 }
 
 func (h *PageSettingsHandlers) SaveRateLimitPerToken(w http.ResponseWriter, r *http.Request) {
-	h.saveIntHandler(h.settingsSvc.IsRateLimitPerTokenFromEnv, "rate_limit_per_token", 1, h.settingsSvc.SetRateLimitPerToken,
+	h.saveIntHandler(neverLocked, "rate_limit_per_token", 1, h.setInt(service.SettingRateLimitPerToken),
 		"Rate limit per token", "Invalid rate limit value (must be >= 1)", "rate limit per token updated").ServeHTTP(w, r)
 }
 
 func (h *PageSettingsHandlers) SaveRateLimitLogin(w http.ResponseWriter, r *http.Request) {
-	h.saveIntHandler(h.settingsSvc.IsRateLimitLoginFromEnv, "rate_limit_login", 1, h.settingsSvc.SetRateLimitLogin,
+	h.saveIntHandler(neverLocked, "rate_limit_login", 1, h.setInt(service.SettingRateLimitLogin),
 		"Login rate limit", "Invalid rate limit value (must be >= 1)", "rate limit login updated").ServeHTTP(w, r)
 }
 
 func (h *PageSettingsHandlers) SetTrustProxyHeaders(enabled bool) http.HandlerFunc {
-	return h.boolToggleHandler(h.settingsSvc.IsTrustProxyHeadersFromEnv, h.settingsSvc.SetTrustProxyHeaders,
+	return h.boolToggleHandler(neverLocked, h.setBool(service.SettingTrustProxyHeaders),
 		"Trust proxy headers", "trust proxy headers updated", enabled)
 }
 
@@ -545,6 +556,6 @@ func (h *PageSettingsHandlers) webhookEndpoints() []models.WebhookEndpoint {
 }
 
 func (h *PageSettingsHandlers) SetLocalhostBypass(enabled bool) http.HandlerFunc {
-	return h.boolToggleHandler(h.settingsSvc.IsLocalhostBypassFromEnv, h.settingsSvc.SetLocalhostBypass,
+	return h.boolToggleHandler(neverLocked, h.setBool(service.SettingLocalhostBypass),
 		"Localhost bypass", "localhost bypass updated", enabled)
 }

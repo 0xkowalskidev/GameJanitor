@@ -156,11 +156,11 @@ func (h *PageGameserverHandlers) New(w http.ResponseWriter, r *http.Request) {
 		"PortsJSON":         "[]",
 		"EnvJSON":           "{}",
 		"UsedPortsJSON":     string(usedPortsJSON),
-		"PreferredPortMode": h.settingsSvc.GetPreferredPortMode(),
+		"PreferredPortMode": h.settingsSvc.GetString(service.SettingPortMode),
 		"CurrentPortMode":   "",
 		"IsAdmin":           true,
-		"PortRangeStart":    h.settingsSvc.GetPortRangeStart(),
-		"PortRangeEnd":      h.settingsSvc.GetPortRangeEnd(),
+		"PortRangeStart":    h.settingsSvc.GetInt(service.SettingPortRangeStart),
+		"PortRangeEnd":      h.settingsSvc.GetInt(service.SettingPortRangeEnd),
 	}
 
 	if h.registry != nil {
@@ -485,10 +485,10 @@ func (h *PageGameserverHandlers) Edit(w http.ResponseWriter, r *http.Request) {
 		"PortsJSON":         portsJSON,
 		"EnvJSON":           envJSON,
 		"UsedPortsJSON":     string(usedPortsJSON),
-		"PreferredPortMode": h.settingsSvc.GetPreferredPortMode(),
+		"PreferredPortMode": h.settingsSvc.GetString(service.SettingPortMode),
 		"CurrentPortMode":   gs.PortMode,
-		"PortRangeStart":    h.settingsSvc.GetPortRangeStart(),
-		"PortRangeEnd":      h.settingsSvc.GetPortRangeEnd(),
+		"PortRangeStart":    h.settingsSvc.GetInt(service.SettingPortRangeStart),
+		"PortRangeEnd":      h.settingsSvc.GetInt(service.SettingPortRangeEnd),
 		"IsAdmin":           isAdmin,
 	})
 }

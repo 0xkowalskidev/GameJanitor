@@ -40,7 +40,7 @@ func (s *GameserverService) portRangeForNode(nodeID string) (int, int) {
 			return *node.PortRangeStart, *node.PortRangeEnd
 		}
 	}
-	return s.settingsSvc.GetPortRangeStart(), s.settingsSvc.GetPortRangeEnd()
+	return s.settingsSvc.GetInt(SettingPortRangeStart), s.settingsSvc.GetInt(SettingPortRangeEnd)
 }
 
 // checkWorkerLimits returns an error if the worker has exceeded its configured resource limits.

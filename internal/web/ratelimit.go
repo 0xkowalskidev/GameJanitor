@@ -34,7 +34,7 @@ func NewRateLimitStore(settingsSvc *service.SettingsService, log *slog.Logger) *
 }
 
 func (s *RateLimitStore) clientIP(r *http.Request) string {
-	if s.settingsSvc.GetTrustProxyHeaders() {
+	if s.settingsSvc.GetBool(service.SettingTrustProxyHeaders) {
 		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 			if ip := strings.TrimSpace(strings.SplitN(xff, ",", 2)[0]); ip != "" {
 				return ip
@@ -73,7 +73,7 @@ func getOrCreateLimiter(store *sync.Map, key string, ratePerSec float64, burst i
 func (s *RateLimitStore) PerIPMiddleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if !s.settingsSvc.GetRateLimitEnabled() {
+			if !s.settingsSvc.GetBool(service.SettingRateLimitEnabled) {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -82,7 +82,7 @@ func (s *RateLimitStore) PerIPMiddleware() func(http.Handler) http.Handler {
 				return
 			}
 
-			rps := float64(s.settingsSvc.GetRateLimitPerIP())
+			rps := float64(s.settingsSvc.GetInt(service.SettingRateLimitPerIP))
 			ip := s.clientIP(r)
 			limiter := getOrCreateLimiter(&s.ipLimiters, ip, rps, int(rps*2))
 
@@ -99,7 +99,7 @@ func (s *RateLimitStore) PerIPMiddleware() func(http.Handler) http.Handler {
 func (s *RateLimitStore) PerTokenMiddleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if !s.settingsSvc.GetRateLimitEnabled() {
+			if !s.settingsSvc.GetBool(service.SettingRateLimitEnabled) {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -110,7 +110,7 @@ func (s *RateLimitStore) PerTokenMiddleware() func(http.Handler) http.Handler {
 				return
 			}
 
-			rps := float64(s.settingsSvc.GetRateLimitPerToken())
+			rps := float64(s.settingsSvc.GetInt(service.SettingRateLimitPerToken))
 			limiter := getOrCreateLimiter(&s.tokenLimiters, token.ID, rps, int(rps*2))
 
 			if !limiter.Allow() {
@@ -126,12 +126,12 @@ func (s *RateLimitStore) PerTokenMiddleware() func(http.Handler) http.Handler {
 func (s *RateLimitStore) LoginRateLimitMiddleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if !s.settingsSvc.GetRateLimitEnabled() || r.Method == http.MethodGet {
+			if !s.settingsSvc.GetBool(service.SettingRateLimitEnabled) || r.Method == http.MethodGet {
 				next.ServeHTTP(w, r)
 				return
 			}
 
-			perMin := float64(s.settingsSvc.GetRateLimitLogin())
+			perMin := float64(s.settingsSvc.GetInt(service.SettingRateLimitLogin))
 			rps := perMin / 60.0
 			burst := int(perMin / 2)
 			if burst < 1 {

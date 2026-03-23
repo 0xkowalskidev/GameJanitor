@@ -2,17 +2,238 @@ package service
 
 import (
 	"database/sql"
+	"fmt"
 	"log/slog"
-	"os"
 	"strconv"
 
 	"github.com/warsmite/gamejanitor/internal/models"
 )
 
+type SettingType int
+
+const (
+	SettingTypeBool SettingType = iota
+	SettingTypeInt
+	SettingTypeString
+)
+
+type SettingDef struct {
+	Key     string
+	Type    SettingType
+	Default any
+}
+
+// Setting key constants
+const (
+	SettingConnectionAddress  = "connection_address"
+	SettingPortRangeStart     = "port_range_start"
+	SettingPortRangeEnd       = "port_range_end"
+	SettingPortMode           = "port_mode"
+	SettingMaxBackups         = "max_backups"
+	SettingAuthEnabled        = "auth_enabled"
+	SettingLocalhostBypass    = "localhost_bypass"
+	SettingRateLimitEnabled   = "rate_limit_enabled"
+	SettingRateLimitPerIP     = "rate_limit_per_ip"
+	SettingRateLimitPerToken  = "rate_limit_per_token"
+	SettingRateLimitLogin     = "rate_limit_login"
+	SettingTrustProxyHeaders  = "trust_proxy_headers"
+	SettingEventRetention     = "event_retention_days"
+	SettingRequireMemoryLimit = "require_memory_limit"
+	SettingRequireCPULimit    = "require_cpu_limit"
+	SettingRequireStorageLimit = "require_storage_limit"
+)
+
+// Registry of all runtime settings with their types and defaults.
+var SettingDefs = []SettingDef{
+	{SettingConnectionAddress, SettingTypeString, ""},
+	{SettingPortRangeStart, SettingTypeInt, 27000},
+	{SettingPortRangeEnd, SettingTypeInt, 28999},
+	{SettingPortMode, SettingTypeString, "auto"},
+	{SettingMaxBackups, SettingTypeInt, 10},
+	{SettingAuthEnabled, SettingTypeBool, false},
+	{SettingLocalhostBypass, SettingTypeBool, true},
+	{SettingRateLimitEnabled, SettingTypeBool, false},
+	{SettingRateLimitPerIP, SettingTypeInt, 20},
+	{SettingRateLimitPerToken, SettingTypeInt, 10},
+	{SettingRateLimitLogin, SettingTypeInt, 10},
+	{SettingTrustProxyHeaders, SettingTypeBool, false},
+	{SettingEventRetention, SettingTypeInt, 30},
+	{SettingRequireMemoryLimit, SettingTypeBool, false},
+	{SettingRequireCPULimit, SettingTypeBool, false},
+	{SettingRequireStorageLimit, SettingTypeBool, false},
+}
+
+type SettingsService struct {
+	db   *sql.DB
+	log  *slog.Logger
+	defs map[string]SettingDef
+}
+
+func NewSettingsService(db *sql.DB, log *slog.Logger) *SettingsService {
+	defs := make(map[string]SettingDef, len(SettingDefs))
+	for _, d := range SettingDefs {
+		defs[d.Key] = d
+	}
+	return &SettingsService{db: db, log: log, defs: defs}
+}
+
+// ApplyConfig writes config-specified settings to DB on startup.
+// Only keys present in the map are written — unspecified settings are left alone.
+func (s *SettingsService) ApplyConfig(settings map[string]any) {
+	if len(settings) == 0 {
+		return
+	}
+
+	applied := 0
+	for key, val := range settings {
+		def, ok := s.defs[key]
+		if !ok {
+			s.log.Warn("ignoring unknown setting from config", "key", key)
+			continue
+		}
+
+		var strVal string
+		switch def.Type {
+		case SettingTypeBool:
+			b, ok := toBool(val)
+			if !ok {
+				s.log.Warn("invalid bool value for setting", "key", key, "value", val)
+				continue
+			}
+			strVal = strconv.FormatBool(b)
+		case SettingTypeInt:
+			n, ok := toInt(val)
+			if !ok {
+				s.log.Warn("invalid int value for setting", "key", key, "value", val)
+				continue
+			}
+			strVal = strconv.Itoa(n)
+		case SettingTypeString:
+			strVal = fmt.Sprintf("%v", val)
+		}
+
+		if err := models.SetSetting(s.db, key, strVal); err != nil {
+			s.log.Error("failed to apply config setting to DB", "key", key, "error", err)
+			continue
+		}
+		applied++
+	}
+
+	if applied > 0 {
+		s.log.Info("applied config settings to DB", "count", applied)
+	}
+}
+
+// GetBool returns a boolean setting value. Falls back to the registered default.
+func (s *SettingsService) GetBool(key string) bool {
+	v, err := models.GetSetting(s.db, key)
+	if err != nil || v == "" {
+		if def, ok := s.defs[key]; ok {
+			if b, ok := def.Default.(bool); ok {
+				return b
+			}
+		}
+		return false
+	}
+	return v == "true"
+}
+
+// GetInt returns an integer setting value. Falls back to the registered default.
+func (s *SettingsService) GetInt(key string) int {
+	v, err := models.GetSetting(s.db, key)
+	if err != nil || v == "" {
+		if def, ok := s.defs[key]; ok {
+			if n, ok := toInt(def.Default); ok {
+				return n
+			}
+		}
+		return 0
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		if def, ok := s.defs[key]; ok {
+			if n, ok := toInt(def.Default); ok {
+				return n
+			}
+		}
+		return 0
+	}
+	return n
+}
+
+// GetString returns a string setting value. Falls back to the registered default.
+func (s *SettingsService) GetString(key string) string {
+	v, err := models.GetSetting(s.db, key)
+	if err != nil || v == "" {
+		if def, ok := s.defs[key]; ok {
+			if str, ok := def.Default.(string); ok {
+				return str
+			}
+		}
+		return ""
+	}
+	return v
+}
+
+// Set writes a setting value to DB after validating the key exists.
+func (s *SettingsService) Set(key string, value any) error {
+	def, ok := s.defs[key]
+	if !ok {
+		return fmt.Errorf("unknown setting: %s", key)
+	}
+
+	var strVal string
+	switch def.Type {
+	case SettingTypeBool:
+		b, ok := toBool(value)
+		if !ok {
+			return fmt.Errorf("invalid bool value for %s", key)
+		}
+		strVal = strconv.FormatBool(b)
+	case SettingTypeInt:
+		n, ok := toInt(value)
+		if !ok {
+			return fmt.Errorf("invalid int value for %s", key)
+		}
+		strVal = strconv.Itoa(n)
+	case SettingTypeString:
+		strVal = fmt.Sprintf("%v", value)
+	}
+
+	return models.SetSetting(s.db, key, strVal)
+}
+
+// Clear removes a setting from DB, reverting it to its default.
+func (s *SettingsService) Clear(key string) error {
+	return models.DeleteSetting(s.db, key)
+}
+
+// All returns all settings with their current values.
+func (s *SettingsService) All() map[string]any {
+	result := make(map[string]any, len(s.defs))
+	for _, def := range SettingDefs {
+		switch def.Type {
+		case SettingTypeBool:
+			result[def.Key] = s.GetBool(def.Key)
+		case SettingTypeInt:
+			result[def.Key] = s.GetInt(def.Key)
+		case SettingTypeString:
+			result[def.Key] = s.GetString(def.Key)
+		}
+	}
+	return result
+}
+
+// Def returns the setting definition for a key, if it exists.
+func (s *SettingsService) Def(key string) (SettingDef, bool) {
+	d, ok := s.defs[key]
+	return d, ok
+}
+
 // ResolveConnectionIP returns the connection IP for a gameserver on the given node.
 // Priority: global override > worker external IP > worker LAN IP > empty (caller falls back to 127.0.0.1).
 func (s *SettingsService) ResolveConnectionIP(nodeID *string) (ip string, configured bool) {
-	if globalIP := s.GetConnectionAddress(); globalIP != "" {
+	if globalIP := s.GetString(SettingConnectionAddress); globalIP != "" {
 		return globalIP, true
 	}
 	if nodeID != nil && *nodeID != "" {
@@ -29,341 +250,31 @@ func (s *SettingsService) ResolveConnectionIP(nodeID *string) (ip string, config
 	return "", false
 }
 
-
-const (
-	SettingConnectionAddress = "connection_address"
-	SettingPortRangeStart    = "port_range_start"
-	SettingPortRangeEnd      = "port_range_end"
-	SettingPreferredPortMode = "preferred_port_mode"
-	SettingMaxBackups        = "max_backups"
-	SettingAuthEnabled       = "auth_enabled"
-	SettingLocalhostBypass   = "localhost_bypass"
-	SettingAuditRetention    = "audit_retention_days"
-	SettingRateLimitEnabled  = "rate_limit_enabled"
-	SettingRateLimitPerIP    = "rate_limit_per_ip"
-	SettingRateLimitPerToken = "rate_limit_per_token"
-	SettingRateLimitLogin    = "rate_limit_login"
-	SettingTrustProxyHeaders    = "trust_proxy_headers"
-	SettingEventRetention      = "event_retention_days"
-	SettingRequireMemoryLimit  = "require_memory_limit"
-	SettingRequireCPULimit     = "require_cpu_limit"
-	SettingRequireStorageLimit = "require_storage_limit"
-
-	DefaultAuditRetention = 30
-
-	DefaultPortRangeStart    = 27000
-	DefaultPortRangeEnd      = 28999
-	DefaultPreferredPortMode = "auto"
-	DefaultMaxBackups        = 10
-
-	DefaultRateLimitPerIP    = 20
-	DefaultRateLimitPerToken = 10
-	DefaultRateLimitLogin    = 10
-)
-
-type SettingsService struct {
-	db  *sql.DB
-	log *slog.Logger
-}
-
-func NewSettingsService(db *sql.DB, log *slog.Logger) *SettingsService {
-	return &SettingsService{db: db, log: log}
-}
-
-func (s *SettingsService) getInt(envKey, dbKey string, defaultVal int) int {
-	if v := os.Getenv(envKey); v != "" {
-		if n, err := strconv.Atoi(v); err == nil {
-			return n
-		}
+// toBool converts various YAML-parsed types to bool.
+func toBool(v any) (bool, bool) {
+	switch val := v.(type) {
+	case bool:
+		return val, true
+	case string:
+		return val == "true" || val == "1", true
+	default:
+		return false, false
 	}
-	v, err := models.GetSetting(s.db, dbKey)
-	if err != nil || v == "" {
-		return defaultVal
+}
+
+// toInt converts various YAML-parsed types to int.
+func toInt(v any) (int, bool) {
+	switch val := v.(type) {
+	case int:
+		return val, true
+	case int64:
+		return int(val), true
+	case float64:
+		return int(val), true
+	case string:
+		n, err := strconv.Atoi(val)
+		return n, err == nil
+	default:
+		return 0, false
 	}
-	n, err := strconv.Atoi(v)
-	if err != nil {
-		return defaultVal
-	}
-	return n
 }
-
-func (s *SettingsService) getBool(envKey, dbKey string, defaultVal bool) bool {
-	if v := os.Getenv(envKey); v != "" {
-		return v == "true" || v == "1"
-	}
-	v, err := models.GetSetting(s.db, dbKey)
-	if err != nil || v == "" {
-		return defaultVal
-	}
-	return v == "true"
-}
-
-func (s *SettingsService) getString(envKey, dbKey string) string {
-	if v := os.Getenv(envKey); v != "" {
-		return v
-	}
-	v, err := models.GetSetting(s.db, dbKey)
-	if err != nil {
-		s.log.Error("reading setting", "key", dbKey, "error", err)
-		return ""
-	}
-	return v
-}
-
-func (s *SettingsService) setInt(dbKey string, v int) error {
-	return models.SetSetting(s.db, dbKey, strconv.Itoa(v))
-}
-
-func (s *SettingsService) setBool(dbKey string, v bool) error {
-	val := "false"
-	if v {
-		val = "true"
-	}
-	return models.SetSetting(s.db, dbKey, val)
-}
-
-// --- Connection Address ---
-
-func (s *SettingsService) GetConnectionAddress() string {
-	return s.getString("GJ_CONNECTION_ADDRESS", SettingConnectionAddress)
-}
-
-func (s *SettingsService) IsConnectionAddressConfigured() bool {
-	return s.GetConnectionAddress() != ""
-}
-
-func (s *SettingsService) IsConnectionAddressFromEnv() bool {
-	return os.Getenv("GJ_CONNECTION_ADDRESS") != ""
-}
-
-func (s *SettingsService) SetConnectionAddress(address string) error {
-	return models.SetSetting(s.db, SettingConnectionAddress, address)
-}
-
-func (s *SettingsService) ClearConnectionAddress() error {
-	return models.DeleteSetting(s.db, SettingConnectionAddress)
-}
-
-// --- Port Range ---
-
-func (s *SettingsService) GetPortRangeStart() int {
-	return s.getInt("GJ_PORT_RANGE_START", SettingPortRangeStart, DefaultPortRangeStart)
-}
-
-func (s *SettingsService) GetPortRangeEnd() int {
-	return s.getInt("GJ_PORT_RANGE_END", SettingPortRangeEnd, DefaultPortRangeEnd)
-}
-
-func (s *SettingsService) IsPortRangeFromEnv() bool {
-	return os.Getenv("GJ_PORT_RANGE_START") != "" || os.Getenv("GJ_PORT_RANGE_END") != ""
-}
-
-func (s *SettingsService) SetPortRangeStart(v int) error {
-	return s.setInt(SettingPortRangeStart, v)
-}
-
-func (s *SettingsService) SetPortRangeEnd(v int) error {
-	return s.setInt(SettingPortRangeEnd, v)
-}
-
-// --- Port Mode ---
-
-func (s *SettingsService) GetPreferredPortMode() string {
-	if v := os.Getenv("GJ_PORT_MODE"); v != "" {
-		if v == "auto" || v == "manual" {
-			return v
-		}
-	}
-	v, err := models.GetSetting(s.db, SettingPreferredPortMode)
-	if err != nil || v == "" {
-		return DefaultPreferredPortMode
-	}
-	if v != "auto" && v != "manual" {
-		return DefaultPreferredPortMode
-	}
-	return v
-}
-
-func (s *SettingsService) IsPortModeFromEnv() bool {
-	return os.Getenv("GJ_PORT_MODE") != ""
-}
-
-func (s *SettingsService) SetPreferredPortMode(mode string) error {
-	if mode != "auto" && mode != "manual" {
-		mode = DefaultPreferredPortMode
-	}
-	return models.SetSetting(s.db, SettingPreferredPortMode, mode)
-}
-
-// --- Max Backups ---
-
-func (s *SettingsService) GetMaxBackups() int {
-	return s.getInt("GJ_MAX_BACKUPS", SettingMaxBackups, DefaultMaxBackups)
-}
-
-func (s *SettingsService) IsMaxBackupsFromEnv() bool {
-	return os.Getenv("GJ_MAX_BACKUPS") != ""
-}
-
-func (s *SettingsService) SetMaxBackups(v int) error {
-	return s.setInt(SettingMaxBackups, v)
-}
-
-// --- Auth ---
-
-func (s *SettingsService) GetAuthEnabled() bool {
-	return s.getBool("GJ_AUTH_ENABLED", SettingAuthEnabled, false)
-}
-
-func (s *SettingsService) IsAuthEnabledFromEnv() bool {
-	return os.Getenv("GJ_AUTH_ENABLED") != ""
-}
-
-func (s *SettingsService) SetAuthEnabled(enabled bool) error {
-	return s.setBool(SettingAuthEnabled, enabled)
-}
-
-// --- Localhost Bypass (defaults to true) ---
-
-func (s *SettingsService) GetLocalhostBypass() bool {
-	return s.getBool("GJ_LOCALHOST_BYPASS", SettingLocalhostBypass, true)
-}
-
-func (s *SettingsService) IsLocalhostBypassFromEnv() bool {
-	return os.Getenv("GJ_LOCALHOST_BYPASS") != ""
-}
-
-func (s *SettingsService) SetLocalhostBypass(enabled bool) error {
-	return s.setBool(SettingLocalhostBypass, enabled)
-}
-
-// --- Audit Retention ---
-
-func (s *SettingsService) GetAuditRetentionDays() int {
-	return s.getInt("GJ_AUDIT_RETENTION_DAYS", SettingAuditRetention, DefaultAuditRetention)
-}
-
-func (s *SettingsService) IsAuditRetentionFromEnv() bool {
-	return os.Getenv("GJ_AUDIT_RETENTION_DAYS") != ""
-}
-
-func (s *SettingsService) SetAuditRetentionDays(v int) error {
-	return s.setInt(SettingAuditRetention, v)
-}
-
-// --- Rate Limiting ---
-
-func (s *SettingsService) GetRateLimitEnabled() bool {
-	return s.getBool("GJ_RATE_LIMIT_ENABLED", SettingRateLimitEnabled, false)
-}
-
-func (s *SettingsService) IsRateLimitEnabledFromEnv() bool {
-	return os.Getenv("GJ_RATE_LIMIT_ENABLED") != ""
-}
-
-func (s *SettingsService) SetRateLimitEnabled(enabled bool) error {
-	return s.setBool(SettingRateLimitEnabled, enabled)
-}
-
-func (s *SettingsService) GetRateLimitPerIP() int {
-	return s.getInt("GJ_RATE_LIMIT_PER_IP", SettingRateLimitPerIP, DefaultRateLimitPerIP)
-}
-
-func (s *SettingsService) IsRateLimitPerIPFromEnv() bool {
-	return os.Getenv("GJ_RATE_LIMIT_PER_IP") != ""
-}
-
-func (s *SettingsService) SetRateLimitPerIP(v int) error {
-	return s.setInt(SettingRateLimitPerIP, v)
-}
-
-func (s *SettingsService) GetRateLimitPerToken() int {
-	return s.getInt("GJ_RATE_LIMIT_PER_TOKEN", SettingRateLimitPerToken, DefaultRateLimitPerToken)
-}
-
-func (s *SettingsService) IsRateLimitPerTokenFromEnv() bool {
-	return os.Getenv("GJ_RATE_LIMIT_PER_TOKEN") != ""
-}
-
-func (s *SettingsService) SetRateLimitPerToken(v int) error {
-	return s.setInt(SettingRateLimitPerToken, v)
-}
-
-func (s *SettingsService) GetRateLimitLogin() int {
-	return s.getInt("GJ_RATE_LIMIT_LOGIN", SettingRateLimitLogin, DefaultRateLimitLogin)
-}
-
-func (s *SettingsService) IsRateLimitLoginFromEnv() bool {
-	return os.Getenv("GJ_RATE_LIMIT_LOGIN") != ""
-}
-
-func (s *SettingsService) SetRateLimitLogin(v int) error {
-	return s.setInt(SettingRateLimitLogin, v)
-}
-
-// --- Trust Proxy Headers ---
-
-func (s *SettingsService) GetTrustProxyHeaders() bool {
-	return s.getBool("GJ_TRUST_PROXY_HEADERS", SettingTrustProxyHeaders, false)
-}
-
-func (s *SettingsService) IsTrustProxyHeadersFromEnv() bool {
-	return os.Getenv("GJ_TRUST_PROXY_HEADERS") != ""
-}
-
-func (s *SettingsService) SetTrustProxyHeaders(enabled bool) error {
-	return s.setBool(SettingTrustProxyHeaders, enabled)
-}
-
-// --- Event Retention ---
-
-func (s *SettingsService) GetEventRetentionDays() int {
-	return s.getInt("GJ_EVENT_RETENTION_DAYS", SettingEventRetention, 30)
-}
-
-func (s *SettingsService) IsEventRetentionFromEnv() bool {
-	return os.Getenv("GJ_EVENT_RETENTION_DAYS") != ""
-}
-
-func (s *SettingsService) SetEventRetentionDays(v int) error {
-	return s.setInt(SettingEventRetention, v)
-}
-
-// --- Require Resource Limits ---
-
-func (s *SettingsService) GetRequireMemoryLimit() bool {
-	return s.getBool("GJ_REQUIRE_MEMORY_LIMIT", SettingRequireMemoryLimit, false)
-}
-
-func (s *SettingsService) IsRequireMemoryLimitFromEnv() bool {
-	return os.Getenv("GJ_REQUIRE_MEMORY_LIMIT") != ""
-}
-
-func (s *SettingsService) SetRequireMemoryLimit(enabled bool) error {
-	return s.setBool(SettingRequireMemoryLimit, enabled)
-}
-
-func (s *SettingsService) GetRequireCPULimit() bool {
-	return s.getBool("GJ_REQUIRE_CPU_LIMIT", SettingRequireCPULimit, false)
-}
-
-func (s *SettingsService) IsRequireCPULimitFromEnv() bool {
-	return os.Getenv("GJ_REQUIRE_CPU_LIMIT") != ""
-}
-
-func (s *SettingsService) SetRequireCPULimit(enabled bool) error {
-	return s.setBool(SettingRequireCPULimit, enabled)
-}
-
-func (s *SettingsService) GetRequireStorageLimit() bool {
-	return s.getBool("GJ_REQUIRE_STORAGE_LIMIT", SettingRequireStorageLimit, false)
-}
-
-func (s *SettingsService) IsRequireStorageLimitFromEnv() bool {
-	return os.Getenv("GJ_REQUIRE_STORAGE_LIMIT") != ""
-}
-
-func (s *SettingsService) SetRequireStorageLimit(enabled bool) error {
-	return s.setBool(SettingRequireStorageLimit, enabled)
-}
-

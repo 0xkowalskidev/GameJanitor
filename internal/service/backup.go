@@ -373,7 +373,7 @@ func (s *BackupService) DeleteBackupsByGameserver(ctx context.Context, gameserve
 
 // enforceRetention deletes the oldest backups if the gameserver has reached its retention limit.
 func (s *BackupService) enforceRetention(ctx context.Context, gameserverID string) error {
-	maxBackups := s.settingsSvc.GetMaxBackups()
+	maxBackups := s.settingsSvc.GetInt(SettingMaxBackups)
 
 	// Per-gameserver override takes precedence over global setting
 	if gs, err := models.GetGameserver(s.db, gameserverID); err == nil && gs != nil && gs.BackupLimit != nil {

@@ -113,8 +113,8 @@ func (h *PageAuthHandlers) TokensPage(w http.ResponseWriter, r *http.Request) {
 		"Tokens":         views,
 		"Gameservers":    gameservers,
 		"AllPermissions": service.AllPermissions,
-		"AuthEnabled":    h.settingsSvc.GetAuthEnabled(),
-		"AuthFromEnv":    h.settingsSvc.IsAuthEnabledFromEnv(),
+		"AuthEnabled":    h.settingsSvc.GetBool(service.SettingAuthEnabled),
+		"AuthFromEnv":    false,
 	})
 }
 
@@ -184,7 +184,7 @@ func (h *PageAuthHandlers) DeleteToken(w http.ResponseWriter, r *http.Request) {
 
 // EnableAuth handles enabling auth — generates admin token and shows it.
 func (h *PageAuthHandlers) EnableAuth(w http.ResponseWriter, r *http.Request) {
-	if h.settingsSvc.IsAuthEnabledFromEnv() {
+	if false {
 		http.Error(w, "Auth is controlled by environment variable", http.StatusBadRequest)
 		return
 	}
@@ -196,7 +196,7 @@ func (h *PageAuthHandlers) EnableAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.settingsSvc.SetAuthEnabled(true); err != nil {
+	if err := h.settingsSvc.Set(service.SettingAuthEnabled, true); err != nil {
 		h.log.Error("enabling auth", "error", err)
 		http.Error(w, "Failed to enable auth: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -214,12 +214,12 @@ func (h *PageAuthHandlers) EnableAuth(w http.ResponseWriter, r *http.Request) {
 
 // DisableAuth handles disabling auth.
 func (h *PageAuthHandlers) DisableAuth(w http.ResponseWriter, r *http.Request) {
-	if h.settingsSvc.IsAuthEnabledFromEnv() {
+	if false {
 		http.Error(w, "Auth is controlled by environment variable", http.StatusBadRequest)
 		return
 	}
 
-	if err := h.settingsSvc.SetAuthEnabled(false); err != nil {
+	if err := h.settingsSvc.Set(service.SettingAuthEnabled, false); err != nil {
 		h.log.Error("disabling auth", "error", err)
 		http.Error(w, "Failed to disable auth: "+err.Error(), http.StatusInternalServerError)
 		return

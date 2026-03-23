@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"time"
 
 	"github.com/warsmite/gamejanitor/internal/config"
@@ -30,7 +29,8 @@ import (
 
 // runWorkerAgent starts a worker-only node: gRPC agent wrapping a local Docker worker.
 // No database, no web UI, no scheduler.
-func runWorkerAgent(cfg config.Config, grpcPort int, controllerAddr string, workerID string, workerToken string, logger *slog.Logger) error {
+func runWorkerAgent(cfg config.Config, logger *slog.Logger) error {
+	grpcPort := cfg.GRPCPort
 	if grpcPort == 0 {
 		grpcPort = 9090
 	}
@@ -48,20 +48,31 @@ func runWorkerAgent(cfg config.Config, grpcPort int, controllerAddr string, work
 
 	localWorker := worker.NewLocalWorker(dockerClient, gameStore, cfg.DataDir, logger)
 
-	// Load worker TLS config from env vars
+	// Load worker TLS config from config file
 	var workerTLSConfig *tls.Config
-	if caPath := os.Getenv("GJ_GRPC_CA"); caPath != "" {
-		certPath := os.Getenv("GJ_GRPC_CERT")
-		keyPath := os.Getenv("GJ_GRPC_KEY")
-		if certPath == "" || keyPath == "" {
-			return fmt.Errorf("GJ_GRPC_CA is set but GJ_GRPC_CERT and GJ_GRPC_KEY are also required")
+	if cfg.TLS != nil && cfg.TLS.CA != "" {
+		if cfg.TLS.Cert == "" || cfg.TLS.Key == "" {
+			return fmt.Errorf("tls.ca is set but tls.cert and tls.key are also required")
 		}
-		tlsCfg, err := tlsutil.ClientTLSConfig(caPath, certPath, keyPath)
+		tlsCfg, err := tlsutil.ClientTLSConfig(cfg.TLS.CA, cfg.TLS.Cert, cfg.TLS.Key)
 		if err != nil {
 			return fmt.Errorf("failed to load worker TLS config: %w", err)
 		}
 		workerTLSConfig = tlsCfg
 		logger.Info("worker gRPC using mTLS")
+	} else {
+		// TLS auto-discovery: check {data_dir}/certs/
+		caPath := filepath.Join(cfg.DataDir, "certs", "ca.pem")
+		certPath := filepath.Join(cfg.DataDir, "certs", "cert.pem")
+		keyPath := filepath.Join(cfg.DataDir, "certs", "key.pem")
+		if _, err := os.Stat(caPath); err == nil {
+			tlsCfg, err := tlsutil.ClientTLSConfig(caPath, certPath, keyPath)
+			if err != nil {
+				return fmt.Errorf("failed to load auto-discovered TLS config: %w", err)
+			}
+			workerTLSConfig = tlsCfg
+			logger.Info("worker gRPC using mTLS (auto-discovered from data_dir/certs)")
+		}
 	}
 
 	// Worker's own gRPC agent also needs TLS so controller can dial back securely
@@ -77,21 +88,15 @@ func runWorkerAgent(cfg config.Config, grpcPort int, controllerAddr string, work
 
 	// Start gRPC agent in background
 	go func() {
-		if err := startGRPCServer(localWorker, gameStore, cfg.DataDir, nil, nil, nil, cfg.BindAddress, grpcPort, workerServerTLS, nil, logger); err != nil {
+		if err := startGRPCServer(localWorker, gameStore, cfg.DataDir, nil, nil, nil, cfg.Bind, grpcPort, workerServerTLS, nil, logger); err != nil {
 			logger.Error("grpc agent stopped", "error", err)
 		}
 	}()
 
 	// Start SFTP on worker if port is configured
-	workerSFTPPort := 0
-	if v := os.Getenv("GJ_SFTP_PORT"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			workerSFTPPort = n
-		}
-	}
-	if workerSFTPPort > 0 && controllerAddr != "" {
+	if cfg.SFTPPort > 0 && cfg.ControllerAddress != "" {
 		// Connect to controller for SFTP auth validation
-		sftpClient, sftpConn, err := worker.DialController(controllerAddr, workerToken, workerTLSConfig)
+		sftpClient, sftpConn, err := worker.DialController(cfg.ControllerAddress, cfg.WorkerToken, workerTLSConfig)
 		if err != nil {
 			logger.Warn("failed to connect to controller for sftp auth, sftp disabled", "error", err)
 		} else {
@@ -106,7 +111,7 @@ func runWorkerAgent(cfg config.Config, grpcPort int, controllerAddr string, work
 			} else {
 				defer sftpServer.Close()
 				go func() {
-					sftpAddr := fmt.Sprintf("%s:%d", cfg.BindAddress, workerSFTPPort)
+					sftpAddr := fmt.Sprintf("%s:%d", cfg.Bind, cfg.SFTPPort)
 					if err := sftpServer.ListenAndServe(sftpAddr); err != nil {
 						logger.Error("sftp server stopped", "error", err)
 					}
@@ -116,7 +121,8 @@ func runWorkerAgent(cfg config.Config, grpcPort int, controllerAddr string, work
 	}
 
 	// If controller address is provided, register with it and start heartbeat loop
-	if controllerAddr != "" {
+	if cfg.ControllerAddress != "" {
+		workerID := cfg.WorkerID
 		if workerID == "" {
 			workerID, _ = os.Hostname()
 			if workerID == "" {
@@ -124,7 +130,7 @@ func runWorkerAgent(cfg config.Config, grpcPort int, controllerAddr string, work
 			}
 		}
 
-		if workerToken == "" {
+		if cfg.WorkerToken == "" {
 			logger.Warn("no worker token provided, controller will likely reject registration")
 		}
 
@@ -132,13 +138,13 @@ func runWorkerAgent(cfg config.Config, grpcPort int, controllerAddr string, work
 		ownAddr := fmt.Sprintf("%s:%d", netInfo.LANIP, grpcPort)
 
 		logger.Info("registering with controller",
-			"controller", controllerAddr,
+			"controller", cfg.ControllerAddress,
 			"worker_id", workerID,
 			"own_grpc_address", ownAddr,
-			"has_token", workerToken != "",
+			"has_token", cfg.WorkerToken != "",
 		)
 
-		runRegistrationLoop(controllerAddr, workerID, ownAddr, workerToken, workerSFTPPort, netInfo, workerTLSConfig, logger)
+		runRegistrationLoop(cfg, workerID, ownAddr, workerTLSConfig, netInfo, logger)
 		// runRegistrationLoop blocks forever
 	}
 
@@ -149,12 +155,12 @@ func runWorkerAgent(cfg config.Config, grpcPort int, controllerAddr string, work
 
 // runRegistrationLoop connects to the controller, registers, and sends heartbeats.
 // Reconnects with backoff on failure. Blocks forever.
-func runRegistrationLoop(controllerAddr, workerID, ownAddr, workerToken string, sftpPort int, netInfo *netinfo.Info, tlsConfig *tls.Config, logger *slog.Logger) {
+func runRegistrationLoop(cfg config.Config, workerID, ownAddr string, tlsConfig *tls.Config, netInfo *netinfo.Info, logger *slog.Logger) {
 	backoff := time.Second
 	maxBackoff := 30 * time.Second
 
 	for {
-		client, conn, err := worker.DialController(controllerAddr, workerToken, tlsConfig)
+		client, conn, err := worker.DialController(cfg.ControllerAddress, cfg.WorkerToken, tlsConfig)
 		if err != nil {
 			logger.Error("failed to connect to controller", "error", err, "retry_in", backoff)
 			time.Sleep(backoff)
@@ -176,24 +182,30 @@ func runRegistrationLoop(controllerAddr, workerID, ownAddr, workerToken string, 
 			LanIp:             req.LanIp,
 			ExternalIp:        req.ExternalIp,
 		}
-		if v, err := strconv.Atoi(os.Getenv("GJ_PORT_RANGE_START")); err == nil {
-			regReq.PortRangeStart = int32(v)
+
+		// Report worker limits from config
+		if wl := cfg.WorkerLimits; wl != nil {
+			if wl.PortRangeStart > 0 {
+				regReq.PortRangeStart = int32(wl.PortRangeStart)
+			}
+			if wl.PortRangeEnd > 0 {
+				regReq.PortRangeEnd = int32(wl.PortRangeEnd)
+			}
+			if wl.MaxMemoryMB > 0 {
+				regReq.MaxMemoryMb = int64(wl.MaxMemoryMB)
+			}
+			if wl.MaxCPU > 0 {
+				regReq.MaxCpu = wl.MaxCPU
+			}
+			if wl.MaxStorageMB > 0 {
+				regReq.MaxStorageMb = int64(wl.MaxStorageMB)
+			}
 		}
-		if v, err := strconv.Atoi(os.Getenv("GJ_PORT_RANGE_END")); err == nil {
-			regReq.PortRangeEnd = int32(v)
+
+		if cfg.SFTPPort > 0 {
+			regReq.SftpPort = int32(cfg.SFTPPort)
 		}
-		if sftpPort > 0 {
-			regReq.SftpPort = int32(sftpPort)
-		}
-		if v, err := strconv.Atoi(os.Getenv("GJ_MAX_MEMORY")); err == nil && v > 0 {
-			regReq.MaxMemoryMb = int64(v)
-		}
-		if v, err := strconv.ParseFloat(os.Getenv("GJ_MAX_CPU"), 64); err == nil && v > 0 {
-			regReq.MaxCpu = v
-		}
-		if v, err := strconv.Atoi(os.Getenv("GJ_MAX_STORAGE")); err == nil && v > 0 {
-			regReq.MaxStorageMb = int64(v)
-		}
+
 		regResp, err := client.Register(ctx, regReq)
 		if err != nil {
 			logger.Error("registration failed", "error", err, "retry_in", backoff)
@@ -210,7 +222,7 @@ func runRegistrationLoop(controllerAddr, workerID, ownAddr, workerToken string, 
 			continue
 		}
 
-		logger.Info("registered with controller", "controller", controllerAddr)
+		logger.Info("registered with controller", "controller", cfg.ControllerAddress)
 		backoff = time.Second // reset on success
 
 		// Heartbeat loop

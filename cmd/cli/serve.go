@@ -33,15 +33,65 @@ var serveCmd = &cobra.Command{
 }
 
 func init() {
-	serveCmd.Flags().IntP("port", "p", 8080, "Port to listen on")
-	serveCmd.Flags().String("bind", "127.0.0.1", "Bind address for all listeners (or GJ_BIND env)")
+	serveCmd.Flags().String("config", "", "Path to YAML config file")
+	serveCmd.Flags().IntP("port", "p", 0, "Port to listen on")
+	serveCmd.Flags().String("bind", "", "Bind address for all listeners")
 	serveCmd.Flags().Int("sftp-port", 0, "SFTP server port (0 to disable)")
-	serveCmd.Flags().Int("grpc-port", 0, "gRPC agent port for worker mode (0 to disable)")
-	serveCmd.Flags().String("role", "standalone", "Server role: standalone, controller, worker, controller+worker")
-	serveCmd.Flags().StringP("data-dir", "d", "/var/lib/gamejanitor", "Data directory for database and backups")
-	serveCmd.Flags().String("controller", "", "Controller gRPC address for worker registration (e.g. 192.168.1.10:9090)")
+	serveCmd.Flags().Int("grpc-port", 0, "gRPC port (0 to disable)")
+	serveCmd.Flags().Bool("controller", false, "Enable controller role")
+	serveCmd.Flags().Bool("worker", false, "Enable worker role")
+	serveCmd.Flags().StringP("data-dir", "d", "", "Data directory for database and backups")
+	serveCmd.Flags().String("controller-address", "", "Controller gRPC address for worker registration")
 	serveCmd.Flags().String("worker-id", "", "Worker ID (defaults to hostname)")
-	serveCmd.Flags().String("worker-token", "", "Worker auth token for gRPC registration (or GJ_WORKER_TOKEN env)")
+	serveCmd.Flags().String("worker-token", "", "Worker auth token for gRPC registration")
+}
+
+// loadConfig loads config file (if any) and applies CLI flag overrides.
+func loadConfig(cmd *cobra.Command) (config.Config, error) {
+	configPath, _ := cmd.Flags().GetString("config")
+	if configPath == "" {
+		configPath = config.Discover()
+	}
+
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return cfg, err
+	}
+
+	// CLI flags override config file values (only if explicitly set)
+	if cmd.Flags().Changed("bind") {
+		cfg.Bind, _ = cmd.Flags().GetString("bind")
+	}
+	if cmd.Flags().Changed("port") {
+		cfg.Port, _ = cmd.Flags().GetInt("port")
+	}
+	if cmd.Flags().Changed("grpc-port") {
+		cfg.GRPCPort, _ = cmd.Flags().GetInt("grpc-port")
+	}
+	if cmd.Flags().Changed("sftp-port") {
+		cfg.SFTPPort, _ = cmd.Flags().GetInt("sftp-port")
+	}
+	if cmd.Flags().Changed("controller") {
+		cfg.Controller, _ = cmd.Flags().GetBool("controller")
+	}
+	if cmd.Flags().Changed("worker") {
+		cfg.Worker, _ = cmd.Flags().GetBool("worker")
+	}
+	if cmd.Flags().Changed("data-dir") {
+		cfg.DataDir, _ = cmd.Flags().GetString("data-dir")
+		cfg.DBPath = filepath.Join(cfg.DataDir, "gamejanitor.db")
+	}
+	if cmd.Flags().Changed("controller-address") {
+		cfg.ControllerAddress, _ = cmd.Flags().GetString("controller-address")
+	}
+	if cmd.Flags().Changed("worker-id") {
+		cfg.WorkerID, _ = cmd.Flags().GetString("worker-id")
+	}
+	if cmd.Flags().Changed("worker-token") {
+		cfg.WorkerToken, _ = cmd.Flags().GetString("worker-token")
+	}
+
+	return cfg, nil
 }
 
 type services struct {
@@ -55,16 +105,20 @@ type services struct {
 	backupSvc     *service.BackupService
 	scheduler     *service.Scheduler
 	scheduleSvc   *service.ScheduleService
-	authSvc        *service.AuthService
-	statusMgr      *service.StatusManager
-	statusSub      *service.StatusSubscriber
-	eventStore     *service.EventStoreSubscriber
-	webhookWorker  *service.WebhookWorker
+	authSvc       *service.AuthService
+	statusMgr     *service.StatusManager
+	statusSub     *service.StatusSubscriber
+	eventStore    *service.EventStoreSubscriber
+	webhookWorker *service.WebhookWorker
 }
 
 func initServices(database *sql.DB, dispatcher *worker.Dispatcher, localWorker worker.Worker, registry *worker.Registry, gameStore *games.GameStore, cfg config.Config, logger *slog.Logger) (*services, error) {
 	broadcaster := service.NewEventBus()
 	settingsSvc := service.NewSettingsService(database, logger)
+
+	// Apply config file runtime settings to DB on every startup
+	settingsSvc.ApplyConfig(cfg.Settings)
+
 	gameserverSvc := service.NewGameserverService(database, dispatcher, broadcaster, settingsSvc, gameStore, nil, cfg.DataDir, logger)
 	querySvc := service.NewQueryService(database, broadcaster, gameStore, logger)
 	readyWatcher := service.NewReadyWatcher(database, broadcaster, gameStore, logger)
@@ -73,25 +127,9 @@ func initServices(database *sql.DB, dispatcher *worker.Dispatcher, localWorker w
 	consoleSvc := service.NewConsoleService(database, dispatcher, gameStore, logger)
 	fileSvc := service.NewFileService(database, dispatcher, logger)
 
-	var backupStore service.BackupStore
-	if bucket := os.Getenv("GJ_S3_BUCKET"); bucket != "" {
-		s3Store, err := service.NewS3Store(
-			os.Getenv("GJ_S3_ENDPOINT"),
-			bucket,
-			os.Getenv("GJ_S3_REGION"),
-			os.Getenv("GJ_S3_ACCESS_KEY"),
-			os.Getenv("GJ_S3_SECRET_KEY"),
-			os.Getenv("GJ_S3_PATH_STYLE") == "true",
-			os.Getenv("GJ_S3_USE_SSL") != "false",
-			logger,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to initialize S3 backup store: %w", err)
-		}
-		backupStore = s3Store
-	} else {
-		backupStore = service.NewLocalStore(cfg.DataDir)
-		logger.Info("backup store: local", "path", cfg.DataDir)
+	backupStore, err := initBackupStore(cfg, logger)
+	if err != nil {
+		return nil, err
 	}
 
 	gameserverSvc.SetBackupStore(backupStore)
@@ -123,62 +161,41 @@ func initServices(database *sql.DB, dispatcher *worker.Dispatcher, localWorker w
 	}, nil
 }
 
+func initBackupStore(cfg config.Config, logger *slog.Logger) (service.BackupStore, error) {
+	bs := cfg.BackupStore
+	if bs == nil || bs.Type == "" || bs.Type == "local" {
+		logger.Info("backup store: local", "path", cfg.DataDir)
+		return service.NewLocalStore(cfg.DataDir), nil
+	}
+
+	if bs.Type == "s3" {
+		s3Store, err := service.NewS3Store(
+			bs.Endpoint,
+			bs.Bucket,
+			bs.Region,
+			bs.AccessKey,
+			bs.SecretKey,
+			bs.PathStyle,
+			bs.UseSSL,
+			logger,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize backup store: %w", err)
+		}
+		return s3Store, nil
+	}
+
+	return nil, fmt.Errorf("unknown backup_store type: %q (must be \"local\" or \"s3\")", bs.Type)
+}
+
 func runServe(cmd *cobra.Command, args []string) error {
-	port, err := cmd.Flags().GetInt("port")
+	cfg, err := loadConfig(cmd)
 	if err != nil {
-		return fmt.Errorf("invalid port flag: %w", err)
-	}
-	sftpPort, err := cmd.Flags().GetInt("sftp-port")
-	if err != nil {
-		return fmt.Errorf("invalid sftp-port flag: %w", err)
-	}
-	grpcPort, err := cmd.Flags().GetInt("grpc-port")
-	if err != nil {
-		return fmt.Errorf("invalid grpc-port flag: %w", err)
-	}
-	role, err := cmd.Flags().GetString("role")
-	if err != nil {
-		return fmt.Errorf("invalid role flag: %w", err)
-	}
-	dataDir, err := cmd.Flags().GetString("data-dir")
-	if err != nil {
-		return fmt.Errorf("invalid data-dir flag: %w", err)
-	}
-	controllerAddr, err := cmd.Flags().GetString("controller")
-	if err != nil {
-		return fmt.Errorf("invalid controller flag: %w", err)
-	}
-	workerID, err := cmd.Flags().GetString("worker-id")
-	if err != nil {
-		return fmt.Errorf("invalid worker-id flag: %w", err)
-	}
-	workerToken, err := cmd.Flags().GetString("worker-token")
-	if err != nil {
-		return fmt.Errorf("invalid worker-token flag: %w", err)
-	}
-	if workerToken == "" {
-		workerToken = os.Getenv("GJ_WORKER_TOKEN")
-	}
-	bindAddress, err := cmd.Flags().GetString("bind")
-	if err != nil {
-		return fmt.Errorf("invalid bind flag: %w", err)
-	}
-	if v := os.Getenv("GJ_BIND"); v != "" {
-		bindAddress = v
+		return err
 	}
 
-	hasLocalWorker := role == "standalone" || role == "worker" || role == "controller+worker"
-	hasController := role == "standalone" || role == "controller" || role == "controller+worker"
-
-	if !hasLocalWorker && !hasController {
-		return fmt.Errorf("invalid role %q: must be standalone, controller, worker, or controller+worker", role)
-	}
-
-	cfg := config.Config{
-		Port:        port,
-		BindAddress: bindAddress,
-		DataDir:     dataDir,
-		DBPath:      filepath.Join(dataDir, "gamejanitor.db"),
+	if !cfg.HasController() && !cfg.HasWorker() {
+		return fmt.Errorf("at least one of controller or worker must be enabled")
 	}
 
 	level := slog.LevelInfo
@@ -202,8 +219,16 @@ func runServe(cmd *cobra.Command, args []string) error {
 	slog.SetDefault(logger)
 
 	// Worker-only mode: start gRPC agent and exit (no DB, no web UI)
-	if role == "worker" {
-		return runWorkerAgent(cfg, grpcPort, controllerAddr, workerID, workerToken, logger)
+	if cfg.WorkerOnly() {
+		return runWorkerAgent(cfg, logger)
+	}
+
+	// Determine role string for logging/display
+	role := "standalone"
+	if cfg.HasController() && !cfg.HasWorker() {
+		role = "controller"
+	} else if cfg.HasController() && cfg.HasWorker() {
+		role = "controller+worker"
 	}
 
 	// Controller and standalone modes need a database
@@ -226,7 +251,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 	// Initialize local worker if this node runs containers
 	var localWorker worker.Worker
-	if hasLocalWorker {
+	if cfg.HasWorker() {
 		dockerClient, err := docker.New(logger)
 		if err != nil {
 			return fmt.Errorf("failed to connect to docker: %w", err)
@@ -269,7 +294,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 	// Prune old events on startup, then hourly
 	go func() {
-		retDays := svcs.settingsSvc.GetEventRetentionDays()
+		retDays := svcs.settingsSvc.GetInt(service.SettingEventRetention)
 		if retDays > 0 {
 			if pruned, err := models.PruneEvents(database, retDays); err != nil {
 				logger.Error("failed to prune events on startup", "error", err)
@@ -280,7 +305,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		ticker := time.NewTicker(time.Hour)
 		defer ticker.Stop()
 		for range ticker.C {
-			days := svcs.settingsSvc.GetEventRetentionDays()
+			days := svcs.settingsSvc.GetInt(service.SettingEventRetention)
 			if days > 0 {
 				if pruned, err := models.PruneEvents(database, days); err != nil {
 					logger.Error("failed to prune events", "error", err)
@@ -299,7 +324,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	defer svcs.querySvc.StopAll()
 
 	// Start gRPC server for controller and/or local worker agent
-	if grpcPort > 0 {
+	if cfg.GRPCPort > 0 {
 		var serverTLS, dialBackTLS *tls.Config
 		if role != "standalone" {
 			caCert, caKey, err := tlsutil.LoadOrCreateCA(cfg.DataDir)
@@ -321,7 +346,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 			}
 		}
 		go func() {
-			if err := startGRPCServer(localWorker, gameStore, cfg.DataDir, registry, svcs.authSvc, database, cfg.BindAddress, grpcPort, serverTLS, dialBackTLS, logger); err != nil {
+			if err := startGRPCServer(localWorker, gameStore, cfg.DataDir, registry, svcs.authSvc, database, cfg.Bind, cfg.GRPCPort, serverTLS, dialBackTLS, logger); err != nil {
 				logger.Error("grpc server stopped", "error", err)
 			}
 		}()
@@ -333,13 +358,13 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 	netInfo := netinfo.Detect(logger)
 
-	router, err := web.NewRouter(gameStore, svcs.gameserverSvc, svcs.consoleSvc, svcs.fileSvc, svcs.scheduleSvc, svcs.backupSvc, svcs.querySvc, svcs.settingsSvc, svcs.authSvc, svcs.broadcaster, netInfo, registry, database, logPath, cfg.DataDir, cfg.BindAddress, cfg.Port, sftpPort, role, logger)
+	router, err := web.NewRouter(gameStore, svcs.gameserverSvc, svcs.consoleSvc, svcs.fileSvc, svcs.scheduleSvc, svcs.backupSvc, svcs.querySvc, svcs.settingsSvc, svcs.authSvc, svcs.broadcaster, netInfo, registry, database, logPath, cfg.DataDir, cfg.Bind, cfg.Port, cfg.SFTPPort, role, logger)
 	if err != nil {
 		return fmt.Errorf("failed to initialize router: %w", err)
 	}
 
 	// Start SFTP server if enabled
-	if sftpPort > 0 {
+	if cfg.SFTPPort > 0 {
 		hostKeyPath := filepath.Join(cfg.DataDir, "sftp_host_key")
 		sftpAuth := gjsftp.NewLocalAuth(database)
 		fileOpFactory := func(gameserverID string) gjsftp.FileOperator {
@@ -352,25 +377,25 @@ func runServe(cmd *cobra.Command, args []string) error {
 		defer sftpServer.Close()
 
 		go func() {
-			sftpAddr := fmt.Sprintf("%s:%d", cfg.BindAddress, sftpPort)
+			sftpAddr := fmt.Sprintf("%s:%d", cfg.Bind, cfg.SFTPPort)
 			if err := sftpServer.ListenAndServe(sftpAddr); err != nil {
 				logger.Error("sftp server stopped", "error", err)
 			}
 		}()
 	}
 
-	if !isLoopback(cfg.BindAddress) && !svcs.settingsSvc.GetAuthEnabled() {
+	if !isLoopback(cfg.Bind) && !svcs.settingsSvc.GetBool(service.SettingAuthEnabled) {
 		logger.Warn("listening on public address with auth disabled — anyone on your network can manage your gameservers",
-			"bind_address", cfg.BindAddress, "port", cfg.Port)
+			"bind_address", cfg.Bind, "port", cfg.Port)
 	}
 
-	addr := fmt.Sprintf("%s:%d", cfg.BindAddress, cfg.Port)
+	addr := fmt.Sprintf("%s:%d", cfg.Bind, cfg.Port)
 	logger.Info("starting gamejanitor",
 		"role", role,
-		"bind_address", cfg.BindAddress,
+		"bind_address", cfg.Bind,
 		"port", cfg.Port,
-		"sftp_port", sftpPort,
-		"grpc_port", grpcPort,
+		"sftp_port", cfg.SFTPPort,
+		"grpc_port", cfg.GRPCPort,
 		"data_dir", cfg.DataDir,
 		"db_path", cfg.DBPath,
 	)

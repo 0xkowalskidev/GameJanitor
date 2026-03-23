@@ -19,12 +19,12 @@ var TokenFromContext = service.TokenFromContext
 func AuthMiddleware(authSvc *service.AuthService, settingsSvc *service.SettingsService) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if !settingsSvc.GetAuthEnabled() {
+			if !settingsSvc.GetBool(service.SettingAuthEnabled) {
 				next.ServeHTTP(w, r)
 				return
 			}
 
-			if settingsSvc.GetLocalhostBypass() && isLocalhost(r) {
+			if settingsSvc.GetBool(service.SettingLocalhostBypass) && isLocalhost(r) {
 				next.ServeHTTP(w, r)
 				return
 			}

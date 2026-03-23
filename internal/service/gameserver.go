@@ -147,13 +147,13 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gam
 	}
 
 	// Enforce require_* settings
-	if s.settingsSvc.GetRequireMemoryLimit() && gs.MemoryLimitMB <= 0 {
+	if s.settingsSvc.GetBool(SettingRequireMemoryLimit) && gs.MemoryLimitMB <= 0 {
 		return "", ErrBadRequest("memory_limit_mb must be > 0 (require_memory_limit is enabled)")
 	}
-	if s.settingsSvc.GetRequireCPULimit() && gs.CPULimit <= 0 {
+	if s.settingsSvc.GetBool(SettingRequireCPULimit) && gs.CPULimit <= 0 {
 		return "", ErrBadRequest("cpu_limit must be > 0 (require_cpu_limit is enabled)")
 	}
-	if s.settingsSvc.GetRequireStorageLimit() && (gs.StorageLimitMB == nil || *gs.StorageLimitMB <= 0) {
+	if s.settingsSvc.GetBool(SettingRequireStorageLimit) && (gs.StorageLimitMB == nil || *gs.StorageLimitMB <= 0) {
 		return "", ErrBadRequest("storage_limit_mb must be > 0 (require_storage_limit is enabled)")
 	}
 
@@ -374,13 +374,13 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *models.Gam
 	}
 
 	// Enforce require_* settings
-	if s.settingsSvc.GetRequireMemoryLimit() && existing.MemoryLimitMB <= 0 {
+	if s.settingsSvc.GetBool(SettingRequireMemoryLimit) && existing.MemoryLimitMB <= 0 {
 		return false, ErrBadRequest("memory_limit_mb must be > 0 (require_memory_limit is enabled)")
 	}
-	if s.settingsSvc.GetRequireCPULimit() && existing.CPULimit <= 0 {
+	if s.settingsSvc.GetBool(SettingRequireCPULimit) && existing.CPULimit <= 0 {
 		return false, ErrBadRequest("cpu_limit must be > 0 (require_cpu_limit is enabled)")
 	}
-	if s.settingsSvc.GetRequireStorageLimit() && (existing.StorageLimitMB == nil || *existing.StorageLimitMB <= 0) {
+	if s.settingsSvc.GetBool(SettingRequireStorageLimit) && (existing.StorageLimitMB == nil || *existing.StorageLimitMB <= 0) {
 		return false, ErrBadRequest("storage_limit_mb must be > 0 (require_storage_limit is enabled)")
 	}
 

@@ -109,14 +109,15 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, name string,
 	if m, ok := data.(map[string]any); ok {
 		m["CSRFToken"] = csrf.Token(req)
 		m["NetInfo"] = r.netInfo
-		m["ConnectionAddress"] = r.settingsSvc.GetConnectionAddress()
-		m["ConnectionAddressConfigured"] = r.settingsSvc.IsConnectionAddressConfigured()
-		m["ConnectionAddressFromEnv"] = r.settingsSvc.IsConnectionAddressFromEnv()
+		connAddr := r.settingsSvc.GetString(service.SettingConnectionAddress)
+		m["ConnectionAddress"] = connAddr
+		m["ConnectionAddressConfigured"] = connAddr != ""
+		m["ConnectionAddressFromEnv"] = false
 		m["BindAddress"] = r.bindAddress
 		m["Port"] = r.port
 		m["SFTPPort"] = r.sftpPort
 		m["Role"] = r.role
-		m["AuthEnabled"] = r.settingsSvc.GetAuthEnabled()
+		m["AuthEnabled"] = r.settingsSvc.GetBool(service.SettingAuthEnabled)
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -170,12 +171,13 @@ func (r *Renderer) RenderError(w http.ResponseWriter, req *http.Request, statusC
 
 	data["CSRFToken"] = csrf.Token(req)
 	data["NetInfo"] = r.netInfo
-	data["ConnectionAddress"] = r.settingsSvc.GetConnectionAddress()
-	data["ConnectionAddressConfigured"] = r.settingsSvc.IsConnectionAddressConfigured()
-	data["ConnectionAddressFromEnv"] = r.settingsSvc.IsConnectionAddressFromEnv()
+	connAddr2 := r.settingsSvc.GetString(service.SettingConnectionAddress)
+	data["ConnectionAddress"] = connAddr2
+	data["ConnectionAddressConfigured"] = connAddr2 != ""
+	data["ConnectionAddressFromEnv"] = false
 	data["SFTPPort"] = r.sftpPort
 	data["Role"] = r.role
-	data["AuthEnabled"] = r.settingsSvc.GetAuthEnabled()
+	data["AuthEnabled"] = r.settingsSvc.GetBool(service.SettingAuthEnabled)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
