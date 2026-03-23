@@ -15,7 +15,7 @@ import (
 var TokenFromContext = service.TokenFromContext
 
 // AuthMiddleware checks for a valid token on every request when auth is enabled.
-// Extracts from Bearer header (API) or _token cookie (web UI).
+// Extracts from Bearer header or _token cookie.
 func AuthMiddleware(authSvc *service.AuthService, settingsSvc *service.SettingsService) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -7,7 +7,6 @@ require (
 	github.com/docker/go-connections v0.6.0
 	github.com/go-chi/chi/v5 v5.2.5
 	github.com/google/uuid v1.6.0
-	github.com/gorilla/csrf v1.7.3
 	github.com/minio/minio-go/v7 v7.0.99
 	github.com/pkg/sftp v1.13.10
 	github.com/robfig/cron/v3 v3.0.1
@@ -36,7 +35,6 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
-	github.com/gorilla/securecookie v1.1.2 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/klauspost/compress v1.18.2 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.11 // indirect
