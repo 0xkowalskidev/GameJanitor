@@ -84,6 +84,8 @@ func (s *StatusSubscriber) handleEvent(event WebhookEvent) {
 		s.setStatus(e.GameserverID, StatusStopping, "")
 	case ContainerStoppedEvent:
 		s.setStatus(e.GameserverID, StatusStopped, "")
+	case ContainerExitedEvent:
+		s.setStatus(e.GameserverID, StatusError, "Container exited unexpectedly")
 	case GameserverErrorEvent:
 		s.setStatus(e.GameserverID, StatusError, e.Reason)
 	}
