@@ -1,0 +1,198 @@
+package service
+
+import (
+	"compress/gzip"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"time"
+
+	"github.com/warsmite/gamejanitor/models"
+	"github.com/google/uuid"
+)
+
+// MigrateGameserver moves a gameserver from its current node to a different node.
+// Requires both source and target workers to be online.
+func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID string, targetNodeID string) (err error) {
+	gs, err := models.GetGameserver(s.db, gameserverID)
+	if err != nil {
+		return err
+	}
+	if gs == nil {
+		return ErrNotFoundf("gameserver %s not found", gameserverID)
+	}
+
+	currentNodeID := ""
+	if gs.NodeID != nil {
+		currentNodeID = *gs.NodeID
+	}
+	if currentNodeID == targetNodeID {
+		return ErrBadRequestf("gameserver is already on node %s", targetNodeID)
+	}
+
+	// Validate target worker is connected
+	targetWorker, err := s.dispatcher.SelectWorkerByNodeID(targetNodeID)
+	if err != nil {
+		return ErrUnavailablef("target worker unavailable: %v", err)
+	}
+
+	// Validate target node tags
+	var requiredTags []string
+	if gs.NodeTags != "" && gs.NodeTags != "[]" {
+		json.Unmarshal([]byte(gs.NodeTags), &requiredTags)
+	}
+	if len(requiredTags) > 0 {
+		targetNode, err := models.GetWorkerNode(s.db, targetNodeID)
+		if err != nil || targetNode == nil {
+			return ErrNotFoundf("target node %s not found", targetNodeID)
+		}
+		var nodeTags []string
+		json.Unmarshal([]byte(targetNode.Tags), &nodeTags)
+		tagSet := make(map[string]bool, len(nodeTags))
+		for _, t := range nodeTags {
+			tagSet[t] = true
+		}
+		for _, req := range requiredTags {
+			if !tagSet[req] {
+				return ErrBadRequestf("target node %s missing required tag: %s", targetNodeID, req)
+			}
+		}
+	}
+
+	// Check target node limits
+	if err := s.checkWorkerLimits(targetNodeID, gs.MemoryLimitMB, gs.CPULimit, ptrIntOr0(gs.StorageLimitMB)); err != nil {
+		return err
+	}
+
+	// Get source worker (must be online to transfer data)
+	sourceWorker := s.dispatcher.WorkerFor(gameserverID)
+	if sourceWorker == nil {
+		return ErrUnavailable("source worker is offline, cannot migrate (both workers must be online)")
+	}
+
+	s.log.Info("migrating gameserver", "id", gameserverID, "from_node", currentNodeID, "to_node", targetNodeID)
+
+	s.broadcaster.Publish(GameserverEvent{
+		Type:         EventGameserverMigrate,
+		Timestamp:    time.Now(),
+		Actor:        ActorFromContext(ctx),
+		GameserverID: gameserverID,
+		Name:         gs.Name,
+		GameID:       gs.GameID,
+		NodeID:       gs.NodeID,
+	})
+
+	defer func() {
+		if err != nil {
+			s.broadcaster.Publish(GameserverErrorEvent{GameserverID: gameserverID, Reason: operationFailedReason("Migration failed", err), Timestamp: time.Now()})
+		}
+	}()
+
+	// Stop if running
+	if gs.Status != StatusStopped {
+		s.log.Info("stopping gameserver for migration", "id", gameserverID)
+		if err := s.Stop(ctx, gameserverID); err != nil {
+			return fmt.Errorf("stopping gameserver for migration: %w", err)
+		}
+	}
+
+	// Transfer volume via backup store (avoids buffering entire volume in controller memory)
+	s.log.Info("transferring volume data via store", "id", gameserverID, "volume", gs.VolumeName)
+	migrationID := uuid.New().String()
+
+	// Tar + gzip from source → store
+	tarReader, err := sourceWorker.BackupVolume(ctx, gs.VolumeName)
+	if err != nil {
+		return fmt.Errorf("reading volume from source worker: %w", err)
+	}
+	pr, pw := io.Pipe()
+	var compressErr error
+	go func() {
+		gzWriter := gzip.NewWriter(pw)
+		if _, err := io.Copy(gzWriter, tarReader); err != nil {
+			compressErr = err
+			gzWriter.Close()
+			pw.CloseWithError(err)
+			tarReader.Close()
+			return
+		}
+		tarReader.Close()
+		gzWriter.Close()
+		pw.Close()
+	}()
+
+	if err := s.store.Save(ctx, "migrations", migrationID, pr); err != nil {
+		return fmt.Errorf("saving migration data to store: %w", err)
+	}
+	if compressErr != nil {
+		return fmt.Errorf("compressing volume data: %w", compressErr)
+	}
+	s.log.Info("migration data stored", "id", gameserverID, "migration_id", migrationID)
+
+	// Store → restore on target
+	if err := targetWorker.CreateVolume(ctx, gs.VolumeName); err != nil {
+		return fmt.Errorf("creating volume on target worker: %w", err)
+	}
+
+	reader, err := s.store.Load(ctx, "migrations", migrationID)
+	if err != nil {
+		return fmt.Errorf("loading migration data from store: %w", err)
+	}
+	gzReader, err := gzip.NewReader(reader)
+	if err != nil {
+		reader.Close()
+		return fmt.Errorf("decompressing migration data: %w", err)
+	}
+
+	if err := targetWorker.RestoreVolume(ctx, gs.VolumeName, gzReader); err != nil {
+		gzReader.Close()
+		reader.Close()
+		if rmErr := targetWorker.RemoveVolume(ctx, gs.VolumeName); rmErr != nil {
+			s.log.Error("failed to clean up target volume after failed restore", "volume", gs.VolumeName, "error", rmErr)
+		}
+		// Don't delete migration data on failure — operator can retry manually
+		s.log.Error("migration restore failed, data preserved in store", "migration_id", migrationID)
+		return fmt.Errorf("restoring volume on target worker: %w", err)
+	}
+	gzReader.Close()
+	reader.Close()
+
+	// Cleanup migration data on success
+	if err := s.store.Delete(ctx, "migrations", migrationID); err != nil {
+		s.log.Warn("failed to clean up migration data from store", "migration_id", migrationID, "error", err)
+	}
+
+	// Lock placement to prevent port races with concurrent creates/migrations
+	s.placementMu.Lock()
+
+	// Reallocate ports on target node's range
+	game := s.gameStore.GetGame(gs.GameID)
+	if game == nil {
+		s.placementMu.Unlock()
+		return ErrNotFoundf("game %s not found", gs.GameID)
+	}
+	newPorts, err := s.AllocatePorts(game, targetNodeID, "")
+	if err != nil {
+		s.placementMu.Unlock()
+		return fmt.Errorf("allocating ports on target node: %w", err)
+	}
+
+	// Update DB: node_id and ports
+	gs.NodeID = &targetNodeID
+	gs.Ports = newPorts
+	if err := models.UpdateGameserver(s.db, gs); err != nil {
+		s.placementMu.Unlock()
+		return fmt.Errorf("updating gameserver node assignment: %w", err)
+	}
+	s.placementMu.Unlock()
+
+	// Clean up old volume on source worker
+	if err := sourceWorker.RemoveVolume(ctx, gs.VolumeName); err != nil {
+		s.log.Warn("failed to remove old volume from source worker", "volume", gs.VolumeName, "error", err)
+	}
+
+	s.broadcaster.Publish(ContainerStoppedEvent{GameserverID: gameserverID, Timestamp: time.Now()})
+	s.log.Info("gameserver migrated", "id", gameserverID, "from_node", currentNodeID, "to_node", targetNodeID)
+	return nil
+}
