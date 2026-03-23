@@ -60,7 +60,7 @@ install_vanilla() {
     echo "[install-server] downloading vanilla server.jar from $SERVER_URL"
     curl -fsSL -o /data/server.jar "$SERVER_URL"
 
-    ACTUAL_SHA1=$(sha1sum /data/server.jar | awk '{print $1}')
+    ACTUAL_SHA1=$(sha1sum /data/server.jar | cut -d' ' -f1)
     if [ "$ACTUAL_SHA1" != "$SERVER_SHA1" ]; then
         echo "[install-server] ERROR: sha1 mismatch — expected $SERVER_SHA1, got $ACTUAL_SHA1"
         rm -f /data/server.jar
@@ -91,7 +91,7 @@ install_paper() {
     echo "[install-server] downloading Paper build $BUILD from $DOWNLOAD_URL"
     curl -fsSL -o /data/server.jar "$DOWNLOAD_URL"
 
-    ACTUAL_SHA256=$(sha256sum /data/server.jar | awk '{print $1}')
+    ACTUAL_SHA256=$(sha256sum /data/server.jar | cut -d' ' -f1)
     if [ "$ACTUAL_SHA256" != "$SHA256" ]; then
         echo "[install-server] ERROR: sha256 mismatch — expected $SHA256, got $ACTUAL_SHA256"
         rm -f /data/server.jar

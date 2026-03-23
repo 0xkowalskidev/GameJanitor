@@ -8,5 +8,5 @@ GAME_PORT="${GAME_PORT:-27015}"
 RCON_PASSWORD="${RCON_PASSWORD:-changeme}"
 
 # CS2 binds RCON to the container's IP, not localhost
-RCON_HOST=$(hostname -i | awk '{print $1}')
+RCON_HOST=$(hostname -i | cut -d' ' -f1)
 rcon -a "${RCON_HOST}:${GAME_PORT}" -p "$RCON_PASSWORD" "$1"
