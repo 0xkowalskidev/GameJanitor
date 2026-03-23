@@ -95,6 +95,9 @@ function dispatch(type: string | null, data: any) {
   }
 
   const eventType = type || data?.type;
+  if (eventType && !data?.type) {
+    data.type = eventType;
+  }
   const gameserverId = data?.gameserver_id;
 
   for (const sub of subscriptions) {
