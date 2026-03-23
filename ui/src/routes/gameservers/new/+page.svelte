@@ -42,8 +42,11 @@
     search ? games.filter(g => g.name.toLowerCase().includes(search.toLowerCase())) : games
   );
 
-  const memoryDisplay = $derived(memoryMb >= 1024 ? `${memoryMb / 1024} GB` : `${memoryMb} MB`);
-  const belowRecommended = $derived(selectedGame ? memoryMb < selectedGame.recommended_memory_mb : false);
+  const memoryDisplay = $derived(memoryMb === 0 ? 'Unlimited' : memoryMb >= 1024 ? `${memoryMb / 1024} GB` : `${memoryMb} MB`);
+  const belowRecommended = $derived(selectedGame ? memoryMb > 0 && memoryMb < selectedGame.recommended_memory_mb : false);
+  const cpuDisplay = $derived(cpuLimit === 0 ? 'Unlimited' : `${cpuLimit} cores`);
+  const storageDisplay = $derived(storageLimitMb === 0 ? 'Unlimited' : storageLimitMb >= 1024 ? `${storageLimitMb / 1024} GB` : `${storageLimitMb} MB`);
+  const backupDisplay = $derived(backupLimit === 0 ? 'Global default' : `${backupLimit} max`);
 
   // Group env vars by their group field
   const envGroups = $derived(() => {
@@ -118,6 +121,15 @@
 
     step = 'configure';
     window.scrollTo({ top: 0, behavior: 'instant' });
+
+    // Initialize slider fill after DOM updates
+    requestAnimationFrame(() => {
+      const slider = document.querySelector('.slider') as HTMLInputElement;
+      if (slider) {
+        const pct = ((parseInt(slider.value) - parseInt(slider.min)) / (parseInt(slider.max) - parseInt(slider.min))) * 100;
+        slider.style.background = `linear-gradient(to right, var(--accent) 0%, var(--accent) ${pct}%, var(--border-dim) ${pct}%, var(--border-dim) 100%)`;
+      }
+    });
   }
 
   function goBack() {
@@ -361,11 +373,11 @@
           <div class="env-group">
             <div class="env-group-label">Ports</div>
             <div class="form-row">
-              <label class="label">Port Mode</label>
-              <select class="select" bind:value={portMode}>
-                <option value="auto">Auto (allocated from port range)</option>
-                <option value="manual">Manual (specify ports)</option>
-              </select>
+              <label class="label">Manual Port Assignment</label>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <button class="toggle" class:on={portMode === 'manual'} onclick={() => portMode = portMode === 'auto' ? 'manual' : 'auto'}></button>
+                <span style="font-size:0.78rem; color:var(--text-tertiary);">{portMode === 'auto' ? 'Auto (allocated from port range)' : 'Manual'}</span>
+              </div>
             </div>
             {#if portMode === 'manual'}
               <div class="port-table" style="margin-top:14px;">
@@ -392,9 +404,12 @@
             <div class="env-group-label">Resources</div>
             <div class="form-grid">
               <div class="form-row">
-                <label class="label">CPU Limit</label>
+                <div class="resource-header">
+                  <span class="label">CPU Limit</span>
+                  <span class="resource-value dim">{cpuDisplay}</span>
+                </div>
                 <div class="input-with-suffix">
-                  <input class="input input-mono" type="number" min="0" step="0.5" placeholder="0 (unlimited)" bind:value={cpuLimit}>
+                  <input class="input input-mono" type="number" min="0" step="0.5" placeholder="0" bind:value={cpuLimit}>
                   <span class="input-suffix">cores</span>
                 </div>
               </div>
@@ -402,22 +417,28 @@
                 <label class="label">Enforce CPU Limit</label>
                 <div style="display:flex; align-items:center; gap:8px;">
                   <button class="toggle" class:on={cpuEnforced} onclick={() => cpuEnforced = !cpuEnforced}></button>
-                  <span style="font-size:0.78rem; color:var(--text-tertiary);">{cpuEnforced ? 'Hard limit' : 'Soft limit'}</span>
+                  <span style="font-size:0.78rem; color:var(--text-tertiary);">{cpuEnforced ? 'Hard limit (Docker enforced)' : 'Soft limit (scheduling only)'}</span>
                 </div>
               </div>
             </div>
             <div class="form-grid" style="margin-top:14px;">
               <div class="form-row">
-                <label class="label">Storage Limit</label>
+                <div class="resource-header">
+                  <span class="label">Storage Limit</span>
+                  <span class="resource-value dim">{storageDisplay}</span>
+                </div>
                 <div class="input-with-suffix">
-                  <input class="input input-mono" type="number" min="0" step="1000" placeholder="0 (unlimited)" bind:value={storageLimitMb}>
+                  <input class="input input-mono" type="number" min="0" step="1000" placeholder="0" bind:value={storageLimitMb}>
                   <span class="input-suffix">MB</span>
                 </div>
               </div>
               <div class="form-row">
-                <label class="label">Backup Limit</label>
+                <div class="resource-header">
+                  <span class="label">Backup Limit</span>
+                  <span class="resource-value dim">{backupDisplay}</span>
+                </div>
                 <div class="input-with-suffix">
-                  <input class="input input-mono" type="number" min="0" placeholder="0 (global default)" bind:value={backupLimit}>
+                  <input class="input input-mono" type="number" min="0" placeholder="0" bind:value={backupLimit}>
                   <span class="input-suffix">max</span>
                 </div>
               </div>
@@ -430,23 +451,13 @@
             <div class="form-grid">
               <div class="form-row">
                 <label class="label">Node ID</label>
-                <input class="input input-mono" type="text" placeholder="Auto (best available)" bind:value={nodeId}>
+                <input class="input input-mono" type="text" placeholder="Auto (best available)" bind:value={nodeId} disabled>
+                <span class="field-hint">Single-node mode — auto placement</span>
               </div>
               <div class="form-row">
                 <label class="label">Node Tags</label>
-                <input class="input input-mono" type="text" placeholder="e.g. ssd, eu-west" bind:value={nodeTags}>
-              </div>
-            </div>
-          </div>
-
-          <!-- Auto-restart -->
-          <div class="env-group">
-            <div class="env-group-label">Behavior</div>
-            <div class="form-row">
-              <label class="label">Auto-Restart on Crash</label>
-              <div style="display:flex; align-items:center; gap:8px;">
-                <button class="toggle" class:on={autoRestart} onclick={() => autoRestart = !autoRestart}></button>
-                <span style="font-size:0.78rem; color:var(--text-tertiary);">{autoRestart ? 'Enabled' : 'Disabled'}</span>
+                <input class="input input-mono" type="text" placeholder="e.g. ssd, eu-west" bind:value={nodeTags} disabled>
+                <span class="field-hint">Requires multi-node deployment</span>
               </div>
             </div>
           </div>
@@ -456,8 +467,14 @@
       <!-- ── SUBMIT ── -->
       <div class="submit-row">
         <div class="submit-left">
-          <label class="label" style="margin-bottom:0;">Start after creating</label>
-          <button class="toggle" class:on={autoStart} onclick={() => autoStart = !autoStart}></button>
+          <div class="submit-toggle">
+            <button class="toggle" class:on={autoRestart} onclick={() => autoRestart = !autoRestart}></button>
+            <span class="submit-toggle-label">Auto-restart</span>
+          </div>
+          <div class="submit-toggle">
+            <button class="toggle" class:on={autoStart} onclick={() => autoStart = !autoStart}></button>
+            <span class="submit-toggle-label">Start now</span>
+          </div>
         </div>
         <button class="btn-solid" disabled={!serverName.trim() || submitting} onclick={createServer}>
           <GameIcon src={selectedGame.icon_path} name={selectedGame.name} size={18} />
@@ -634,8 +651,16 @@
   .advanced-content { animation: slide-down 0.25s ease-out; padding-top: 10px; }
   @keyframes slide-down { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
 
+  .resource-value.dim { color: var(--text-tertiary); font-size: 0.72rem; }
+
+  .field-hint { font-size: 0.68rem; color: var(--text-tertiary); opacity: 0.6; margin-top: 4px; }
+
+  input:disabled { opacity: 0.4; cursor: not-allowed; }
+
   .submit-row { display: flex; align-items: center; justify-content: space-between; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border-dim); position: relative; z-index: 1; }
-  .submit-left { display: flex; align-items: center; gap: 8px; }
+  .submit-left { display: flex; align-items: center; gap: 16px; }
+  .submit-toggle { display: flex; align-items: center; gap: 6px; }
+  .submit-toggle-label { font-size: 0.78rem; color: var(--text-tertiary); }
   .submit-row .btn-solid:disabled { opacity: 0.5; cursor: not-allowed; }
 
   /* Modal */
