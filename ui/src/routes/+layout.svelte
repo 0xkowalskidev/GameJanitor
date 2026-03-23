@@ -1,8 +1,20 @@
 <script lang="ts">
   import '../styles/tokens.css';
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
+  import { ToastContainer } from '$lib/components';
+  import { connect, disconnect, enableAutoToasts, initAuth } from '$lib/stores';
 
   let { children } = $props();
+
+  onMount(() => {
+    initAuth();
+    connect();
+    enableAutoToasts();
+  });
+
+  onDestroy(() => {
+    disconnect();
+  });
 </script>
 
 <nav>
@@ -24,3 +36,5 @@
 </nav>
 
 {@render children()}
+
+<ToastContainer />
