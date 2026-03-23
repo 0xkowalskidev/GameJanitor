@@ -2,7 +2,7 @@
   import { page } from '$app/stores';
   import { onMount, onDestroy } from 'svelte';
   import { api, type Backup } from '$lib/api';
-  import { onGameserverEvent, toast } from '$lib/stores';
+  import { onGameserverEvent, toast, confirm } from '$lib/stores';
 
   const gsId = $derived($page.params.id as string);
 
@@ -56,7 +56,7 @@
   }
 
   async function restoreBackup(backup: Backup) {
-    if (!confirm(`Restore from "${backup.name}"? This will overwrite all current server data. There is no rollback.`)) return;
+    if (!await confirm({ title: 'Restore Backup', message: `Restore from "${backup.name}"? This will overwrite all current server data. There is no rollback.`, confirmLabel: 'Restore', danger: true })) return;
     try {
       await api.backups.restore(gsId, backup.id);
       toast('Restore started', 'info');
@@ -71,7 +71,7 @@
   }
 
   async function deleteBackup(backup: Backup) {
-    if (!confirm(`Delete backup "${backup.name}"? This cannot be undone.`)) return;
+    if (!await confirm({ title: 'Delete Backup', message: `Delete backup "${backup.name}"? This cannot be undone.`, confirmLabel: 'Delete', danger: true })) return;
     try {
       await api.backups.delete(gsId, backup.id);
       await loadBackups();

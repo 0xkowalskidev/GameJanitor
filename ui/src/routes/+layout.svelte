@@ -1,7 +1,7 @@
 <script lang="ts">
   import '../styles/tokens.css';
   import { onMount, onDestroy } from 'svelte';
-  import { ToastContainer } from '$lib/components';
+  import { ToastContainer, ConfirmModal } from '$lib/components';
   import { connect, disconnect, enableAutoToasts, initAuth } from '$lib/stores';
 
   let { children } = $props();
@@ -38,3 +38,4 @@
 {@render children()}
 
 <ToastContainer />
+<ConfirmModal />

@@ -3,7 +3,7 @@
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
   import { api, type Gameserver, type Game, type EnvVar, type DynamicOption } from '$lib/api';
-  import { toast } from '$lib/stores';
+  import { toast, confirm } from '$lib/stores';
   import { GameIcon } from '$lib/components';
 
   const gsId = $derived($page.params.id as string);
@@ -25,7 +25,6 @@
   // Danger
   let updating = $state(false);
   let reinstalling = $state(false);
-  let deleteConfirmName = $state('');
   let deleting = $state(false);
 
   // Dynamic options cache
@@ -128,7 +127,7 @@
   }
 
   async function updateGame() {
-    if (!confirm('Update the game to the latest version? The server will restart.')) return;
+    if (!await confirm({ title: 'Update Game', message: 'Update to the latest game version? The server will restart.', confirmLabel: 'Update' })) return;
     updating = true;
     try {
       await api.gameservers.updateGame(gsId);
@@ -141,7 +140,7 @@
   }
 
   async function reinstall() {
-    if (!confirm('Reinstall will wipe all server data. Backups are preserved. Continue?')) return;
+    if (!await confirm({ title: 'Reinstall Server', message: 'This will wipe all server data and reinstall from scratch. Backups are preserved.', confirmLabel: 'Reinstall', danger: true })) return;
     reinstalling = true;
     try {
       await api.gameservers.reinstall(gsId);
@@ -154,7 +153,8 @@
   }
 
   async function deleteServer() {
-    if (!gameserver || deleteConfirmName !== gameserver.name) return;
+    if (!gameserver) return;
+    if (!await confirm({ title: 'Delete Gameserver', message: `Permanently delete "${gameserver.name}" and all its data? This cannot be undone.`, confirmLabel: 'Delete', danger: true })) return;
     deleting = true;
     try {
       await api.gameservers.delete(gsId);
@@ -344,21 +344,8 @@
           <div class="danger-text">
             <div class="danger-label">Delete Gameserver</div>
             <div class="danger-desc">Permanently deletes this gameserver and all its data. This cannot be undone.</div>
-            <div class="delete-confirm">
-              <input
-                class="input" type="text"
-                placeholder="Type server name to confirm..."
-                bind:value={deleteConfirmName}
-                style="max-width:280px; margin-top:8px;"
-              >
-            </div>
           </div>
-          <button
-            class="btn-action stop"
-            onclick={deleteServer}
-            disabled={deleting || deleteConfirmName !== gameserver.name}
-            style="flex-shrink:0;"
-          >
+          <button class="btn-action stop" onclick={deleteServer} disabled={deleting} style="flex-shrink:0;">
             {deleting ? 'Deleting...' : 'Delete'}
           </button>
         </div>

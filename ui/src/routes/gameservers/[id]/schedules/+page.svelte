@@ -2,7 +2,7 @@
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
   import { api, type Schedule } from '$lib/api';
-  import { toast } from '$lib/stores';
+  import { toast, confirm } from '$lib/stores';
 
   const gsId = $derived($page.params.id as string);
 
@@ -96,7 +96,7 @@
   }
 
   async function deleteSchedule(s: Schedule) {
-    if (!confirm(`Delete schedule "${s.name}"?`)) return;
+    if (!await confirm({ title: 'Delete Schedule', message: `Delete schedule "${s.name}"?`, confirmLabel: 'Delete', danger: true })) return;
     try {
       await api.schedules.delete(gsId, s.id);
       await loadSchedules();

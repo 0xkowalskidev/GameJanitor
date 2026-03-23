@@ -2,7 +2,7 @@
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { api, type FileEntry } from '$lib/api';
-  import { toast } from '$lib/stores';
+  import { toast, confirm } from '$lib/stores';
 
   const gsId = $derived($page.params.id as string);
 
@@ -150,7 +150,7 @@
 
   async function deleteFile(name: string, isDir: boolean) {
     const path = filePath(name);
-    if (!confirm(`Delete ${isDir ? 'directory' : 'file'} "${name}"? This cannot be undone.`)) return;
+    if (!await confirm({ title: `Delete ${isDir ? 'Directory' : 'File'}`, message: `Delete "${name}"? This cannot be undone.`, confirmLabel: 'Delete', danger: true })) return;
     try {
       await api.files.delete(gsId, apiPath(path));
       await loadFiles();
