@@ -24,7 +24,7 @@ export default defineConfig({
         changeOrigin: true,
       },
       // Game assets (icons)
-      '/games': {
+      '/assets/games': {
         target: 'http://localhost:8080',
         changeOrigin: true,
       },

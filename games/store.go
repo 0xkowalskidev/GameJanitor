@@ -152,7 +152,7 @@ func (s *GameStore) loadGamesFromFS(root fs.FS, source string) error {
 
 		// Set asset path from YAML definition (empty if no icon configured)
 		if def.Assets.Icon != "" {
-			game.IconPath = "/games/" + def.ID + "/" + def.Assets.Icon
+			game.IconPath = "/assets/games/" + def.ID + "/" + def.Assets.Icon
 		}
 
 		subFS, err := fs.Sub(root, gameDir)
@@ -212,7 +212,7 @@ func (s *GameStore) GetGameFS(id string) fs.FS {
 }
 
 // AssetsFS returns an fs.FS that serves game assets at {gameID}/{filename}
-// for use with the /games/ route. Includes the _default fallback.
+// for use with the /assets/games/ route. Includes the _default fallback.
 func (s *GameStore) AssetsFS() fs.FS {
 	return &gameAssetsFS{store: s}
 }
