@@ -25,6 +25,8 @@
   let backupLimit = $state(0);    // 0 = use global default
   let portMode = $state('auto');
   let manualPorts = $state<{ name: string; host_port: number; container_port: number; protocol: string }[]>([]);
+  let nodeId = $state('');
+  let nodeTags = $state('');
   let autoRestart = $state(true);
   let autoStart = $state(true);
   let envValues = $state<Record<string, string>>({});
@@ -157,6 +159,8 @@
       if (storageLimitMb > 0) payload.storage_limit_mb = storageLimitMb;
       if (backupLimit > 0) payload.backup_limit = backupLimit;
       if (portMode === 'manual') payload.ports = manualPorts;
+      if (nodeId.trim()) payload.node_id = nodeId.trim();
+      if (nodeTags.trim()) payload.node_tags = JSON.stringify(nodeTags.split(',').map((t: string) => t.trim()).filter(Boolean));
 
       const result = await api.gameservers.create(payload);
 
@@ -350,6 +354,21 @@
             {/each}
           </div>
         {/if}
+      </div>
+
+      <!-- Placement (multi-node) -->
+      <div class="env-group">
+        <div class="env-group-label">Placement</div>
+        <div class="form-grid">
+          <div class="form-row">
+            <label class="label">Node ID</label>
+            <input class="input input-mono" type="text" placeholder="Auto (best available)" bind:value={nodeId}>
+          </div>
+          <div class="form-row">
+            <label class="label">Node Tags</label>
+            <input class="input input-mono" type="text" placeholder="e.g. ssd, eu-west" bind:value={nodeTags}>
+          </div>
+        </div>
       </div>
 
       <hr class="form-divider">
