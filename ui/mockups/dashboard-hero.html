@@ -10,24 +10,38 @@
   *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
   :root {
+    /* Brand */
+    --accent: #e8722a;
+    --accent-hover: #f08840;
+    --accent-dim: rgba(232, 114, 42, 0.12);
+    --accent-subtle: rgba(232, 114, 42, 0.06);
+    --accent-border: rgba(232, 114, 42, 0.22);
+
+    /* Surfaces */
     --bg-root: #0a0a0b;
     --bg-surface: #0e0e10;
     --bg-elevated: #141416;
     --bg-hover: #1a1a1e;
-    --bg-inset: #09090a;
+    --bg-inset: #08080a;
+
+    /* Borders */
     --border: #27272a;
     --border-subtle: #1c1c1f;
-    --border-dim: #151518;
+    --border-dim: #131315;
+
+    /* Text */
     --text-primary: #fafafa;
     --text-secondary: #a1a1aa;
-    --text-tertiary: #63636e;
-    --accent: #3b82f6;
+    --text-tertiary: #5a5a65;
+
+    /* Status — server-reported, NOT brand */
     --status-running: #22c55e;
     --status-running-dim: rgba(34, 197, 94, 0.06);
     --status-running-glow: rgba(34, 197, 94, 0.12);
     --status-starting: #f59e0b;
     --status-error: #ef4444;
     --status-stopped: #52525b;
+
     --font-body: 'DM Sans', sans-serif;
     --font-mono: 'JetBrains Mono', monospace;
     --radius: 10px;
@@ -43,7 +57,7 @@
     -webkit-font-smoothing: antialiased;
   }
 
-  /* ─── NAV ─── */
+  /* ────────────────────────────── NAV ────────────────────────────── */
   nav {
     position: sticky; top: 0; z-index: 50;
     display: flex; align-items: center; justify-content: space-between;
@@ -51,125 +65,120 @@
     background: var(--bg-root);
     border-bottom: 1px solid var(--border-dim);
   }
-  .nav-left { display: flex; align-items: center; gap: 28px; }
+  .nav-left { display: flex; align-items: center; gap: 24px; }
+
   .brand {
-    display: flex; align-items: center; gap: 8px;
+    display: flex; align-items: center; gap: 9px;
     font-weight: 600; font-size: 0.93rem; letter-spacing: -0.01em;
     color: var(--text-primary); text-decoration: none;
   }
   .brand-mark {
-    width: 22px; height: 22px; background: var(--accent);
-    border-radius: 5px; display: grid; place-items: center;
+    width: 24px; height: 24px; background: var(--accent);
+    border-radius: 6px; display: grid; place-items: center;
+    box-shadow: 0 0 12px rgba(232, 114, 42, 0.2);
   }
   .brand-mark svg { width: 13px; height: 13px; fill: white; }
-  .nav-links { display: flex; gap: 4px; }
+
+  .nav-links { display: flex; gap: 2px; }
   .nav-links a {
     padding: 6px 12px; border-radius: var(--radius-sm);
-    font-size: 0.87rem; font-weight: 450; color: var(--text-secondary);
+    font-size: 0.85rem; font-weight: 450; color: var(--text-tertiary);
     text-decoration: none; transition: color 0.15s, background 0.15s;
+    position: relative;
   }
-  .nav-links a:hover { color: var(--text-primary); background: var(--bg-hover); }
-  .nav-links a.active { color: var(--text-primary); background: var(--bg-elevated); }
-  .nav-right { display: flex; align-items: center; gap: 12px; }
+  .nav-links a:hover { color: var(--text-secondary); background: var(--bg-hover); }
+  .nav-links a.active { color: var(--accent); }
+  /* Active indicator — a subtle orange underline */
+  .nav-links a.active::after {
+    content: '';
+    position: absolute; bottom: 0; left: 20%; right: 20%;
+    height: 2px; border-radius: 1px;
+    background: var(--accent); opacity: 0.7;
+  }
+
+  .nav-right { display: flex; align-items: center; }
   .auth-pill {
     display: flex; align-items: center; gap: 6px;
-    padding: 4px 10px; border-radius: 100px;
-    background: var(--bg-elevated); border: 1px solid var(--border-subtle);
-    font-size: 0.78rem; color: var(--text-tertiary); font-family: var(--font-mono);
+    padding: 5px 11px; border-radius: 100px;
+    background: var(--bg-elevated); border: 1px solid var(--border-dim);
+    font-size: 0.76rem; color: var(--text-tertiary); font-family: var(--font-mono);
   }
-  .auth-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-tertiary); opacity: 0.5; }
+  .auth-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--text-tertiary); opacity: 0.4; }
 
-  /* ─── LAYOUT ─── */
+  /* ────────────────────────────── PAGE ────────────────────────────── */
   main { max-width: 680px; margin: 0 auto; padding: 32px 20px 60px; }
 
   .page-header {
     display: flex; align-items: center; justify-content: space-between;
     margin-bottom: 24px;
   }
-  .page-header h1 { font-size: 1.3rem; font-weight: 600; letter-spacing: -0.02em; }
+  .page-header h1 {
+    font-size: 1.25rem; font-weight: 600; letter-spacing: -0.02em;
+    color: var(--text-primary);
+  }
+
   .btn-new {
     display: inline-flex; align-items: center; gap: 5px;
-    padding: 6px 13px; border-radius: var(--radius-sm);
-    background: transparent; border: 1px solid var(--border-subtle);
-    color: var(--text-tertiary); font-family: var(--font-body);
-    font-size: 0.82rem; font-weight: 500; cursor: pointer;
-    transition: color 0.15s, border-color 0.15s;
+    padding: 6px 14px; border-radius: var(--radius-sm);
+    background: var(--accent-subtle); border: 1px solid var(--accent-border);
+    color: var(--accent); font-family: var(--font-body);
+    font-size: 0.82rem; font-weight: 520; cursor: pointer;
+    transition: background 0.15s, border-color 0.2s, color 0.15s;
   }
-  .btn-new:hover { color: var(--text-secondary); border-color: var(--border); }
+  .btn-new:hover { background: var(--accent-dim); border-color: rgba(232,114,42,0.4); color: var(--accent-hover); }
   .btn-new svg { width: 13px; height: 13px; }
 
-  /* ─── HERO PANEL ─── */
+  /* ────────────────────────────── HERO ────────────────────────────── */
   .hero {
     background: var(--bg-surface);
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius);
-    position: relative;
-    overflow: hidden;
-    animation: hero-up 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-    /* Breathing glow around the border when running */
+    position: relative; overflow: hidden;
+    /* Breathing glow — server status green */
     box-shadow:
       0 0 0 1px var(--border-dim),
-      0 0 40px -10px var(--status-running-glow),
-      0 0 80px -20px var(--status-running-dim);
-    animation: hero-up 0.5s cubic-bezier(0.16, 1, 0.3, 1), breathe 4s ease-in-out 0.5s infinite;
+      0 0 40px -12px var(--status-running-glow);
+    animation: hero-enter 0.5s cubic-bezier(0.16, 1, 0.3, 1),
+               breathe 4s ease-in-out 0.5s infinite;
   }
-
-  @keyframes hero-up {
-    from { opacity: 0; transform: translateY(16px); }
+  @keyframes hero-enter {
+    from { opacity: 0; transform: translateY(14px); }
     to { opacity: 1; transform: translateY(0); }
   }
-
   @keyframes breathe {
-    0%, 100% {
-      box-shadow:
-        0 0 0 1px var(--border-dim),
-        0 0 30px -10px var(--status-running-glow),
-        0 0 60px -20px var(--status-running-dim);
-    }
-    50% {
-      box-shadow:
-        0 0 0 1px var(--border-subtle),
-        0 0 50px -8px var(--status-running-glow),
-        0 0 100px -15px var(--status-running-dim);
-    }
+    0%, 100% { box-shadow: 0 0 0 1px var(--border-dim), 0 0 30px -12px var(--status-running-glow); }
+    50% { box-shadow: 0 0 0 1px var(--border-subtle), 0 0 50px -8px var(--status-running-glow); }
   }
-
-  /* Top status line */
+  /* Status line at top — green = running */
   .hero::after {
-    content: '';
-    position: absolute; top: 0; left: 5%; right: 5%; height: 1px;
+    content: ''; position: absolute; top: 0; left: 8%; right: 8%; height: 1px;
     background: linear-gradient(90deg, transparent, var(--status-running), transparent);
-    opacity: 0.6;
+    opacity: 0.5;
   }
 
-  /* ─── HERO HEADER ─── */
+  /* ── Header ── */
   .hero-head {
     display: flex; align-items: flex-start; justify-content: space-between;
     padding: 22px 22px 0;
   }
   .hero-identity { display: flex; align-items: center; gap: 14px; }
   .hero-icon {
-    width: 52px; height: 52px; border-radius: 10px;
+    width: 50px; height: 50px; border-radius: 10px;
     background: var(--bg-inset); border: 1px solid var(--border-dim);
     display: grid; place-items: center; font-size: 1.5rem; flex-shrink: 0;
   }
-  .hero-name {
-    font-weight: 600; font-size: 1.2rem; letter-spacing: -0.025em;
-    line-height: 1.2;
-  }
-  .hero-game {
-    font-size: 0.8rem; color: var(--text-tertiary); margin-top: 3px;
-    font-weight: 450;
-  }
+  .hero-name { font-weight: 600; font-size: 1.15rem; letter-spacing: -0.02em; }
+  .hero-game { font-size: 0.8rem; color: var(--text-tertiary); margin-top: 2px; }
+
   .hero-badge {
     display: inline-flex; align-items: center; gap: 6px;
     padding: 5px 12px 5px 9px; border-radius: 100px;
-    font-size: 0.74rem; font-weight: 500; font-family: var(--font-mono);
+    font-size: 0.73rem; font-weight: 500; font-family: var(--font-mono);
     text-transform: uppercase; letter-spacing: 0.04em;
     background: var(--status-running-dim); color: var(--status-running);
-    border: 1px solid rgba(34, 197, 94, 0.15);
+    border: 1px solid rgba(34, 197, 94, 0.12);
   }
-  .hero-badge .dot {
+  .badge-dot {
     width: 7px; height: 7px; border-radius: 50%;
     background: var(--status-running);
     box-shadow: 0 0 6px var(--status-running);
@@ -177,49 +186,48 @@
   }
   @keyframes dot-pulse {
     0%, 100% { opacity: 1; box-shadow: 0 0 4px var(--status-running); }
-    50% { opacity: 0.45; box-shadow: 0 0 10px var(--status-running); }
+    50% { opacity: 0.4; box-shadow: 0 0 10px var(--status-running); }
   }
 
-  /* ─── CONNECTION BLOCK ─── */
+  /* ── Connection ── */
   .hero-connect {
     margin: 18px 22px 0;
     background: var(--bg-inset);
-    border: 1px solid var(--border-dim);
+    border: 1px solid var(--accent-border);
     border-radius: var(--radius-sm);
-    padding: 12px 16px;
+    padding: 14px 16px;
     display: flex; align-items: center; justify-content: space-between;
-    gap: 12px;
     cursor: pointer;
-    transition: border-color 0.2s;
+    transition: border-color 0.2s, background 0.2s;
   }
-  .hero-connect:hover { border-color: var(--border); }
+  .hero-connect:hover { border-color: rgba(232,114,42,0.4); background: rgba(232,114,42,0.03); }
 
-  .connect-left { display: flex; flex-direction: column; gap: 3px; }
+  .connect-left { display: flex; flex-direction: column; gap: 4px; }
   .connect-label {
-    font-size: 0.68rem; font-family: var(--font-mono);
-    text-transform: uppercase; letter-spacing: 0.08em;
-    color: var(--text-tertiary); opacity: 0.7;
+    font-size: 0.66rem; font-family: var(--font-mono);
+    text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--accent); opacity: 0.7;
   }
   .connect-addr {
-    font-size: 1.05rem; font-family: var(--font-mono); font-weight: 500;
+    font-size: 1.1rem; font-family: var(--font-mono); font-weight: 500;
     color: var(--text-primary); letter-spacing: 0.02em;
   }
   .connect-copy {
     display: flex; align-items: center; gap: 5px;
-    padding: 6px 12px; border-radius: var(--radius-sm);
-    background: var(--bg-elevated); border: 1px solid var(--border-subtle);
-    color: var(--text-tertiary); font-family: var(--font-mono);
-    font-size: 0.72rem; cursor: pointer;
-    transition: color 0.15s, border-color 0.15s;
+    padding: 7px 14px; border-radius: var(--radius-sm);
+    background: var(--accent); border: none;
+    color: white; font-family: var(--font-mono);
+    font-size: 0.72rem; font-weight: 500; cursor: pointer;
+    transition: background 0.15s;
   }
-  .connect-copy:hover { color: var(--text-primary); border-color: var(--border); }
-  .connect-copy.copied { color: var(--status-running); border-color: rgba(34,197,94,0.4); }
+  .connect-copy:hover { background: var(--accent-hover); }
+  .connect-copy.copied { background: var(--status-running); }
   .connect-copy svg { width: 12px; height: 12px; }
 
-  /* ─── TELEMETRY GRID ─── */
+  /* ── Telemetry ── */
   .hero-telemetry {
     display: grid; grid-template-columns: repeat(3, 1fr);
-    margin: 18px 22px 0;
+    margin: 16px 22px 0;
     border: 1px solid var(--border-dim);
     border-radius: var(--radius-sm);
     overflow: hidden;
@@ -228,47 +236,43 @@
     padding: 14px 16px;
     background: var(--bg-inset);
     display: flex; flex-direction: column; gap: 10px;
-    position: relative;
   }
   .tele-cell + .tele-cell { border-left: 1px solid var(--border-dim); }
 
   .tele-label {
-    font-size: 0.67rem; font-family: var(--font-mono);
-    text-transform: uppercase; letter-spacing: 0.08em;
-    color: var(--text-tertiary); opacity: 0.7;
+    font-size: 0.65rem; font-family: var(--font-mono);
+    text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--text-tertiary);
   }
   .tele-value {
     font-size: 1.5rem; font-weight: 600; letter-spacing: -0.03em;
     line-height: 1; font-family: var(--font-mono);
   }
   .tele-unit {
-    font-size: 0.7rem; font-weight: 400; color: var(--text-tertiary);
-    margin-left: 1px;
+    font-size: 0.68rem; font-weight: 400; color: var(--text-tertiary); margin-left: 2px;
   }
   .tele-sub {
-    font-size: 0.72rem; color: var(--text-tertiary); font-family: var(--font-mono);
+    font-size: 0.7rem; color: var(--text-tertiary); font-family: var(--font-mono);
     margin-top: -4px;
   }
-
-  /* Thin bar at bottom of each cell */
   .tele-bar {
-    height: 3px; border-radius: 1.5px;
-    background: var(--border-dim);
-    overflow: hidden;
+    height: 3px; border-radius: 2px;
+    background: var(--border-dim); overflow: hidden;
   }
   .tele-bar-fill {
-    height: 100%; border-radius: 1.5px;
+    height: 100%; border-radius: 2px;
     transition: width 0.8s cubic-bezier(0.16, 1, 0.3, 1);
   }
+  /* Players = green (server health), Memory/CPU = orange (resource usage = operator concern) */
   .tele-bar-fill.players { background: var(--status-running); }
   .tele-bar-fill.mem { background: var(--accent); }
-  .tele-bar-fill.cpu { background: var(--status-starting); }
+  .tele-bar-fill.cpu { background: var(--accent); opacity: 0.75; }
 
-  /* ─── ACTIONS ─── */
+  /* ── Actions ── */
   .hero-actions {
     display: flex; align-items: center; justify-content: space-between;
     padding: 18px 22px 20px;
-    margin-top: 18px;
+    margin-top: 16px;
     border-top: 1px solid var(--border-dim);
   }
   .action-group { display: flex; gap: 6px; }
@@ -277,26 +281,20 @@
     display: inline-flex; align-items: center; gap: 6px;
     padding: 8px 16px; border-radius: var(--radius-sm);
     font-family: var(--font-body); font-size: 0.84rem; font-weight: 500;
-    border: 1px solid; cursor: pointer;
+    border: 1px solid; cursor: pointer; background: transparent;
     transition: background 0.15s, border-color 0.15s;
-    background: transparent;
   }
   .btn-action svg { width: 14px; height: 14px; }
-
   .btn-action.stop {
-    border-color: rgba(239, 68, 68, 0.25); color: var(--status-error);
+    border-color: rgba(239, 68, 68, 0.2); color: var(--status-error);
   }
-  .btn-action.stop:hover {
-    background: rgba(239, 68, 68, 0.06); border-color: rgba(239, 68, 68, 0.5);
-  }
+  .btn-action.stop:hover { background: rgba(239, 68, 68, 0.06); border-color: rgba(239, 68, 68, 0.4); }
   .btn-action.restart {
-    border-color: rgba(245, 158, 11, 0.25); color: var(--status-starting);
+    border-color: rgba(245, 158, 11, 0.2); color: var(--status-starting);
   }
-  .btn-action.restart:hover {
-    background: rgba(245, 158, 11, 0.06); border-color: rgba(245, 158, 11, 0.5);
-  }
+  .btn-action.restart:hover { background: rgba(245, 158, 11, 0.06); border-color: rgba(245, 158, 11, 0.4); }
 
-  .quick-links { display: flex; gap: 2px; }
+  .quick-links { display: flex; gap: 1px; }
   .qlink {
     display: inline-flex; align-items: center; gap: 5px;
     padding: 6px 10px; border-radius: var(--radius-sm);
@@ -304,21 +302,22 @@
     color: var(--text-tertiary); text-decoration: none;
     transition: color 0.15s, background 0.15s;
   }
-  .qlink:hover { color: var(--text-secondary); background: var(--bg-hover); }
+  .qlink:hover { color: var(--accent); background: var(--accent-subtle); }
   .qlink svg { width: 13px; height: 13px; }
 
-  /* ─── MOBILE ─── */
+  /* ────────────────────────────── MOBILE ────────────────────────────── */
   @media (max-width: 600px) {
     main { padding: 20px 12px 40px; }
     .hero-head { flex-direction: column; gap: 14px; padding: 18px 16px 0; }
-    .hero-connect { margin: 14px 16px 0; }
+    .hero-connect { margin: 14px 16px 0; flex-direction: column; gap: 10px; align-items: stretch; }
+    .connect-copy { justify-content: center; }
     .hero-telemetry { grid-template-columns: 1fr; margin: 14px 16px 0; }
     .tele-cell + .tele-cell { border-left: none; border-top: 1px solid var(--border-dim); }
     .hero-actions { flex-direction: column; gap: 12px; padding: 16px; }
     .action-group { width: 100%; }
     .btn-action { flex: 1; justify-content: center; }
-    .quick-links { width: 100%; justify-content: center; }
-    .page-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+    .quick-links { width: 100%; justify-content: center; flex-wrap: wrap; }
+    .page-header { flex-direction: column; align-items: flex-start; gap: 12px; }
   }
 </style>
 </head>
@@ -352,7 +351,6 @@
   </div>
 
   <div class="hero">
-    <!-- Header: identity + status -->
     <div class="hero-head">
       <div class="hero-identity">
         <div class="hero-icon">⛏️</div>
@@ -361,10 +359,9 @@
           <div class="hero-game">Minecraft Java</div>
         </div>
       </div>
-      <div class="hero-badge"><span class="dot"></span>Running</div>
+      <div class="hero-badge"><span class="badge-dot"></span>Running</div>
     </div>
 
-    <!-- Connection address — the most important thing on the page -->
     <div class="hero-connect" onclick="copyConnect(this)">
       <div class="connect-left">
         <span class="connect-label">Connect</span>
@@ -376,7 +373,6 @@
       </button>
     </div>
 
-    <!-- Telemetry: players, memory, CPU -->
     <div class="hero-telemetry">
       <div class="tele-cell">
         <span class="tele-label">Players</span>
@@ -397,7 +393,6 @@
       </div>
     </div>
 
-    <!-- Actions + quick links -->
     <div class="hero-actions">
       <div class="action-group">
         <button class="btn-action stop">
@@ -437,10 +432,10 @@ function copyConnect(block) {
   const btn = block.querySelector('.connect-copy');
   navigator.clipboard.writeText(addr).then(() => {
     btn.classList.add('copied');
-    const origText = btn.lastChild;
-    const origLabel = origText.textContent;
-    origText.textContent = 'Copied';
-    setTimeout(() => { btn.classList.remove('copied'); origText.textContent = origLabel; }, 1500);
+    const label = btn.lastChild;
+    const orig = label.textContent;
+    label.textContent = 'Copied';
+    setTimeout(() => { btn.classList.remove('copied'); label.textContent = orig; }, 1500);
   });
 }
 </script>
