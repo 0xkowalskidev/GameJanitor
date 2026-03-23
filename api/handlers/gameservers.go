@@ -144,7 +144,7 @@ func (h *GameserverHandlers) Update(w http.ResponseWriter, r *http.Request) {
 
 func (h *GameserverHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	if err := h.svc.DeleteGameserver(r.Context(), id); err != nil {
+	if err := h.svc.DeleteGameserver(detachedCtx(r), id); err != nil {
 		h.log.Error("deleting gameserver", "id", id, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
@@ -153,23 +153,23 @@ func (h *GameserverHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *GameserverHandlers) Start(w http.ResponseWriter, r *http.Request) {
-	h.doAction(w, r, func(id string) error { return h.svc.Start(r.Context(), id) })
+	h.doAction(w, r, func(id string) error { return h.svc.Start(detachedCtx(r), id) })
 }
 
 func (h *GameserverHandlers) Stop(w http.ResponseWriter, r *http.Request) {
-	h.doAction(w, r, func(id string) error { return h.svc.Stop(r.Context(), id) })
+	h.doAction(w, r, func(id string) error { return h.svc.Stop(detachedCtx(r), id) })
 }
 
 func (h *GameserverHandlers) Restart(w http.ResponseWriter, r *http.Request) {
-	h.doAction(w, r, func(id string) error { return h.svc.Restart(r.Context(), id) })
+	h.doAction(w, r, func(id string) error { return h.svc.Restart(detachedCtx(r), id) })
 }
 
 func (h *GameserverHandlers) UpdateServerGame(w http.ResponseWriter, r *http.Request) {
-	h.doAction(w, r, func(id string) error { return h.svc.UpdateServerGame(r.Context(), id) })
+	h.doAction(w, r, func(id string) error { return h.svc.UpdateServerGame(detachedCtx(r), id) })
 }
 
 func (h *GameserverHandlers) Reinstall(w http.ResponseWriter, r *http.Request) {
-	h.doAction(w, r, func(id string) error { return h.svc.Reinstall(r.Context(), id) })
+	h.doAction(w, r, func(id string) error { return h.svc.Reinstall(detachedCtx(r), id) })
 }
 
 func (h *GameserverHandlers) Migrate(w http.ResponseWriter, r *http.Request) {
@@ -186,7 +186,7 @@ func (h *GameserverHandlers) Migrate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.svc.MigrateGameserver(r.Context(), id, body.NodeID); err != nil {
+	if err := h.svc.MigrateGameserver(detachedCtx(r), id, body.NodeID); err != nil {
 		h.log.Error("migrating gameserver", "id", id, "target_node", body.NodeID, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
@@ -287,6 +287,18 @@ func (h *GameserverHandlers) doAction(w http.ResponseWriter, r *http.Request, ac
 		return
 	}
 	respondOK(w, gs)
+}
+
+// detachedCtx creates a new context that preserves request values (actor, auth)
+// but is not canceled when the HTTP request completes. This allows long-running
+// operations like image pulls to survive client disconnects.
+func detachedCtx(r *http.Request) context.Context {
+	ctx := context.Background()
+	// Preserve actor for event publishing
+	if actor := service.ActorFromContext(r.Context()); actor.Type != "" {
+		ctx = service.SetActorInContext(ctx, actor)
+	}
+	return ctx
 }
 
 type statusResponse struct {
