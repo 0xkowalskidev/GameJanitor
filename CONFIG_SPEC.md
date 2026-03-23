@@ -128,6 +128,16 @@ On startup, the server validates the configuration makes sense:
 | Controller mode + no gRPC port | Warning: "controller mode but gRPC disabled — remote workers cannot connect" |
 | Worker mode + no controller address | Hard error: "worker mode requires --controller-address" |
 
+## Open Question: Declarative Settings Convergence
+
+NixOS and similar declarative systems expect `rebuild` to apply ALL config changes. Our model seeds settings on first boot only — subsequent config file changes to the `settings` block are ignored.
+
+**Maybe:** Add a `--apply-settings` flag (or config option) that forces the config file's settings block to overwrite DB values on every startup. This would make the config file the source of truth for operational settings, matching the declarative model.
+
+**Trade-off:** Businesses using API for runtime setting changes would have their changes overwritten on next restart. Could solve with a `managed_settings` list in the config that specifies which settings the config file owns vs which the API owns. Needs more thought.
+
+---
+
 ## Migration from Current System
 
 ### What changes
