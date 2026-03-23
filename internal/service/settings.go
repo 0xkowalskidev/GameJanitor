@@ -5,115 +5,120 @@ import (
 	"fmt"
 	"log/slog"
 	"strconv"
+	"sync"
 
 	"github.com/warsmite/gamejanitor/internal/models"
 )
 
-type SettingType int
-
-const (
-	SettingTypeBool SettingType = iota
-	SettingTypeInt
-	SettingTypeString
-)
-
-type SettingDef struct {
-	Key     string
-	Type    SettingType
-	Default any
-}
-
 // Setting key constants
 const (
-	SettingConnectionAddress  = "connection_address"
-	SettingPortRangeStart     = "port_range_start"
-	SettingPortRangeEnd       = "port_range_end"
-	SettingPortMode           = "port_mode"
-	SettingMaxBackups         = "max_backups"
-	SettingAuthEnabled        = "auth_enabled"
-	SettingLocalhostBypass    = "localhost_bypass"
-	SettingRateLimitEnabled   = "rate_limit_enabled"
-	SettingRateLimitPerIP     = "rate_limit_per_ip"
-	SettingRateLimitPerToken  = "rate_limit_per_token"
-	SettingRateLimitLogin     = "rate_limit_login"
-	SettingTrustProxyHeaders  = "trust_proxy_headers"
-	SettingEventRetention     = "event_retention_days"
-	SettingRequireMemoryLimit = "require_memory_limit"
-	SettingRequireCPULimit    = "require_cpu_limit"
+	SettingConnectionAddress   = "connection_address"
+	SettingPortRangeStart      = "port_range_start"
+	SettingPortRangeEnd        = "port_range_end"
+	SettingPortMode            = "port_mode"
+	SettingMaxBackups          = "max_backups"
+	SettingAuthEnabled         = "auth_enabled"
+	SettingLocalhostBypass     = "localhost_bypass"
+	SettingRateLimitEnabled    = "rate_limit_enabled"
+	SettingRateLimitPerIP      = "rate_limit_per_ip"
+	SettingRateLimitPerToken   = "rate_limit_per_token"
+	SettingRateLimitLogin      = "rate_limit_login"
+	SettingTrustProxyHeaders   = "trust_proxy_headers"
+	SettingEventRetention      = "event_retention_days"
+	SettingRequireMemoryLimit  = "require_memory_limit"
+	SettingRequireCPULimit     = "require_cpu_limit"
 	SettingRequireStorageLimit = "require_storage_limit"
 )
 
-// Registry of all runtime settings with their types and defaults.
-var SettingDefs = []SettingDef{
-	{SettingConnectionAddress, SettingTypeString, ""},
-	{SettingPortRangeStart, SettingTypeInt, 27000},
-	{SettingPortRangeEnd, SettingTypeInt, 28999},
-	{SettingPortMode, SettingTypeString, "auto"},
-	{SettingMaxBackups, SettingTypeInt, 10},
-	{SettingAuthEnabled, SettingTypeBool, false},
-	{SettingLocalhostBypass, SettingTypeBool, true},
-	{SettingRateLimitEnabled, SettingTypeBool, false},
-	{SettingRateLimitPerIP, SettingTypeInt, 20},
-	{SettingRateLimitPerToken, SettingTypeInt, 10},
-	{SettingRateLimitLogin, SettingTypeInt, 10},
-	{SettingTrustProxyHeaders, SettingTypeBool, false},
-	{SettingEventRetention, SettingTypeInt, 30},
-	{SettingRequireMemoryLimit, SettingTypeBool, false},
-	{SettingRequireCPULimit, SettingTypeBool, false},
-	{SettingRequireStorageLimit, SettingTypeBool, false},
+// Defaults defines every setting with its default value.
+// The Go type of the default IS the setting's type: bool, int, or string.
+var Defaults = map[string]any{
+	SettingConnectionAddress:   "",
+	SettingPortRangeStart:      27000,
+	SettingPortRangeEnd:        28999,
+	SettingPortMode:            "auto",
+	SettingMaxBackups:          10,
+	SettingAuthEnabled:         false,
+	SettingLocalhostBypass:     true,
+	SettingRateLimitEnabled:    false,
+	SettingRateLimitPerIP:      20,
+	SettingRateLimitPerToken:   10,
+	SettingRateLimitLogin:      10,
+	SettingTrustProxyHeaders:   false,
+	SettingEventRetention:      30,
+	SettingRequireMemoryLimit:  false,
+	SettingRequireCPULimit:     false,
+	SettingRequireStorageLimit: false,
 }
 
 type SettingsService struct {
-	db   *sql.DB
-	log  *slog.Logger
-	defs map[string]SettingDef
+	mu     sync.RWMutex
+	values map[string]any // live typed values, served from memory
+	db     *sql.DB
+	log    *slog.Logger
 }
 
 func NewSettingsService(db *sql.DB, log *slog.Logger) *SettingsService {
-	defs := make(map[string]SettingDef, len(SettingDefs))
-	for _, d := range SettingDefs {
-		defs[d.Key] = d
+	s := &SettingsService{
+		values: make(map[string]any, len(Defaults)),
+		db:     db,
+		log:    log,
 	}
-	return &SettingsService{db: db, log: log, defs: defs}
+
+	// Start with defaults
+	for k, v := range Defaults {
+		s.values[k] = v
+	}
+
+	// Load persisted values from DB, overwriting defaults
+	stored, err := models.AllSettings(db)
+	if err != nil {
+		log.Error("failed to load settings from DB, using defaults", "error", err)
+		return s
+	}
+	for key, strVal := range stored {
+		def, ok := Defaults[key]
+		if !ok {
+			continue // ignore unknown keys in DB
+		}
+		if parsed, err := parseAs(strVal, def); err == nil {
+			s.values[key] = parsed
+		}
+	}
+
+	return s
 }
 
-// ApplyConfig writes config-specified settings to DB on startup.
+// ApplyConfig writes config-specified settings to DB and memory on startup.
 // Only keys present in the map are written — unspecified settings are left alone.
 func (s *SettingsService) ApplyConfig(settings map[string]any) {
 	if len(settings) == 0 {
 		return
 	}
 
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	applied := 0
 	for key, val := range settings {
-		def, ok := s.defs[key]
+		def, ok := Defaults[key]
 		if !ok {
 			s.log.Warn("ignoring unknown setting from config", "key", key)
 			continue
 		}
 
-		var strVal string
-		switch def.Type {
-		case SettingTypeBool:
-			b, ok := toBool(val)
-			if !ok {
-				s.log.Warn("invalid bool value for setting", "key", key, "value", val)
-				continue
-			}
-			strVal = strconv.FormatBool(b)
-		case SettingTypeInt:
-			n, ok := toInt(val)
-			if !ok {
-				s.log.Warn("invalid int value for setting", "key", key, "value", val)
-				continue
-			}
-			strVal = strconv.Itoa(n)
-		case SettingTypeString:
-			strVal = fmt.Sprintf("%v", val)
+		// Coerce the YAML-parsed value to match the default's type
+		typed, err := coerce(val, def)
+		if err != nil {
+			s.log.Warn("invalid config value for setting", "key", key, "value", val, "error", err)
+			continue
 		}
 
-		if err := models.SetSetting(s.db, key, strVal); err != nil {
-			s.log.Error("failed to apply config setting to DB", "key", key, "error", err)
+		s.values[key] = typed
+
+		// Persist to DB
+		if err := models.SetSetting(s.db, key, fmt.Sprintf("%v", typed)); err != nil {
+			s.log.Error("failed to persist config setting", "key", key, "error", err)
 			continue
 		}
 		applied++
@@ -124,110 +129,111 @@ func (s *SettingsService) ApplyConfig(settings map[string]any) {
 	}
 }
 
-// GetBool returns a boolean setting value. Falls back to the registered default.
+// GetBool returns a boolean setting. Returns the default if key is unknown.
 func (s *SettingsService) GetBool(key string) bool {
-	v, err := models.GetSetting(s.db, key)
-	if err != nil || v == "" {
-		if def, ok := s.defs[key]; ok {
-			if b, ok := def.Default.(bool); ok {
+	s.mu.RLock()
+	v, ok := s.values[key]
+	s.mu.RUnlock()
+	if !ok {
+		if d, ok := Defaults[key]; ok {
+			if b, ok := d.(bool); ok {
 				return b
 			}
 		}
 		return false
 	}
-	return v == "true"
+	b, _ := v.(bool)
+	return b
 }
 
-// GetInt returns an integer setting value. Falls back to the registered default.
+// GetInt returns an integer setting. Returns the default if key is unknown.
 func (s *SettingsService) GetInt(key string) int {
-	v, err := models.GetSetting(s.db, key)
-	if err != nil || v == "" {
-		if def, ok := s.defs[key]; ok {
-			if n, ok := toInt(def.Default); ok {
+	s.mu.RLock()
+	v, ok := s.values[key]
+	s.mu.RUnlock()
+	if !ok {
+		if d, ok := Defaults[key]; ok {
+			if n, ok := d.(int); ok {
 				return n
 			}
 		}
 		return 0
 	}
-	n, err := strconv.Atoi(v)
-	if err != nil {
-		if def, ok := s.defs[key]; ok {
-			if n, ok := toInt(def.Default); ok {
-				return n
-			}
-		}
-		return 0
-	}
+	n, _ := v.(int)
 	return n
 }
 
-// GetString returns a string setting value. Falls back to the registered default.
+// GetString returns a string setting. Returns the default if key is unknown.
 func (s *SettingsService) GetString(key string) string {
-	v, err := models.GetSetting(s.db, key)
-	if err != nil || v == "" {
-		if def, ok := s.defs[key]; ok {
-			if str, ok := def.Default.(string); ok {
+	s.mu.RLock()
+	v, ok := s.values[key]
+	s.mu.RUnlock()
+	if !ok {
+		if d, ok := Defaults[key]; ok {
+			if str, ok := d.(string); ok {
 				return str
 			}
 		}
 		return ""
 	}
-	return v
+	str, _ := v.(string)
+	return str
 }
 
-// Set writes a setting value to DB after validating the key exists.
+// Set updates a setting in memory and persists to DB.
 func (s *SettingsService) Set(key string, value any) error {
-	def, ok := s.defs[key]
+	def, ok := Defaults[key]
 	if !ok {
 		return fmt.Errorf("unknown setting: %s", key)
 	}
 
-	var strVal string
-	switch def.Type {
-	case SettingTypeBool:
-		b, ok := toBool(value)
-		if !ok {
-			return fmt.Errorf("invalid bool value for %s", key)
-		}
-		strVal = strconv.FormatBool(b)
-	case SettingTypeInt:
-		n, ok := toInt(value)
-		if !ok {
-			return fmt.Errorf("invalid int value for %s", key)
-		}
-		strVal = strconv.Itoa(n)
-	case SettingTypeString:
-		strVal = fmt.Sprintf("%v", value)
+	typed, err := coerce(value, def)
+	if err != nil {
+		return fmt.Errorf("invalid value for %s: %w", key, err)
 	}
 
-	return models.SetSetting(s.db, key, strVal)
+	if err := models.SetSetting(s.db, key, fmt.Sprintf("%v", typed)); err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	s.values[key] = typed
+	s.mu.Unlock()
+	return nil
 }
 
-// Clear removes a setting from DB, reverting it to its default.
+// Clear removes a setting from DB and reverts to default in memory.
 func (s *SettingsService) Clear(key string) error {
-	return models.DeleteSetting(s.db, key)
+	if err := models.DeleteSetting(s.db, key); err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	if def, ok := Defaults[key]; ok {
+		s.values[key] = def
+	} else {
+		delete(s.values, key)
+	}
+	s.mu.Unlock()
+	return nil
 }
 
-// All returns all settings with their current values.
+// All returns all settings with their current typed values.
 func (s *SettingsService) All() map[string]any {
-	result := make(map[string]any, len(s.defs))
-	for _, def := range SettingDefs {
-		switch def.Type {
-		case SettingTypeBool:
-			result[def.Key] = s.GetBool(def.Key)
-		case SettingTypeInt:
-			result[def.Key] = s.GetInt(def.Key)
-		case SettingTypeString:
-			result[def.Key] = s.GetString(def.Key)
-		}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	result := make(map[string]any, len(s.values))
+	for k, v := range s.values {
+		result[k] = v
 	}
 	return result
 }
 
-// Def returns the setting definition for a key, if it exists.
-func (s *SettingsService) Def(key string) (SettingDef, bool) {
-	d, ok := s.defs[key]
-	return d, ok
+// IsKnown returns true if the key is a registered setting.
+func (s *SettingsService) IsKnown(key string) bool {
+	_, ok := Defaults[key]
+	return ok
 }
 
 // ResolveConnectionIP returns the connection IP for a gameserver on the given node.
@@ -250,31 +256,56 @@ func (s *SettingsService) ResolveConnectionIP(nodeID *string) (ip string, config
 	return "", false
 }
 
-// toBool converts various YAML-parsed types to bool.
-func toBool(v any) (bool, bool) {
-	switch val := v.(type) {
+// parseAs parses a DB string value into the same Go type as the default.
+func parseAs(strVal string, defaultVal any) (any, error) {
+	switch defaultVal.(type) {
 	case bool:
-		return val, true
+		return strVal == "true", nil
+	case int:
+		n, err := strconv.Atoi(strVal)
+		if err != nil {
+			return nil, err
+		}
+		return n, nil
 	case string:
-		return val == "true" || val == "1", true
+		return strVal, nil
 	default:
-		return false, false
+		return strVal, nil
 	}
 }
 
-// toInt converts various YAML-parsed types to int.
-func toInt(v any) (int, bool) {
-	switch val := v.(type) {
+// coerce converts a value (from YAML, API, etc.) to match the default's Go type.
+func coerce(val any, defaultVal any) (any, error) {
+	switch defaultVal.(type) {
+	case bool:
+		switch v := val.(type) {
+		case bool:
+			return v, nil
+		case string:
+			return v == "true" || v == "1", nil
+		default:
+			return nil, fmt.Errorf("cannot coerce %T to bool", val)
+		}
 	case int:
-		return val, true
-	case int64:
-		return int(val), true
-	case float64:
-		return int(val), true
+		switch v := val.(type) {
+		case int:
+			return v, nil
+		case int64:
+			return int(v), nil
+		case float64:
+			return int(v), nil
+		case string:
+			n, err := strconv.Atoi(v)
+			if err != nil {
+				return nil, err
+			}
+			return n, nil
+		default:
+			return nil, fmt.Errorf("cannot coerce %T to int", val)
+		}
 	case string:
-		n, err := strconv.Atoi(val)
-		return n, err == nil
+		return fmt.Sprintf("%v", val), nil
 	default:
-		return 0, false
+		return val, nil
 	}
 }

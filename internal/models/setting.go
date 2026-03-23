@@ -6,6 +6,25 @@ import (
 	"time"
 )
 
+// AllSettings returns all settings as a key→value map.
+func AllSettings(db *sql.DB) (map[string]string, error) {
+	rows, err := db.Query("SELECT key, value FROM settings")
+	if err != nil {
+		return nil, fmt.Errorf("listing settings: %w", err)
+	}
+	defer rows.Close()
+
+	result := make(map[string]string)
+	for rows.Next() {
+		var k, v string
+		if err := rows.Scan(&k, &v); err != nil {
+			return nil, fmt.Errorf("scanning setting: %w", err)
+		}
+		result[k] = v
+	}
+	return result, rows.Err()
+}
+
 func GetSetting(db *sql.DB, key string) (string, error) {
 	var value string
 	err := db.QueryRow("SELECT value FROM settings WHERE key = ?", key).Scan(&value)

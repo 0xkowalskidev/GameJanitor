@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"encoding/json"
-	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -30,47 +29,30 @@ func (h *SettingsAPIHandlers) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for key, raw := range req {
-		def, ok := h.settingsSvc.Def(key)
-		if !ok {
+		if !h.settingsSvc.IsKnown(key) {
 			respondError(w, http.StatusBadRequest, "unknown setting: "+key)
 			return
 		}
 
+		// Unmarshal JSON into a generic value — json.Unmarshal produces
+		// bool, float64, string, which Set()/coerce() handles.
 		var value any
-		switch def.Type {
-		case service.SettingTypeBool:
-			var v bool
-			if err := json.Unmarshal(raw, &v); err != nil {
-				respondError(w, http.StatusBadRequest, fmt.Sprintf("invalid bool value for %s", key))
+		if err := json.Unmarshal(raw, &value); err != nil {
+			respondError(w, http.StatusBadRequest, "invalid value for "+key)
+			return
+		}
+
+		// Empty string clears the setting (reverts to default)
+		if str, ok := value.(string); ok && str == "" {
+			if err := h.settingsSvc.Clear(key); err != nil {
+				respondError(w, http.StatusInternalServerError, "failed to clear setting")
 				return
 			}
-			value = v
-		case service.SettingTypeInt:
-			var v int
-			if err := json.Unmarshal(raw, &v); err != nil {
-				respondError(w, http.StatusBadRequest, fmt.Sprintf("invalid int value for %s", key))
-				return
-			}
-			value = v
-		case service.SettingTypeString:
-			var v string
-			if err := json.Unmarshal(raw, &v); err != nil {
-				respondError(w, http.StatusBadRequest, fmt.Sprintf("invalid string value for %s", key))
-				return
-			}
-			// Empty string clears the setting
-			if v == "" {
-				if err := h.settingsSvc.Clear(key); err != nil {
-					respondError(w, http.StatusInternalServerError, "failed to clear setting")
-					return
-				}
-				continue
-			}
-			value = v
+			continue
 		}
 
 		if err := h.settingsSvc.Set(key, value); err != nil {
-			respondError(w, http.StatusInternalServerError, "failed to update setting: "+err.Error())
+			respondError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 	}
