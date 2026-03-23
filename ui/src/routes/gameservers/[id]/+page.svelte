@@ -47,7 +47,8 @@
 
     // Load activity feed
     try {
-      events = await api.events.history({ gameserver_id: gsId, limit: 20 });
+      const allEvents = await api.events.history({ gameserver_id: gsId, limit: 40 });
+      events = allEvents.filter(e => e.event_type !== 'status_changed').slice(0, 20);
     } catch { /* non-fatal */ }
 
     // Initial stats/query fetch
@@ -56,6 +57,14 @@
 
     // SSE: prepend new events to feed
     unsub = onGameserverEvent(gsId, (data: any) => {
+      // Use status_changed to update gameserver state, but don't show in feed
+      if (data.type === 'status_changed') {
+        if (gameserver) {
+          gameserver = { ...gameserver, status: data.new_status, error_reason: data.error_reason || '' };
+        }
+        return;
+      }
+
       const event: Event = {
         id: crypto.randomUUID(),
         event_type: data.type || 'unknown',
@@ -65,13 +74,6 @@
         created_at: new Date().toISOString(),
       };
       events = [event, ...events.slice(0, 19)];
-
-      // Re-fetch gameserver on status changes
-      if (data.type === 'status_changed') {
-        if (gameserver) {
-          gameserver = { ...gameserver, status: data.new_status, error_reason: data.error_reason || '' };
-        }
-      }
     });
   });
 
@@ -96,8 +98,10 @@
     }
   }
 
-  // Format event type for display
-  function eventLabel(type: string): string {
+  function eventLabel(type: string, data?: any): string {
+    if (type === 'gameserver.error' && data?.reason) {
+      return `Error: ${data.reason}`;
+    }
     const labels: Record<string, string> = {
       'gameserver.create': 'Gameserver created',
       'gameserver.start': 'Start requested',
@@ -107,15 +111,14 @@
       'gameserver.reinstall': 'Reinstall requested',
       'gameserver.migrate': 'Migration requested',
       'gameserver.image_pulling': 'Pulling image...',
-      'gameserver.image_pulled': 'Image pulled successfully',
-      'gameserver.container_creating': 'Container creating',
+      'gameserver.image_pulled': 'Image pulled',
+      'gameserver.container_creating': 'Creating container',
       'gameserver.container_started': 'Container started',
       'gameserver.ready': 'Ready — accepting players',
-      'gameserver.container_stopping': 'Container stopping',
+      'gameserver.container_stopping': 'Stopping container',
       'gameserver.container_stopped': 'Container stopped',
       'gameserver.container_exited': 'Container exited',
       'gameserver.error': 'Error',
-      'status_changed': 'Status changed',
       'backup.create': 'Backup started',
       'backup.completed': 'Backup completed',
       'backup.failed': 'Backup failed',
@@ -240,7 +243,7 @@
             <div class="feed-item">
               <span class="feed-dot {eventDotColor(event.event_type)}"></span>
               <div>
-                <div class="feed-text">{eventLabel(event.event_type)}</div>
+                <div class="feed-text">{eventLabel(event.event_type, event.data)}</div>
                 <div class="feed-time">{timeAgo(event.created_at)} · {formatTime(event.created_at)}</div>
               </div>
             </div>
