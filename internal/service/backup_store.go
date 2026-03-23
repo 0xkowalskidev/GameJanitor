@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/warsmite/gamejanitor/internal/config"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
@@ -93,32 +94,32 @@ type S3Store struct {
 	log    *slog.Logger
 }
 
-func NewS3Store(endpoint, bucket, region, accessKey, secretKey string, pathStyle, useSSL bool, log *slog.Logger) (*S3Store, error) {
+func NewS3Store(cfg *config.BackupStoreConfig, log *slog.Logger) (*S3Store, error) {
 	bucketLookup := minio.BucketLookupAuto
-	if pathStyle {
+	if cfg.PathStyle {
 		bucketLookup = minio.BucketLookupPath
 	}
 
-	client, err := minio.New(endpoint, &minio.Options{
-		Creds:        credentials.NewStaticV4(accessKey, secretKey, ""),
-		Secure:       useSSL,
-		Region:       region,
+	client, err := minio.New(cfg.Endpoint, &minio.Options{
+		Creds:        credentials.NewStaticV4(cfg.AccessKey, cfg.SecretKey, ""),
+		Secure:       cfg.UseSSL,
+		Region:       cfg.Region,
 		BucketLookup: bucketLookup,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("creating S3 client: %w", err)
 	}
 
-	exists, err := client.BucketExists(context.Background(), bucket)
+	exists, err := client.BucketExists(context.Background(), cfg.Bucket)
 	if err != nil {
-		return nil, fmt.Errorf("checking S3 bucket %q: %w", bucket, err)
+		return nil, fmt.Errorf("checking S3 bucket %q: %w", cfg.Bucket, err)
 	}
 	if !exists {
-		return nil, fmt.Errorf("S3 bucket %q does not exist", bucket)
+		return nil, fmt.Errorf("S3 bucket %q does not exist", cfg.Bucket)
 	}
 
-	log.Info("S3 backup store connected", "bucket", bucket, "endpoint", endpoint)
-	return &S3Store{client: client, bucket: bucket, log: log}, nil
+	log.Info("backup store connected", "type", "s3", "bucket", cfg.Bucket, "endpoint", cfg.Endpoint)
+	return &S3Store{client: client, bucket: cfg.Bucket, log: log}, nil
 }
 
 func (s *S3Store) objectKey(gameserverID, backupID string) string {

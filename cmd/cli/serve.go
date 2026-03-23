@@ -169,16 +169,7 @@ func initBackupStore(cfg config.Config, logger *slog.Logger) (service.BackupStor
 	}
 
 	if bs.Type == "s3" {
-		s3Store, err := service.NewS3Store(
-			bs.Endpoint,
-			bs.Bucket,
-			bs.Region,
-			bs.AccessKey,
-			bs.SecretKey,
-			bs.PathStyle,
-			bs.UseSSL,
-			logger,
-		)
+		s3Store, err := service.NewS3Store(bs, logger)
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize backup store: %w", err)
 		}

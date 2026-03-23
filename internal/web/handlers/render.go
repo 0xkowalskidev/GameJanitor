@@ -171,9 +171,9 @@ func (r *Renderer) RenderError(w http.ResponseWriter, req *http.Request, statusC
 
 	data["CSRFToken"] = csrf.Token(req)
 	data["NetInfo"] = r.netInfo
-	connAddr2 := r.settingsSvc.GetString(service.SettingConnectionAddress)
-	data["ConnectionAddress"] = connAddr2
-	data["ConnectionAddressConfigured"] = connAddr2 != ""
+	connAddr := r.settingsSvc.GetString(service.SettingConnectionAddress)
+	data["ConnectionAddress"] = connAddr
+	data["ConnectionAddressConfigured"] = connAddr != ""
 	data["ConnectionAddressFromEnv"] = false
 	data["SFTPPort"] = r.sftpPort
 	data["Role"] = r.role
