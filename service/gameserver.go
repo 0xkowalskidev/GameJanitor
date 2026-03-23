@@ -77,6 +77,11 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gam
 		return "", ErrNotFoundf("game %s not found", gs.GameID)
 	}
 
+	// Validate required env vars from the game definition
+	if err := s.validateRequiredEnv(game, gs); err != nil {
+		return "", err
+	}
+
 	var targetWorker worker.Worker
 	var nodeID string
 	if gs.NodeID != nil && *gs.NodeID != "" {
@@ -567,6 +572,33 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 		MemoryLimitMB: gs.MemoryLimitMB,
 	})
 
+	return nil
+}
+
+func (s *GameserverService) validateRequiredEnv(game *games.Game, gs *models.Gameserver) error {
+	var env map[string]string
+	if gs.Env != nil {
+		if err := json.Unmarshal(gs.Env, &env); err != nil {
+			return ErrBadRequestf("invalid env format: %v", err)
+		}
+	}
+	if env == nil {
+		env = map[string]string{}
+	}
+
+	for _, def := range game.DefaultEnv {
+		if !def.Required {
+			continue
+		}
+		val, exists := env[def.Key]
+		if !exists || val == "" || val == "false" {
+			label := def.Label
+			if label == "" {
+				label = def.Key
+			}
+			return ErrBadRequestf("%s is required", label)
+		}
+	}
 	return nil
 }
 
