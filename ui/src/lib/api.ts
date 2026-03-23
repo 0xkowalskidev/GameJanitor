@@ -80,6 +80,19 @@ function del<T>(path: string, query?: Record<string, any>): Promise<T> {
   return request<T>('DELETE', path, undefined, query);
 }
 
+async function putRaw(url: string, content: string): Promise<void> {
+  const headers: Record<string, string> = {};
+  const token = getToken();
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const resp = await fetch(url, { method: 'PUT', headers, body: content });
+  if (resp.status === 204) return;
+  if (!resp.ok) {
+    const json = await resp.json().catch(() => ({ error: 'Write failed' }));
+    throw new ApiClientError(resp.status, json.error || 'Write failed');
+  }
+}
+
 async function uploadFile(path: string, filePath: string, file: File): Promise<void> {
   const form = new FormData();
   form.append('path', filePath);
@@ -317,7 +330,7 @@ export const api = {
   files: {
     list: (gsId: string, path: string) => get<FileEntry[]>(`/api/gameservers/${gsId}/files`, { path }),
     read: (gsId: string, path: string) => get<{ content: string }>(`/api/gameservers/${gsId}/files/content`, { path }),
-    write: (gsId: string, path: string, content: string) => put(`/api/gameservers/${gsId}/files/content`, { path, content }),
+    write: (gsId: string, path: string, content: string) => putRaw(`/api/gameservers/${gsId}/files/content?path=${encodeURIComponent(path)}`, content),
     delete: (gsId: string, path: string) => del(`/api/gameservers/${gsId}/files`, { path }),
     mkdir: (gsId: string, path: string) => post(`/api/gameservers/${gsId}/files/mkdir`, { path }),
     rename: (gsId: string, from: string, to: string) => post(`/api/gameservers/${gsId}/files/rename`, { from, to }),

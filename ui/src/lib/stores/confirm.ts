@@ -6,7 +6,10 @@ interface ConfirmState {
   message: string;
   confirmLabel: string;
   danger: boolean;
-  resolve: ((value: boolean) => void) | null;
+  inputMode: boolean;
+  inputPlaceholder: string;
+  inputValue: string;
+  resolve: ((value: boolean | string | null) => void) | null;
 }
 
 const initial: ConfirmState = {
@@ -15,6 +18,9 @@ const initial: ConfirmState = {
   message: '',
   confirmLabel: 'Confirm',
   danger: false,
+  inputMode: false,
+  inputPlaceholder: '',
+  inputValue: '',
   resolve: null,
 };
 
@@ -28,19 +34,45 @@ export function confirm(opts: {
 }): Promise<boolean> {
   return new Promise((resolve) => {
     confirmState.set({
+      ...initial,
       open: true,
       title: opts.title,
       message: opts.message,
       confirmLabel: opts.confirmLabel || 'Confirm',
       danger: opts.danger ?? false,
-      resolve,
+      resolve: (v) => resolve(!!v),
     });
   });
 }
 
-export function resolveConfirm(accepted: boolean) {
+export function prompt(opts: {
+  title: string;
+  message?: string;
+  placeholder?: string;
+  confirmLabel?: string;
+}): Promise<string | null> {
+  return new Promise((resolve) => {
+    confirmState.set({
+      ...initial,
+      open: true,
+      title: opts.title,
+      message: opts.message || '',
+      confirmLabel: opts.confirmLabel || 'Create',
+      inputMode: true,
+      inputPlaceholder: opts.placeholder || '',
+      inputValue: '',
+      resolve: (v) => resolve(typeof v === 'string' ? v : null),
+    });
+  });
+}
+
+export function resolveConfirm(accepted: boolean, inputValue?: string) {
   confirmState.update((s) => {
-    s.resolve?.(accepted);
+    if (accepted && s.inputMode) {
+      s.resolve?.(inputValue || '');
+    } else {
+      s.resolve?.(accepted ? true : null);
+    }
     return initial;
   });
 }

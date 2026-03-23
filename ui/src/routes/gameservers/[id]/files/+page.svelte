@@ -2,7 +2,7 @@
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { api, type FileEntry } from '$lib/api';
-  import { toast, confirm } from '$lib/stores';
+  import { toast, confirm, prompt } from '$lib/stores';
 
   const gsId = $derived($page.params.id as string);
 
@@ -49,7 +49,7 @@
 
   // Sort: directories first, then alphabetical
   const sortedFiles = $derived(
-    [...files].sort((a, b) => {
+    [...(files || [])].sort((a, b) => {
       if (a.is_dir !== b.is_dir) return a.is_dir ? -1 : 1;
       return a.name.localeCompare(b.name);
     })
@@ -88,7 +88,7 @@
   async function loadFiles() {
     loading = true;
     try {
-      files = await api.files.list(gsId, apiPath(currentPath));
+      files = (await api.files.list(gsId, apiPath(currentPath))) || [];
     } catch (e: any) {
       toast(`Failed to load files: ${e.message}`, 'error');
       files = [];
@@ -181,7 +181,7 @@
   }
 
   async function createDirectory() {
-    const name = prompt('Directory name:');
+    const name = await prompt({ title: 'New Folder', placeholder: 'Folder name', confirmLabel: 'Create' });
     if (!name) return;
     const path = filePath(name);
     try {
@@ -189,6 +189,21 @@
       await loadFiles();
     } catch (e: any) {
       toast(`Failed to create directory: ${e.message}`, 'error');
+    }
+  }
+
+  async function createFile() {
+    const name = await prompt({ title: 'New File', placeholder: 'File name', confirmLabel: 'Create' });
+    if (!name) return;
+    const path = filePath(name);
+    try {
+      await api.files.write(gsId, apiPath(path), '');
+      await loadFiles();
+      if (isTextFile(name)) {
+        openEditor(name);
+      }
+    } catch (e: any) {
+      toast(`Failed to create file: ${e.message}`, 'error');
     }
   }
 
@@ -273,6 +288,10 @@
       <button class="btn-accent" onclick={() => uploadInput.click()} style="font-size:0.78rem; padding:6px 12px;">
         <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/><path d="M7.646 1.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 2.707V11.5a.5.5 0 0 1-1 0V2.707L5.354 4.854a.5.5 0 1 1-.708-.708l3-3z"/></svg>
         Upload
+      </button>
+      <button class="btn-accent" onclick={createFile} style="font-size:0.78rem; padding:6px 12px;">
+        <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12"><path d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2z"/></svg>
+        New File
       </button>
       <button class="btn-accent" onclick={createDirectory} style="font-size:0.78rem; padding:6px 12px;">
         <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12"><path d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2z"/></svg>

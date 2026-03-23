@@ -1,14 +1,31 @@
 <script lang="ts">
   import { confirmState, resolveConfirm } from '$lib/stores/confirm';
 
-  let state = $state({ open: false, title: '', message: '', confirmLabel: 'Confirm', danger: false, resolve: null as any });
+  let state = $state({
+    open: false, title: '', message: '', confirmLabel: 'Confirm',
+    danger: false, inputMode: false, inputPlaceholder: '', inputValue: '',
+    resolve: null as any,
+  });
 
-  confirmState.subscribe((s) => { state = s; });
+  let inputEl: HTMLInputElement | undefined;
+
+  confirmState.subscribe((s) => {
+    state = s;
+    // Auto-focus input when prompt opens
+    if (s.open && s.inputMode) {
+      requestAnimationFrame(() => inputEl?.focus());
+    }
+  });
+
+  function submit() {
+    if (state.inputMode && !state.inputValue.trim()) return;
+    resolveConfirm(true, state.inputValue);
+  }
 
   function handleKeydown(e: KeyboardEvent) {
     if (!state.open) return;
     if (e.key === 'Escape') resolveConfirm(false);
-    if (e.key === 'Enter') resolveConfirm(true);
+    if (e.key === 'Enter') submit();
   }
 </script>
 
@@ -18,13 +35,25 @@
   <div class="backdrop" onclick={() => resolveConfirm(false)} role="presentation">
     <div class="modal" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
       <div class="modal-title">{state.title}</div>
-      <div class="modal-message">{state.message}</div>
+      {#if state.message}
+        <div class="modal-message">{state.message}</div>
+      {/if}
+      {#if state.inputMode}
+        <input
+          class="modal-input"
+          type="text"
+          placeholder={state.inputPlaceholder}
+          bind:value={state.inputValue}
+          bind:this={inputEl}
+        >
+      {/if}
       <div class="modal-actions">
         <button class="btn-cancel" onclick={() => resolveConfirm(false)}>Cancel</button>
         <button
           class="btn-confirm"
           class:danger={state.danger}
-          onclick={() => resolveConfirm(true)}
+          disabled={state.inputMode && !state.inputValue.trim()}
+          onclick={submit}
         >{state.confirmLabel}</button>
       </div>
     </div>
@@ -65,8 +94,24 @@
   .modal-message {
     font-size: 0.84rem; color: var(--text-secondary);
     line-height: 1.5;
-    margin-bottom: 20px;
+    margin-bottom: 16px;
   }
+
+  .modal-input {
+    width: 100%;
+    padding: 9px 14px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-inset);
+    border: 1px solid var(--border-dim);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    font-size: 0.85rem;
+    outline: none;
+    transition: border-color 0.2s;
+    margin-bottom: 16px;
+  }
+  .modal-input::placeholder { color: var(--text-tertiary); opacity: 0.6; }
+  .modal-input:focus { border-color: var(--accent-border); }
 
   .modal-actions {
     display: flex; justify-content: flex-end; gap: 8px;
@@ -90,6 +135,7 @@
     box-shadow: 0 0 12px rgba(232, 114, 42, 0.2);
   }
   .btn-confirm:hover { background: var(--accent-hover); }
+  .btn-confirm:disabled { opacity: 0.4; pointer-events: none; }
   .btn-confirm.danger {
     background: var(--danger);
     box-shadow: 0 0 12px rgba(239, 68, 68, 0.2);
