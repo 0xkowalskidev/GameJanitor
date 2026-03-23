@@ -18,22 +18,22 @@ Starts the gamejanitor server. Both controller and worker are enabled by default
 
 | Flag | Default | Description |
 |---|---|---|
-| `--controller` | `true` | Run the API/orchestrator |
-| `--worker` | `true` | Run the local Docker worker |
-| `--port` | `8080` | HTTP API port |
-| `--bind` | `127.0.0.1` | Bind address |
-| `--data-dir` | `/var/lib/gamejanitor` | Data directory |
-| `--sftp-port` | `2222` | SFTP port (0 to disable) |
-| `--grpc-port` | `9090` | gRPC port for multi-node (0 to disable) |
-| `--web-ui` | `true` | Serve web UI (ignored when `--controller=false`) |
-| `--connect` | — | Controller gRPC address (worker-only mode) |
-| `--worker-id` | hostname | Worker node ID |
-| `--worker-token` | — | Worker auth token (or `GJ_WORKER_TOKEN`) |
+| `--controller` | `true` | Enable the API server and orchestrator |
+| `--worker` | `true` | Enable the local Docker worker that manages containers on this machine |
+| `--port` | `8080` | Port for the HTTP API and web UI |
+| `--bind` | `127.0.0.1` | Address to listen on (`0.0.0.0` for all interfaces) |
+| `--data-dir` | `/var/lib/gamejanitor` | Where gamejanitor stores its database, backups, and config |
+| `--sftp-port` | `2222` | Port for the built-in SFTP file server (0 to disable) |
+| `--grpc-port` | `9090` | Port for worker nodes to connect to this controller (0 to disable) |
+| `--web-ui` | `true` | Serve the web dashboard (ignored when `--controller=false`) |
+| `--controller-address` | — | Address of the controller to register with as a worker (e.g. `10.0.0.1:9090`) |
+| `--worker-id` | hostname | Unique name for this worker node |
+| `--worker-token` | — | Auth token for this worker to connect to the controller (or `GJ_WORKER_TOKEN`) |
 
 **Deployment modes:**
 - **Newbie/power user:** `gamejanitor serve` — both flags default true, everything runs
 - **Business controller:** `gamejanitor serve --worker=false` — API + orchestration only, no local Docker
-- **Business worker node:** `gamejanitor serve --controller=false --connect controller:9090 --worker-token gj_...` — Docker agent only, registers with controller
+- **Business worker node:** `gamejanitor serve --controller=false --controller-address 10.0.0.1:9090 --worker-token gj_...` — Docker agent only, registers with controller
 
 ## Setup Commands
 
