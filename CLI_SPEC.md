@@ -25,7 +25,7 @@ Starts the gamejanitor server. Both controller and worker are enabled by default
 | `--data-dir` | `/var/lib/gamejanitor` | Data directory |
 | `--sftp-port` | `2222` | SFTP port (0 to disable) |
 | `--grpc-port` | `9090` | gRPC port for multi-node (0 to disable) |
-| `--no-ui` | `false` | Disable web UI, API-only |
+| `--web-ui` | `true` | Serve web UI (ignored when `--controller=false`) |
 | `--connect` | — | Controller gRPC address (worker-only mode) |
 | `--worker-id` | hostname | Worker node ID |
 | `--worker-token` | — | Worker auth token (or `GJ_WORKER_TOKEN`) |
