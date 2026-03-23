@@ -257,6 +257,13 @@ func (m *StatusManager) handleEvent(event worker.ContainerEvent) {
 		m.log.Debug("container event: container started", "id", gsID)
 
 	case "die", "stop":
+		// Ignore stale events from old containers (e.g. previous container's "die"
+		// arriving after a new start has begun)
+		if gs.ContainerID != nil && *gs.ContainerID != event.ContainerID {
+			m.log.Debug("container event: ignoring stale event from old container", "id", gsID, "event_container", event.ContainerID[:12], "current_container", (*gs.ContainerID)[:12])
+			return
+		}
+
 		m.readyWatcher.Stop(gsID)
 		m.querySvc.StopPolling(gsID)
 		m.statsPoller.StopPolling(gsID)
