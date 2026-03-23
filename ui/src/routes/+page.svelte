@@ -50,16 +50,15 @@
         games[g.id] = g;
       }
 
-      // Initial stats + query fetch for running servers
-      await refreshData();
-
-      // Poll stats every 5s
-      pollInterval = setInterval(refreshData, 5000);
     } catch (e: any) {
       toast(`Failed to load gameservers: ${e.message}`, 'error');
     } finally {
       loading = false;
     }
+
+    // Fetch stats in background — don't block initial render
+    refreshData();
+    pollInterval = setInterval(refreshData, 5000);
 
     // SSE: update gameserver status in real-time
     unsub = onEvent('status_changed', (data: any) => {
