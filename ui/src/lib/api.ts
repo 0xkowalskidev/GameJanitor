@@ -212,6 +212,7 @@ export interface Schedule {
   cron_expr: string;
   payload: string;
   enabled: boolean;
+  one_shot: boolean;
   last_run?: string;
   next_run?: string;
   created_at: string;

@@ -191,15 +191,23 @@ func (s *Scheduler) executeTask(scheduleID string) {
 	now := time.Now()
 	schedule.LastRun = &now
 
-	s.mu.Lock()
-	if entryID, ok := s.entries[scheduleID]; ok {
-		entry := s.cron.Entry(entryID)
-		if !entry.Next.IsZero() {
-			nextRun := entry.Next
-			schedule.NextRun = &nextRun
+	if schedule.OneShot {
+		// One-shot schedules disable after first execution
+		schedule.Enabled = false
+		schedule.NextRun = nil
+		s.RemoveSchedule(scheduleID)
+		s.log.Info("one-shot schedule completed, disabling", "schedule_id", scheduleID)
+	} else {
+		s.mu.Lock()
+		if entryID, ok := s.entries[scheduleID]; ok {
+			entry := s.cron.Entry(entryID)
+			if !entry.Next.IsZero() {
+				nextRun := entry.Next
+				schedule.NextRun = &nextRun
+			}
 		}
+		s.mu.Unlock()
 	}
-	s.mu.Unlock()
 
 	if err := models.UpdateSchedule(s.db, schedule); err != nil {
 		s.log.Error("failed to update schedule after execution", "schedule_id", scheduleID, "error", err)

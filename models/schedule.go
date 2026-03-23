@@ -15,13 +15,14 @@ type Schedule struct {
 	CronExpr     string          `json:"cron_expr"`
 	Payload      json.RawMessage `json:"payload"`
 	Enabled      bool            `json:"enabled"`
+	OneShot      bool            `json:"one_shot"`
 	LastRun      *time.Time      `json:"last_run"`
 	NextRun      *time.Time      `json:"next_run"`
 	CreatedAt    time.Time       `json:"created_at"`
 }
 
 func ListSchedules(db *sql.DB, gameserverID string) ([]Schedule, error) {
-	rows, err := db.Query("SELECT id, gameserver_id, name, type, cron_expr, payload, enabled, last_run, next_run, created_at FROM schedules WHERE gameserver_id = ? ORDER BY name", gameserverID)
+	rows, err := db.Query("SELECT id, gameserver_id, name, type, cron_expr, payload, enabled, one_shot, last_run, next_run, created_at FROM schedules WHERE gameserver_id = ? ORDER BY name", gameserverID)
 	if err != nil {
 		return nil, fmt.Errorf("listing schedules: %w", err)
 	}
@@ -39,7 +40,7 @@ func ListSchedules(db *sql.DB, gameserverID string) ([]Schedule, error) {
 }
 
 func GetSchedule(db *sql.DB, id string) (*Schedule, error) {
-	row := db.QueryRow("SELECT id, gameserver_id, name, type, cron_expr, payload, enabled, last_run, next_run, created_at FROM schedules WHERE id = ?", id)
+	row := db.QueryRow("SELECT id, gameserver_id, name, type, cron_expr, payload, enabled, one_shot, last_run, next_run, created_at FROM schedules WHERE id = ?", id)
 	s, err := scanSchedule(row.Scan)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -53,7 +54,7 @@ func GetSchedule(db *sql.DB, id string) (*Schedule, error) {
 func scanSchedule(scan func(dest ...any) error) (Schedule, error) {
 	var s Schedule
 	var payloadStr string
-	err := scan(&s.ID, &s.GameserverID, &s.Name, &s.Type, &s.CronExpr, &payloadStr, &s.Enabled, &s.LastRun, &s.NextRun, &s.CreatedAt)
+	err := scan(&s.ID, &s.GameserverID, &s.Name, &s.Type, &s.CronExpr, &payloadStr, &s.Enabled, &s.OneShot, &s.LastRun, &s.NextRun, &s.CreatedAt)
 	if err != nil {
 		return s, err
 	}
@@ -65,8 +66,8 @@ func CreateSchedule(db *sql.DB, s *Schedule) error {
 	s.CreatedAt = time.Now()
 
 	_, err := db.Exec(
-		"INSERT INTO schedules (id, gameserver_id, name, type, cron_expr, payload, enabled, last_run, next_run, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		s.ID, s.GameserverID, s.Name, s.Type, s.CronExpr, s.Payload, s.Enabled, s.LastRun, s.NextRun, s.CreatedAt,
+		"INSERT INTO schedules (id, gameserver_id, name, type, cron_expr, payload, enabled, one_shot, last_run, next_run, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		s.ID, s.GameserverID, s.Name, s.Type, s.CronExpr, s.Payload, s.Enabled, s.OneShot, s.LastRun, s.NextRun, s.CreatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("creating schedule %s: %w", s.ID, err)
@@ -76,8 +77,8 @@ func CreateSchedule(db *sql.DB, s *Schedule) error {
 
 func UpdateSchedule(db *sql.DB, s *Schedule) error {
 	result, err := db.Exec(
-		"UPDATE schedules SET name = ?, type = ?, cron_expr = ?, payload = ?, enabled = ?, last_run = ?, next_run = ? WHERE id = ?",
-		s.Name, s.Type, s.CronExpr, s.Payload, s.Enabled, s.LastRun, s.NextRun, s.ID,
+		"UPDATE schedules SET name = ?, type = ?, cron_expr = ?, payload = ?, enabled = ?, one_shot = ?, last_run = ?, next_run = ? WHERE id = ?",
+		s.Name, s.Type, s.CronExpr, s.Payload, s.Enabled, s.OneShot, s.LastRun, s.NextRun, s.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("updating schedule %s: %w", s.ID, err)

@@ -32,6 +32,7 @@ CREATE TABLE schedules (
     cron_expr TEXT NOT NULL,
     payload JSON NOT NULL DEFAULT '{}',
     enabled BOOLEAN NOT NULL DEFAULT 1,
+    one_shot BOOLEAN NOT NULL DEFAULT 0,
     last_run DATETIME,
     next_run DATETIME,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP

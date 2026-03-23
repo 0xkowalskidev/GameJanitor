@@ -57,6 +57,7 @@ func (h *ScheduleHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		CronExpr string          `json:"cron_expr"`
 		Payload  json.RawMessage `json:"payload"`
 		Enabled  *bool           `json:"enabled"`
+		OneShot  bool            `json:"one_shot"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
@@ -84,6 +85,7 @@ func (h *ScheduleHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		CronExpr:     req.CronExpr,
 		Payload:      payload,
 		Enabled:      enabled,
+		OneShot:      req.OneShot,
 	}
 
 	if err := h.svc.CreateSchedule(r.Context(), schedule); err != nil {
@@ -115,6 +117,7 @@ func (h *ScheduleHandlers) Update(w http.ResponseWriter, r *http.Request) {
 		CronExpr *string          `json:"cron_expr"`
 		Payload  *json.RawMessage `json:"payload"`
 		Enabled  *bool            `json:"enabled"`
+		OneShot  *bool            `json:"one_shot"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
@@ -135,6 +138,9 @@ func (h *ScheduleHandlers) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Enabled != nil {
 		existing.Enabled = *req.Enabled
+	}
+	if req.OneShot != nil {
+		existing.OneShot = *req.OneShot
 	}
 
 	if err := h.svc.UpdateSchedule(r.Context(), existing); err != nil {
