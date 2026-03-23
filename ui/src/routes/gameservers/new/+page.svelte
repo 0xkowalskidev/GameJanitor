@@ -19,6 +19,12 @@
   // Form state
   let serverName = $state('');
   let memoryMb = $state(2048);
+  let cpuLimit = $state(0);
+  let cpuEnforced = $state(false);
+  let storageLimitMb = $state(0);
+  let backupLimit = $state(0);    // 0 = use global default
+  let portMode = $state('auto');
+  let manualPorts = $state<{ name: string; host_port: number; container_port: number; protocol: string }[]>([]);
   let autoRestart = $state(true);
   let autoStart = $state(true);
   let envValues = $state<Record<string, string>>({});
@@ -78,6 +84,19 @@
     selectedGame = game;
     memoryMb = game.recommended_memory_mb;
     serverName = '';
+    cpuLimit = 0;
+    cpuEnforced = false;
+    storageLimitMb = 0;
+    backupLimit = 0;
+    portMode = 'auto';
+
+    // Initialize manual ports from game's default ports
+    manualPorts = game.default_ports.map(p => ({
+      name: p.name,
+      host_port: p.port,
+      container_port: p.port,
+      protocol: p.protocol,
+    }));
 
     // Initialize env values from defaults
     envValues = {};
@@ -122,13 +141,24 @@
         env[key] = val;
       }
 
-      const result = await api.gameservers.create({
+      const payload: any = {
         name: serverName.trim(),
         game_id: selectedGame.id,
         memory_limit_mb: memoryMb,
         auto_restart: autoRestart,
+        port_mode: portMode,
         env,
-      });
+      };
+
+      if (cpuLimit > 0) {
+        payload.cpu_limit = cpuLimit;
+        payload.cpu_enforced = cpuEnforced;
+      }
+      if (storageLimitMb > 0) payload.storage_limit_mb = storageLimitMb;
+      if (backupLimit > 0) payload.backup_limit = backupLimit;
+      if (portMode === 'manual') payload.ports = manualPorts;
+
+      const result = await api.gameservers.create(payload);
 
       // Show SFTP password (show-once from create response)
       createdServer = {
@@ -251,6 +281,73 @@
           <div class="resource-warning">
             <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/></svg>
             Below recommended ({selectedGame.recommended_memory_mb >= 1024 ? `${selectedGame.recommended_memory_mb / 1024} GB` : `${selectedGame.recommended_memory_mb} MB`})
+          </div>
+        {/if}
+      </div>
+
+      <!-- Resources -->
+      <div class="env-group">
+        <div class="env-group-label">Resources</div>
+        <div class="form-grid">
+          <div class="form-row">
+            <label class="label">CPU Limit</label>
+            <div class="input-with-suffix">
+              <input class="input input-mono" type="number" min="0" step="0.5" placeholder="0 (unlimited)" bind:value={cpuLimit}>
+              <span class="input-suffix">cores</span>
+            </div>
+          </div>
+          <div class="form-row">
+            <label class="label">Enforce CPU Limit</label>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <button class="toggle" class:on={cpuEnforced} onclick={() => cpuEnforced = !cpuEnforced}></button>
+              <span style="font-size:0.78rem; color:var(--text-tertiary);">{cpuEnforced ? 'Hard limit' : 'Soft limit'}</span>
+            </div>
+          </div>
+        </div>
+        <div class="form-grid" style="margin-top:14px;">
+          <div class="form-row">
+            <label class="label">Storage Limit</label>
+            <div class="input-with-suffix">
+              <input class="input input-mono" type="number" min="0" step="1000" placeholder="0 (unlimited)" bind:value={storageLimitMb}>
+              <span class="input-suffix">MB</span>
+            </div>
+          </div>
+          <div class="form-row">
+            <label class="label">Backup Limit</label>
+            <div class="input-with-suffix">
+              <input class="input input-mono" type="number" min="0" placeholder="0 (global default)" bind:value={backupLimit}>
+              <span class="input-suffix">max</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Ports -->
+      <div class="env-group">
+        <div class="env-group-label">Ports</div>
+        <div class="form-row">
+          <label class="label">Port Mode</label>
+          <select class="select" bind:value={portMode}>
+            <option value="auto">Auto (allocated from port range)</option>
+            <option value="manual">Manual (specify ports)</option>
+          </select>
+        </div>
+        {#if portMode === 'manual'}
+          <div class="port-table" style="margin-top:14px;">
+            {#each manualPorts as port, i}
+              <div class="port-row">
+                <span class="port-name">{port.name}</span>
+                <div class="port-field">
+                  <label class="port-label">Host</label>
+                  <input class="input input-mono" type="number" style="width:100px;" bind:value={manualPorts[i].host_port}>
+                </div>
+                <div class="port-field">
+                  <label class="port-label">Container</label>
+                  <input class="input input-mono" type="number" style="width:100px;" bind:value={manualPorts[i].container_port}>
+                </div>
+                <span class="port-proto">{port.protocol}</span>
+              </div>
+            {/each}
           </div>
         {/if}
       </div>
@@ -477,6 +574,20 @@
   .eula-notice :global(a) { color: var(--accent); text-decoration: none; }
   .eula-notice :global(a:hover) { text-decoration: underline; }
   .eula-required { font-size: 0.62rem; font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); opacity: 0.8; }
+
+  .input-with-suffix { position: relative; }
+  .input-with-suffix input { padding-right: 50px; }
+  .input-suffix { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: 0.72rem; font-family: var(--font-mono); color: var(--text-tertiary); pointer-events: none; }
+
+  .port-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 0;
+  }
+  .port-row + .port-row { border-top: 1px solid var(--border-dim); }
+  .port-name { font-size: 0.82rem; font-weight: 500; min-width: 60px; }
+  .port-field { display: flex; flex-direction: column; gap: 3px; }
+  .port-label { font-size: 0.65rem; font-family: var(--font-mono); color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.08em; }
+  .port-proto { font-size: 0.72rem; font-family: var(--font-mono); color: var(--text-tertiary); text-transform: uppercase; }
 
   .submit-row { display: flex; align-items: center; justify-content: flex-end; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border-dim); position: relative; z-index: 1; }
   .submit-row .btn-solid:disabled { opacity: 0.5; cursor: not-allowed; }
