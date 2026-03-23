@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -26,7 +27,8 @@ type ProcessWorker struct {
 	log       *slog.Logger
 	gameStore *games.GameStore
 	dataDir   string
-	resolve   volumeResolver
+	resolve     volumeResolver
+	resolvConf  string
 
 	mu        sync.Mutex
 	processes map[string]*managedProcess
@@ -66,7 +68,13 @@ func NewProcessWorker(gameStore *games.GameStore, dataDir string, log *slog.Logg
 		eventCh:   make(chan ContainerEvent, 64),
 	}
 	w.resolve = w.processVolumeResolver()
-	log.Info("using process runtime (no container isolation)")
+	w.resolvConf = ensureResolvConf(dataDir)
+
+	if runtime.GOARCH == "arm64" {
+		log.Info("using process runtime (ARM — will use Box64 for x86 images)")
+	} else {
+		log.Info("using process runtime (bwrap sandbox)")
+	}
 	return w
 }
 
@@ -146,12 +154,24 @@ func (w *ProcessWorker) StartContainer(ctx context.Context, id string) error {
 		return fmt.Errorf("image %s has no entrypoint or cmd", manifest.Image)
 	}
 
-	// Build bwrap command: mount extracted rootfs as /, bind volume to /data
-	bwrapArgs := buildBwrapArgs(rootFS, manifest, imgCfg)
-	bwrapArgs = append(bwrapArgs, "--")
-	bwrapArgs = append(bwrapArgs, cmdArgs...)
-
-	cmd := exec.Command("bwrap", bwrapArgs...)
+	var cmd *exec.Cmd
+	if needsBox64(rootFS) {
+		// ARM host + x86 image: use Box64 for translation
+		box64Path, err := ensureBox64(ctx, w.dataDir, w.log)
+		if err != nil {
+			return fmt.Errorf("setting up box64: %w", err)
+		}
+		cmd, err = buildBox64Command(box64Path, rootFS, manifest, imgCfg, cmdArgs, w.resolvConf)
+		if err != nil {
+			return fmt.Errorf("building box64 command: %w", err)
+		}
+	} else {
+		// x86 host: use bwrap for rootfs isolation
+		bwrapArgs := buildBwrapArgs(rootFS, manifest, imgCfg, w.resolvConf)
+		bwrapArgs = append(bwrapArgs, "--")
+		bwrapArgs = append(bwrapArgs, cmdArgs...)
+		cmd = exec.Command("bwrap", bwrapArgs...)
+	}
 
 	// Set up log file
 	logPath := filepath.Join(dir, "output.log")
@@ -309,11 +329,22 @@ func (w *ProcessWorker) Exec(ctx context.Context, containerID string, cmd []stri
 		return -1, "", "", fmt.Errorf("resolving image rootfs for exec: %w", err)
 	}
 
-	bwrapArgs := buildBwrapArgs(rootFS, manifest, imgCfg)
-	bwrapArgs = append(bwrapArgs, "--")
-	bwrapArgs = append(bwrapArgs, cmd...)
-
-	execCmd := exec.CommandContext(ctx, "bwrap", bwrapArgs...)
+	var execCmd *exec.Cmd
+	if needsBox64(rootFS) {
+		box64Path, err := ensureBox64(ctx, w.dataDir, w.log)
+		if err != nil {
+			return -1, "", "", fmt.Errorf("setting up box64: %w", err)
+		}
+		execCmd, err = buildBox64Command(box64Path, rootFS, manifest, imgCfg, cmd, w.resolvConf)
+		if err != nil {
+			return -1, "", "", fmt.Errorf("building box64 command: %w", err)
+		}
+	} else {
+		bwrapArgs := buildBwrapArgs(rootFS, manifest, imgCfg, w.resolvConf)
+		bwrapArgs = append(bwrapArgs, "--")
+		bwrapArgs = append(bwrapArgs, cmd...)
+		execCmd = exec.CommandContext(ctx, "bwrap", bwrapArgs...)
+	}
 
 	var stdout, stderr bytes.Buffer
 	execCmd.Stdout = &stdout
@@ -520,9 +551,110 @@ func (w *ProcessWorker) PrepareGameScripts(ctx context.Context, gameID, gameserv
 
 // --- Helpers ---
 
+// buildBox64Command constructs a command that runs x86 binaries through Box64 on ARM.
+// Uses the extracted rootfs's libraries and the rootfs's own dynamic linker.
+func buildBox64Command(box64Path string, rootFS string, manifest processManifest, imgCfg *imageConfig, cmdArgs []string, resolvConf string) (*exec.Cmd, error) {
+	// Copy working resolv.conf into the rootfs so curl/wget can resolve DNS
+	if resolvConf != "" {
+		rootFSResolv := filepath.Join(rootFS, "etc", "resolv.conf")
+		if data, err := os.ReadFile(resolvConf); err == nil {
+			os.MkdirAll(filepath.Dir(rootFSResolv), 0755)
+			os.WriteFile(rootFSResolv, data, 0644)
+		}
+	}
+	// Resolve the entrypoint binary within the rootfs
+	binary := cmdArgs[0]
+	if filepath.IsAbs(binary) {
+		binary = filepath.Join(rootFS, binary)
+	} else {
+		binary = findBinaryInRootFS(rootFS, imgCfg.Env, binary)
+	}
+
+	// Box64 runs: box64 <binary> [args...]
+	args := append([]string{binary}, cmdArgs[1:]...)
+	cmd := exec.Command(box64Path, args...)
+
+	// Working directory
+	if manifest.VolumeName != "" {
+		dataDir := filepath.Dir(filepath.Dir(filepath.Dir(rootFS)))
+		cmd.Dir = filepath.Join(dataDir, "volumes", manifest.VolumeName)
+	} else if imgCfg.WorkingDir != "" {
+		cmd.Dir = filepath.Join(rootFS, imgCfg.WorkingDir)
+	}
+
+	// Build environment: image env + manifest env + Box64 env + PATH + LD_LIBRARY_PATH
+	env := make([]string, 0, len(imgCfg.Env)+len(manifest.Env)+10)
+	env = append(env, imgCfg.Env...)
+	env = append(env, manifest.Env...)
+	env = append(env, box64Env(rootFS)...)
+	env = appendPath(env, rootFS)
+	env = appendLDLibraryPath(env, rootFS)
+	env = append(env, "HOME=/tmp")
+
+
+	cmd.Env = env
+	return cmd, nil
+}
+
+// findBinaryInRootFS searches for a binary in the extracted rootfs using the image's PATH.
+func findBinaryInRootFS(rootFS string, env []string, binary string) string {
+	pathVar := "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+	for _, e := range env {
+		if strings.HasPrefix(e, "PATH=") {
+			pathVar = strings.TrimPrefix(e, "PATH=")
+			break
+		}
+	}
+	for _, dir := range strings.Split(pathVar, ":") {
+		candidate := filepath.Join(rootFS, dir, binary)
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+	}
+	return filepath.Join(rootFS, "usr", "bin", binary)
+}
+
+// appendPath adds the rootfs bin directories to PATH in the env list.
+func appendPath(env []string, rootFS string) []string {
+	rootBins := strings.Join([]string{
+		filepath.Join(rootFS, "usr/local/sbin"),
+		filepath.Join(rootFS, "usr/local/bin"),
+		filepath.Join(rootFS, "usr/sbin"),
+		filepath.Join(rootFS, "usr/bin"),
+		filepath.Join(rootFS, "sbin"),
+		filepath.Join(rootFS, "bin"),
+	}, ":")
+	for i, e := range env {
+		if strings.HasPrefix(e, "PATH=") {
+			env[i] = "PATH=" + rootBins + ":" + strings.TrimPrefix(e, "PATH=")
+			return env
+		}
+	}
+	return append(env, "PATH="+rootBins+":/usr/local/bin:/usr/bin:/bin")
+}
+
+// appendLDLibraryPath adds the rootfs library directories to LD_LIBRARY_PATH.
+func appendLDLibraryPath(env []string, rootFS string) []string {
+	rootLibs := strings.Join([]string{
+		filepath.Join(rootFS, "usr/local/lib"),
+		filepath.Join(rootFS, "usr/lib"),
+		filepath.Join(rootFS, "usr/lib/x86_64-linux-gnu"),
+		filepath.Join(rootFS, "lib"),
+		filepath.Join(rootFS, "lib/x86_64-linux-gnu"),
+		filepath.Join(rootFS, "lib64"),
+	}, ":")
+	for i, e := range env {
+		if strings.HasPrefix(e, "LD_LIBRARY_PATH=") {
+			env[i] = "LD_LIBRARY_PATH=" + rootLibs + ":" + strings.TrimPrefix(e, "LD_LIBRARY_PATH=")
+			return env
+		}
+	}
+	return append(env, "LD_LIBRARY_PATH="+rootLibs)
+}
+
 // buildBwrapArgs constructs bubblewrap arguments to run a process inside the extracted rootfs.
 // The rootfs is mounted as /, volumes are bound to /data, and scripts are bound to /scripts.
-func buildBwrapArgs(rootFS string, manifest processManifest, imgCfg *imageConfig) []string {
+func buildBwrapArgs(rootFS string, manifest processManifest, imgCfg *imageConfig, resolvConf string) []string {
 	args := []string{
 		"--bind", rootFS, "/",
 		"--dev", "/dev",
@@ -531,9 +663,9 @@ func buildBwrapArgs(rootFS string, manifest processManifest, imgCfg *imageConfig
 		"--die-with-parent",
 	}
 
-	// Bind host DNS config into the sandbox
-	if _, err := os.Stat("/etc/resolv.conf"); err == nil {
-		args = append(args, "--ro-bind", "/etc/resolv.conf", "/etc/resolv.conf")
+	// Bind DNS config into the sandbox
+	if resolvConf != "" {
+		args = append(args, "--ro-bind", resolvConf, "/etc/resolv.conf")
 	}
 
 	// Bind host SSL certs only if the rootfs doesn't have its own
