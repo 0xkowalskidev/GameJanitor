@@ -32,25 +32,15 @@ type PlacementCandidate struct {
 }
 
 // Dispatcher routes operations to the correct Worker for a given gameserver.
-// In standalone mode, all operations go to a single LocalWorker.
-// In multi-node mode, routes based on gameserver-to-node assignment.
+// All workers (local and remote) are accessed through the registry.
 type Dispatcher struct {
-	local    Worker    // nil if controller-only (no local Docker)
-	registry *Registry // nil in standalone mode
-	db       *sql.DB   // nil in standalone mode (no node lookups needed)
+	registry *Registry
+	db       *sql.DB
 	log      *slog.Logger
 }
 
-// NewLocalDispatcher creates a standalone dispatcher that routes everything to a local worker.
-func NewLocalDispatcher(w Worker) *Dispatcher {
-	return &Dispatcher{local: w}
-}
-
-// NewMultiNodeDispatcher creates a dispatcher that routes to local or remote workers
-// based on the gameserver's node_id in the database.
-func NewMultiNodeDispatcher(local Worker, registry *Registry, db *sql.DB, log *slog.Logger) *Dispatcher {
+func NewDispatcher(registry *Registry, db *sql.DB, log *slog.Logger) *Dispatcher {
 	return &Dispatcher{
-		local:    local,
 		registry: registry,
 		db:       db,
 		log:      log,
@@ -58,25 +48,16 @@ func NewMultiNodeDispatcher(local Worker, registry *Registry, db *sql.DB, log *s
 }
 
 // WorkerFor returns the Worker responsible for an existing gameserver.
-// In standalone mode, always returns the local worker.
-// In multi-node mode, looks up the gameserver's node_id and routes accordingly.
+// Looks up the gameserver's node_id and routes to the corresponding worker.
 func (d *Dispatcher) WorkerFor(gameserverID string) Worker {
-	if d.registry == nil {
-		return d.local
-	}
-
 	nodeID, err := d.lookupNodeID(gameserverID)
 	if err != nil {
-		d.log.Error("looking up node for gameserver, falling back to local", "gameserver_id", gameserverID, "error", err)
-		return d.local
+		d.log.Error("looking up node for gameserver", "gameserver_id", gameserverID, "error", err)
+		return nil
 	}
 
-	// Empty node_id means local
 	if nodeID == "" {
-		if d.local != nil {
-			return d.local
-		}
-		d.log.Error("gameserver assigned to local node but no local worker available", "gameserver_id", gameserverID)
+		d.log.Error("gameserver has no node_id", "gameserver_id", gameserverID)
 		return nil
 	}
 
@@ -93,18 +74,8 @@ func (d *Dispatcher) WorkerFor(gameserverID string) Worker {
 // Uses allocated (sum of limits for assigned gameservers), not live usage,
 // to avoid overcommit when stopped servers are started.
 func (d *Dispatcher) RankWorkersForPlacement(requiredTags []string) []PlacementCandidate {
-	if d.registry == nil {
-		if d.local != nil {
-			return []PlacementCandidate{{Worker: d.local, NodeID: "", Score: 0}}
-		}
-		return nil
-	}
-
 	workers := d.registry.ListWorkers()
 	if len(workers) == 0 {
-		if d.local != nil {
-			return []PlacementCandidate{{Worker: d.local, NodeID: "", Score: 0}}
-		}
 		d.log.Error("no workers available for gameserver placement")
 		return nil
 	}
@@ -174,7 +145,6 @@ func (d *Dispatcher) RankWorkersForPlacement(requiredTags []string) []PlacementC
 		}
 
 		if !hasLimits {
-			// No limits set — rank by least allocated memory (negative so less = better)
 			score = -float64(allocMem)
 		}
 
@@ -189,13 +159,6 @@ func (d *Dispatcher) RankWorkersForPlacement(requiredTags []string) []PlacementC
 		return candidates[i].Score > candidates[j].Score
 	})
 
-	if len(candidates) == 0 {
-		d.log.Warn("no suitable worker found, falling back to local")
-		if d.local != nil {
-			return []PlacementCandidate{{Worker: d.local, NodeID: "", Score: 0}}
-		}
-	}
-
 	return candidates
 }
 
@@ -203,14 +166,7 @@ func (d *Dispatcher) RankWorkersForPlacement(requiredTags []string) []PlacementC
 // Used when the user explicitly chooses a node for placement.
 func (d *Dispatcher) SelectWorkerByNodeID(nodeID string) (Worker, error) {
 	if nodeID == "" {
-		if d.local != nil {
-			return d.local, nil
-		}
-		return nil, fmt.Errorf("no local worker available")
-	}
-
-	if d.registry == nil {
-		return nil, fmt.Errorf("multi-node not enabled")
+		return nil, fmt.Errorf("node_id is required")
 	}
 
 	w, ok := d.registry.Get(nodeID)
@@ -220,11 +176,8 @@ func (d *Dispatcher) SelectWorkerByNodeID(nodeID string) (Worker, error) {
 	return w, nil
 }
 
-// ListWorkers returns info for all registered workers. Returns nil in standalone mode.
+// ListWorkers returns info for all registered workers.
 func (d *Dispatcher) ListWorkers() []WorkerInfo {
-	if d.registry == nil {
-		return nil
-	}
 	return d.registry.ListWorkers()
 }
 

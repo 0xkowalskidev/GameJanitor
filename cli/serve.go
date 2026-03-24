@@ -10,8 +10,10 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"io/fs"
@@ -27,6 +29,8 @@ import (
 	"github.com/warsmite/gamejanitor/api"
 	"github.com/warsmite/gamejanitor/ui"
 	"github.com/warsmite/gamejanitor/worker"
+	"github.com/shirou/gopsutil/v4/disk"
+	"github.com/shirou/gopsutil/v4/mem"
 	"github.com/spf13/cobra"
 )
 
@@ -122,7 +126,7 @@ type services struct {
 	modSvc        *service.ModService
 }
 
-func initServices(database *sql.DB, dispatcher *worker.Dispatcher, localWorker worker.Worker, registry *worker.Registry, gameStore *games.GameStore, cfg config.Config, logger *slog.Logger) (*services, error) {
+func initServices(database *sql.DB, dispatcher *worker.Dispatcher, registry *worker.Registry, gameStore *games.GameStore, cfg config.Config, logger *slog.Logger) (*services, error) {
 	broadcaster := service.NewEventBus()
 	settingsSvc := service.NewSettingsService(database, logger)
 
@@ -167,7 +171,7 @@ func initServices(database *sql.DB, dispatcher *worker.Dispatcher, localWorker w
 	scheduler := service.NewScheduler(database, backupSvc, gameserverSvc, consoleSvc, broadcaster, logger)
 	scheduleSvc := service.NewScheduleService(database, scheduler, broadcaster, logger)
 	authSvc := service.NewAuthService(database, logger)
-	statusMgr := service.NewStatusManager(database, localWorker, broadcaster, querySvc, statsPoller, readyWatcher, dispatcher, registry, gameserverSvc.Start, logger)
+	statusMgr := service.NewStatusManager(database, broadcaster, querySvc, statsPoller, readyWatcher, dispatcher, registry, gameserverSvc.Start, logger)
 	statusSub := service.NewStatusSubscriber(database, broadcaster, logger)
 	eventStore := service.NewEventStoreSubscriber(database, broadcaster, logger)
 	webhookWorker := service.NewWebhookWorker(database, broadcaster, logger)
@@ -289,28 +293,38 @@ func runServe(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	var dispatcher *worker.Dispatcher
-	var registry *worker.Registry
-	if role == "standalone" {
-		dispatcher = worker.NewLocalDispatcher(localWorker)
-	} else {
-		registry = worker.NewRegistry(logger)
-		dispatcher = worker.NewMultiNodeDispatcher(localWorker, registry, database, logger)
+	registry := worker.NewRegistry(logger)
+	dispatcher := worker.NewDispatcher(registry, database, logger)
+
+	// Determine local node ID for registry
+	localNodeID, _ := os.Hostname()
+	if localNodeID == "" {
+		localNodeID = "local"
 	}
 
-	svcs, err := initServices(database, dispatcher, localWorker, registry, gameStore, cfg, logger)
+	svcs, err := initServices(database, dispatcher, registry, gameStore, cfg, logger)
 	if err != nil {
 		return err
 	}
 
 	ctx := context.Background()
+	svcs.statusMgr.Start(ctx)
+	defer svcs.statusMgr.Stop()
+
+	// Register local worker in the registry after StatusManager.Start() so
+	// the onWorkerRegistered callback has a valid context for event watching.
 	if localWorker != nil {
+		info := localWorkerInfo(localNodeID)
+		registry.Register(localNodeID, localWorker, info)
+		if err := models.UpsertWorkerNode(database, &models.WorkerNode{
+			ID: localNodeID, LanIP: info.LanIP, ExternalIP: info.ExternalIP,
+		}); err != nil {
+			logger.Error("failed to persist local worker node", "error", err)
+		}
 		if err := svcs.statusMgr.RecoverOnStartup(ctx); err != nil {
 			return fmt.Errorf("failed to recover gameserver status: %w", err)
 		}
-		svcs.statusMgr.Start(ctx)
 	}
-	defer svcs.statusMgr.Stop()
 
 	svcs.statusSub.Start(ctx)
 	defer svcs.statusSub.Stop()
@@ -384,9 +398,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		}()
 	}
 
-	if registry != nil {
-		registry.StartReaper(ctx, logger)
-	}
+	registry.StartReaper(ctx, logger)
 
 	router := api.NewRouter(api.RouterOptions{
 		Config:        cfg,
@@ -465,6 +477,35 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 func isLoopback(addr string) bool {
 	return addr == "127.0.0.1" || addr == "::1" || addr == "localhost"
+}
+
+func localWorkerInfo(nodeID string) worker.WorkerInfo {
+	info := worker.WorkerInfo{
+		ID:       nodeID,
+		CPUCores: int64(runtime.NumCPU()),
+		Local:    true,
+	}
+
+	if v, err := mem.VirtualMemory(); err == nil {
+		info.MemoryTotalMB = int64(v.Total / 1024 / 1024)
+		info.MemoryAvailableMB = int64(v.Available / 1024 / 1024)
+	}
+	if d, err := disk.Usage("/"); err == nil {
+		info.DiskTotalMB = int64(d.Total / 1024 / 1024)
+		info.DiskAvailableMB = int64(d.Free / 1024 / 1024)
+	}
+
+	// Detect LAN IP
+	if addrs, err := net.InterfaceAddrs(); err == nil {
+		for _, addr := range addrs {
+			if ipNet, ok := addr.(*net.IPNet); ok && !ipNet.IP.IsLoopback() && ipNet.IP.To4() != nil {
+				info.LanIP = ipNet.IP.String()
+				break
+			}
+		}
+	}
+
+	return info
 }
 
 func webUIFS(cfg config.Config) fs.FS {

@@ -20,10 +20,10 @@ type WorkerInfo struct {
 	DiskAvailableMB   int64
 	LastSeen          time.Time
 	TokenID           string
+	Local             bool // local workers are never reaped
 }
 
-// Registry tracks connected remote workers.
-// Used by the controller in multi-node mode.
+// Registry tracks all workers (local and remote).
 type Registry struct {
 	workers map[string]*registeredWorker
 	mu      sync.RWMutex
@@ -35,7 +35,7 @@ type Registry struct {
 }
 
 type registeredWorker struct {
-	worker *RemoteWorker
+	worker Worker
 	info   WorkerInfo
 }
 
@@ -53,21 +53,22 @@ func (r *Registry) SetCallbacks(onRegister func(string, Worker), onUnregister fu
 	r.onUnregister = onUnregister
 }
 
-func (r *Registry) Register(w *RemoteWorker, info WorkerInfo) {
+func (r *Registry) Register(nodeID string, w Worker, info WorkerInfo) {
 	r.mu.Lock()
 
-	// Close old connection if re-registering
-	if old, ok := r.workers[w.nodeID]; ok {
-		old.worker.Close()
+	if old, ok := r.workers[nodeID]; ok {
+		if closer, ok := old.worker.(interface{ Close() error }); ok {
+			closer.Close()
+		}
 	}
 
 	info.LastSeen = time.Now()
-	r.workers[w.nodeID] = &registeredWorker{worker: w, info: info}
-	r.log.Info("worker registered", "worker_id", w.nodeID, "lan_ip", info.LanIP, "external_ip", info.ExternalIP)
+	r.workers[nodeID] = &registeredWorker{worker: w, info: info}
+	r.log.Info("worker registered", "worker_id", nodeID, "lan_ip", info.LanIP, "local", info.Local)
 	r.mu.Unlock()
 
 	if r.onRegister != nil {
-		r.onRegister(w.nodeID, w)
+		r.onRegister(nodeID, w)
 	}
 }
 
@@ -80,7 +81,9 @@ func (r *Registry) Unregister(nodeID string) {
 		return
 	}
 
-	rw.worker.Close()
+	if closer, ok := rw.worker.(interface{ Close() error }); ok {
+		closer.Close()
+	}
 	delete(r.workers, nodeID)
 	r.log.Info("worker unregistered", "worker_id", nodeID)
 	r.mu.Unlock()
@@ -122,6 +125,7 @@ func (r *Registry) UpdateHeartbeat(nodeID string, info WorkerInfo) error {
 	}
 	info.LastSeen = time.Now()
 	info.TokenID = rw.info.TokenID // preserve token from registration
+	info.Local = rw.info.Local     // preserve local flag
 	rw.info = info
 	return nil
 }
@@ -145,6 +149,7 @@ func (r *Registry) Count() int {
 }
 
 // StartReaper starts a goroutine that removes workers with stale heartbeats.
+// Local workers are never reaped.
 func (r *Registry) StartReaper(ctx context.Context, log *slog.Logger) {
 	const heartbeatTimeout = 30 * time.Second
 
@@ -167,6 +172,9 @@ func (r *Registry) reapStale(timeout time.Duration, log *slog.Logger) {
 	r.mu.RLock()
 	var stale []string
 	for id, rw := range r.workers {
+		if rw.info.Local {
+			continue
+		}
 		if time.Since(rw.info.LastSeen) > timeout {
 			stale = append(stale, id)
 		}

@@ -195,7 +195,7 @@ func (c *ControllerGRPC) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest
 
 		info.TokenID = token.ID
 		remote := NewRemoteWorker(conn, req.WorkerId)
-		c.registry.Register(remote, info)
+		c.registry.Register(req.WorkerId, remote, info)
 		c.log.Info("worker activated via first heartbeat", "worker_id", req.WorkerId, "grpc_address", node.GRPCAddress)
 	}
 

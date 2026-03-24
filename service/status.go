@@ -14,9 +14,8 @@ import (
 )
 
 type StatusManager struct {
-	db           *sql.DB
-	localWorker  worker.Worker
-	log          *slog.Logger
+	db  *sql.DB
+	log *slog.Logger
 	broadcaster  *EventBus
 	querySvc     *QueryService
 	statsPoller  *StatsPoller
@@ -36,10 +35,9 @@ type StatusManager struct {
 	crashMu     sync.Mutex
 }
 
-func NewStatusManager(db *sql.DB, localWorker worker.Worker, broadcaster *EventBus, querySvc *QueryService, statsPoller *StatsPoller, readyWatcher *ReadyWatcher, dispatcher *worker.Dispatcher, registry *worker.Registry, restartFunc func(ctx context.Context, id string) error, log *slog.Logger) *StatusManager {
+func NewStatusManager(db *sql.DB, broadcaster *EventBus, querySvc *QueryService, statsPoller *StatsPoller, readyWatcher *ReadyWatcher, dispatcher *worker.Dispatcher, registry *worker.Registry, restartFunc func(ctx context.Context, id string) error, log *slog.Logger) *StatusManager {
 	sm := &StatusManager{
 		db:            db,
-		localWorker:   localWorker,
 		broadcaster:   broadcaster,
 		querySvc:      querySvc,
 		statsPoller:   statsPoller,
@@ -52,21 +50,15 @@ func NewStatusManager(db *sql.DB, localWorker worker.Worker, broadcaster *EventB
 		crashCounts:   make(map[string]int),
 	}
 
-	// Subscribe to worker registration events for multi-node event watching
-	if registry != nil {
-		registry.SetCallbacks(sm.onWorkerRegistered, sm.onWorkerUnregistered)
-	}
+	registry.SetCallbacks(sm.onWorkerRegistered, sm.onWorkerUnregistered)
 
 	return sm
 }
 
-// Start begins watching container events from the local worker.
+// Start begins watching for status events.
+// Workers are watched via registry callbacks (onWorkerRegistered).
 func (m *StatusManager) Start(ctx context.Context) {
 	ctx, m.cancel = context.WithCancel(ctx)
-
-	if m.localWorker != nil {
-		m.watchWorkerEvents(ctx, "local", m.localWorker)
-	}
 
 	// Reset crash counter when a gameserver successfully reaches "running"
 	events, unsub := m.broadcaster.Subscribe()
@@ -143,11 +135,7 @@ func (m *StatusManager) RecoverOnStartup(ctx context.Context) error {
 
 // workerForGameserver returns the appropriate worker, or nil if unavailable.
 func (m *StatusManager) workerForGameserver(gs *models.Gameserver) worker.Worker {
-	if m.dispatcher != nil {
-		w := m.dispatcher.WorkerFor(gs.ID)
-		return w
-	}
-	return m.localWorker
+	return m.dispatcher.WorkerFor(gs.ID)
 }
 
 func (m *StatusManager) recoverGameserver(ctx context.Context, gs *models.Gameserver, w worker.Worker) {
