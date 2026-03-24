@@ -12,21 +12,31 @@
       pkgs = nixpkgs.legacyPackages.${system};
     in
     {
-      packages.${system}.default = pkgs.buildGoModule {
-        pname = "gamejanitor";
-        version = "0.1.0";
-        src = ./.;
-        vendorHash = "sha256-gQgVaBuFxSlH3pGDmmKJ/K88Xe40W608yCc/3BiKh5g=";
-        env.CGO_ENABLED = "0";
+      packages.${system} = let
+        ui = pkgs.buildNpmPackage {
+          pname = "gamejanitor-ui";
+          version = "0.1.0";
+          src = ./.;
+          postUnpack = ''
+            sourceRoot="$sourceRoot/ui"
+          '';
+          npmDepsHash = "sha256-4ylyfmqUiQDOVGit3MUC8Bh0NHQ/3U2aU9HWQJvIXAY=";
+          installPhase = ''
+            cp -r dist $out
+          '';
+        };
+      in {
+        default = pkgs.buildGoModule {
+          pname = "gamejanitor";
+          version = "0.1.0";
+          src = ./.;
+          vendorHash = "sha256-d2ILTAhTQwQsoS+pUCpXszCIZCzTDdpXXlBTNqiOxnA=";
+          env.CGO_ENABLED = "0";
 
-        nativeBuildInputs = [ pkgs.nodejs ];
-
-        preBuild = ''
-          cd ui
-          npm ci --ignore-scripts
-          npm run build
-          cd ..
-        '';
+          preBuild = ''
+            cp -r ${ui} ui/dist
+          '';
+        };
       };
 
       nixosModules.default = import ./nixos/module.nix self;
