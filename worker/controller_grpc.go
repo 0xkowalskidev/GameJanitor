@@ -2,14 +2,18 @@ package worker
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"crypto/tls"
+	"crypto/x509"
 	"database/sql"
 	"fmt"
 	"log/slog"
+	"net"
 
 	"github.com/warsmite/gamejanitor/models"
-	"golang.org/x/crypto/bcrypt"
+	"github.com/warsmite/gamejanitor/tlsutil"
 	"github.com/warsmite/gamejanitor/worker/pb"
+	"golang.org/x/crypto/bcrypt"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -29,11 +33,13 @@ type ControllerGRPC struct {
 	tokenAuth   TokenValidator
 	db          *sql.DB
 	dialBackTLS *tls.Config
+	caCert      *x509.Certificate
+	caKey       *ecdsa.PrivateKey
 	log         *slog.Logger
 }
 
-func NewControllerGRPC(registry *Registry, tokenAuth TokenValidator, db *sql.DB, dialBackTLS *tls.Config, log *slog.Logger) *ControllerGRPC {
-	return &ControllerGRPC{registry: registry, tokenAuth: tokenAuth, db: db, dialBackTLS: dialBackTLS, log: log}
+func NewControllerGRPC(registry *Registry, tokenAuth TokenValidator, db *sql.DB, dialBackTLS *tls.Config, caCert *x509.Certificate, caKey *ecdsa.PrivateKey, log *slog.Logger) *ControllerGRPC {
+	return &ControllerGRPC{registry: registry, tokenAuth: tokenAuth, db: db, dialBackTLS: dialBackTLS, caCert: caCert, caKey: caKey, log: log}
 }
 
 func (c *ControllerGRPC) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.RegisterResponse, error) {
@@ -55,45 +61,22 @@ func (c *ControllerGRPC) Register(ctx context.Context, req *pb.RegisterRequest) 
 		return &pb.RegisterResponse{Accepted: false}, nil
 	}
 
-	// Dial back to the worker's gRPC address to create a RemoteWorker
-	var dialOpt grpc.DialOption
-	if c.dialBackTLS != nil {
-		dialOpt = grpc.WithTransportCredentials(credentials.NewTLS(c.dialBackTLS))
-	} else {
-		dialOpt = grpc.WithTransportCredentials(insecure.NewCredentials())
-	}
-	conn, err := grpc.NewClient(req.GrpcAddress, dialOpt)
-	if err != nil {
-		c.log.Error("failed to dial worker", "worker_id", req.WorkerId, "address", req.GrpcAddress, "error", err)
-		return &pb.RegisterResponse{Accepted: false}, nil
-	}
-
-	// Verify connectivity with a quick health check
-	hbClient := pb.NewWorkerServiceClient(conn)
-	_, err = hbClient.Heartbeat(ctx, &pb.HeartbeatRequest{WorkerId: req.WorkerId})
-	if err != nil {
-		conn.Close()
-		c.log.Error("worker health check failed", "worker_id", req.WorkerId, "error", err)
-		return &pb.RegisterResponse{Accepted: false}, nil
+	// Generate worker TLS certificate for mTLS enrollment
+	var caPEM, certPEM, keyPEM []byte
+	if c.caCert != nil && c.caKey != nil {
+		workerIPs := parseWorkerIPs(req.LanIp, req.ExternalIp)
+		var err error
+		caPEM, certPEM, keyPEM, err = tlsutil.GenerateWorkerCertPEM(req.WorkerId, c.caCert, c.caKey, workerIPs)
+		if err != nil {
+			c.log.Error("failed to generate worker cert", "worker_id", req.WorkerId, "error", err)
+			return &pb.RegisterResponse{Accepted: false}, nil
+		}
+		c.log.Info("issued TLS certificate for worker", "worker_id", req.WorkerId)
 	}
 
-	remote := NewRemoteWorker(conn, req.WorkerId)
-	info := WorkerInfo{
-		ID:                req.WorkerId,
-		LanIP:             req.LanIp,
-		ExternalIP:        req.ExternalIp,
-		CPUCores:          req.CpuCores,
-		MemoryTotalMB:     req.MemoryTotalMb,
-		MemoryAvailableMB: req.MemoryAvailableMb,
-		DiskTotalMB:       req.DiskTotalMb,
-		DiskAvailableMB:   req.DiskAvailableMb,
-		TokenID:           token.ID,
-	}
-
-	c.registry.Register(remote, info)
-
+	// Persist worker node (dial-back happens on first heartbeat after worker has certs)
 	if err := models.UpsertWorkerNode(c.db, &models.WorkerNode{
-		ID: req.WorkerId, LanIP: req.LanIp, ExternalIP: req.ExternalIp,
+		ID: req.WorkerId, GRPCAddress: req.GrpcAddress, LanIP: req.LanIp, ExternalIP: req.ExternalIp,
 	}); err != nil {
 		c.log.Error("failed to persist worker node on register", "worker_id", req.WorkerId, "error", err)
 	}
@@ -148,7 +131,12 @@ func (c *ControllerGRPC) Register(ctx context.Context, req *pb.RegisterRequest) 
 	}
 
 	c.log.Info("worker registered successfully", "worker_id", req.WorkerId, "grpc_address", req.GrpcAddress, "token_id", token.ID)
-	return &pb.RegisterResponse{Accepted: true}, nil
+	return &pb.RegisterResponse{
+		Accepted:      true,
+		CaCertPem:     caPEM,
+		ClientCertPem: certPEM,
+		ClientKeyPem:  keyPEM,
+	}, nil
 }
 
 func (c *ControllerGRPC) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (*pb.HeartbeatResponse, error) {
@@ -164,8 +152,51 @@ func (c *ControllerGRPC) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest
 	}
 
 	if err := c.registry.UpdateHeartbeat(req.WorkerId, info); err != nil {
-		c.log.Debug("heartbeat from unregistered worker", "worker_id", req.WorkerId)
-		return &pb.HeartbeatResponse{Accepted: false}, nil
+		// Worker not in registry — first heartbeat after enrollment. Establish dial-back.
+		rawToken := TokenFromContext(ctx)
+		token := c.tokenAuth.ValidateToken(rawToken)
+		if token == nil || token.Scope != "worker" {
+			c.log.Warn("heartbeat rejected: invalid or non-worker token", "worker_id", req.WorkerId)
+			return &pb.HeartbeatResponse{Accepted: false}, nil
+		}
+
+		node, err := models.GetWorkerNode(c.db, req.WorkerId)
+		if err != nil || node == nil {
+			c.log.Warn("heartbeat from unknown worker", "worker_id", req.WorkerId)
+			return &pb.HeartbeatResponse{Accepted: false}, nil
+		}
+
+		if node.GRPCAddress == "" {
+			c.log.Error("worker has no grpc_address, cannot dial back", "worker_id", req.WorkerId)
+			return &pb.HeartbeatResponse{Accepted: false}, nil
+		}
+
+		// Dial back to worker with mTLS
+		var dialOpt grpc.DialOption
+		if c.dialBackTLS != nil {
+			dialOpt = grpc.WithTransportCredentials(credentials.NewTLS(c.dialBackTLS))
+		} else {
+			dialOpt = grpc.WithTransportCredentials(insecure.NewCredentials())
+		}
+		conn, err := grpc.NewClient(node.GRPCAddress, dialOpt)
+		if err != nil {
+			c.log.Error("failed to dial worker on first heartbeat", "worker_id", req.WorkerId, "address", node.GRPCAddress, "error", err)
+			return &pb.HeartbeatResponse{Accepted: false}, nil
+		}
+
+		// Verify connectivity
+		hbClient := pb.NewWorkerServiceClient(conn)
+		_, err = hbClient.Heartbeat(ctx, &pb.HeartbeatRequest{WorkerId: req.WorkerId})
+		if err != nil {
+			conn.Close()
+			c.log.Error("worker dial-back health check failed", "worker_id", req.WorkerId, "error", err)
+			return &pb.HeartbeatResponse{Accepted: false}, nil
+		}
+
+		info.TokenID = token.ID
+		remote := NewRemoteWorker(conn, req.WorkerId)
+		c.registry.Register(remote, info)
+		c.log.Info("worker activated via first heartbeat", "worker_id", req.WorkerId, "grpc_address", node.GRPCAddress)
 	}
 
 	// Check that the worker's token still exists (lightweight, no bcrypt)
@@ -203,7 +234,7 @@ func (c *ControllerGRPC) ValidateSFTPLogin(ctx context.Context, req *pb.SFTPLogi
 
 // DialController connects to a controller's gRPC address and returns the ControllerService client.
 // If token is non-empty, it is sent as Bearer auth metadata on every RPC.
-// If tlsConfig is non-nil, the connection uses TLS; otherwise insecure.
+// If tlsConfig is non-nil, the connection uses mTLS; otherwise insecure.
 func DialController(address string, token string, tlsConfig *tls.Config) (pb.ControllerServiceClient, *grpc.ClientConn, error) {
 	var transportCreds grpc.DialOption
 	if tlsConfig != nil {
@@ -220,4 +251,36 @@ func DialController(address string, token string, tlsConfig *tls.Config) (pb.Con
 		return nil, nil, fmt.Errorf("dialing controller at %s: %w", address, err)
 	}
 	return pb.NewControllerServiceClient(conn), conn, nil
+}
+
+// DialControllerEnrollment connects to the controller with TLS (encrypted) but without a client
+// certificate. Used for the initial Register call before the worker has been issued certs.
+// Token auth protects the RPC; InsecureSkipVerify is acceptable because the controller uses a
+// self-signed CA and the worker validates the full cert chain on all subsequent connections.
+func DialControllerEnrollment(address string, token string) (pb.ControllerServiceClient, *grpc.ClientConn, error) {
+	tlsConfig := &tls.Config{
+		InsecureSkipVerify: true,
+	}
+	opts := []grpc.DialOption{
+		grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)),
+	}
+	if token != "" {
+		opts = append(opts, grpc.WithPerRPCCredentials(workerCredentials{token: token, requireTLS: true}))
+	}
+	conn, err := grpc.NewClient(address, opts...)
+	if err != nil {
+		return nil, nil, fmt.Errorf("dialing controller for enrollment at %s: %w", address, err)
+	}
+	return pb.NewControllerServiceClient(conn), conn, nil
+}
+
+func parseWorkerIPs(lanIP, externalIP string) []net.IP {
+	var ips []net.IP
+	if ip := net.ParseIP(lanIP); ip != nil {
+		ips = append(ips, ip)
+	}
+	if ip := net.ParseIP(externalIP); ip != nil {
+		ips = append(ips, ip)
+	}
+	return ips
 }

@@ -69,6 +69,7 @@ CREATE TABLE settings (
 
 CREATE TABLE worker_nodes (
     id TEXT PRIMARY KEY,
+    grpc_address TEXT NOT NULL DEFAULT '',
     lan_ip TEXT NOT NULL DEFAULT '',
     external_ip TEXT NOT NULL DEFAULT '',
     port_range_start INTEGER,

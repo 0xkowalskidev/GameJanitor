@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package worker;
 
-option go_package = "github.com/warsmite/gamejanitor/internal/worker/pb";
+option go_package = "github.com/warsmite/gamejanitor/worker/pb";
 
 // WorkerService is the gRPC interface between controller and worker agents.
 // Maps 1:1 to the Go Worker interface in internal/worker/worker.go.
@@ -300,6 +300,9 @@ message RegisterRequest {
 }
 message RegisterResponse {
     bool accepted = 1;
+    bytes ca_cert_pem = 2;
+    bytes client_cert_pem = 3;
+    bytes client_key_pem = 4;
 }
 
 // SFTP auth

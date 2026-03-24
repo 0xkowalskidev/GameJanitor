@@ -2,7 +2,9 @@ package cli
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"crypto/tls"
+	"crypto/x509"
 	"database/sql"
 	"fmt"
 	"io"
@@ -353,8 +355,11 @@ func runServe(cmd *cobra.Command, args []string) error {
 	// Start gRPC server for controller and/or local worker agent
 	if cfg.GRPCPort > 0 {
 		var serverTLS, dialBackTLS *tls.Config
+		var caCert *x509.Certificate
+		var caKey *ecdsa.PrivateKey
 		if role != "standalone" {
-			caCert, caKey, err := tlsutil.LoadOrCreateCA(cfg.DataDir)
+			var err error
+			caCert, caKey, err = tlsutil.LoadOrCreateCA(cfg.DataDir)
 			if err != nil {
 				return fmt.Errorf("failed to initialize gRPC CA: %w", err)
 			}
@@ -373,7 +378,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 			}
 		}
 		go func() {
-			if err := startGRPCServer(localWorker, gameStore, cfg.DataDir, registry, svcs.authSvc, database, cfg.Bind, cfg.GRPCPort, serverTLS, dialBackTLS, logger); err != nil {
+			if err := startGRPCServer(localWorker, gameStore, cfg.DataDir, registry, svcs.authSvc, database, cfg.Bind, cfg.GRPCPort, serverTLS, dialBackTLS, caCert, caKey, logger); err != nil {
 				logger.Error("grpc server stopped", "error", err)
 			}
 		}()

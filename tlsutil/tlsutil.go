@@ -98,6 +98,43 @@ func GenerateWorkerCert(dataDir string, workerID string, caCert *x509.Certificat
 	return filepath.Join(dir, name+".crt"), filepath.Join(dir, name+".key"), filepath.Join(dir, "ca.crt"), nil
 }
 
+// GenerateWorkerCertPEM generates a worker certificate signed by the CA and returns PEM bytes.
+// The cert includes SANs for the provided worker IPs plus localhost.
+func GenerateWorkerCertPEM(workerID string, caCert *x509.Certificate, caKey *ecdsa.PrivateKey, workerIPs []net.IP) (caPEM, certPEM, keyPEM []byte, err error) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("generating worker key: %w", err)
+	}
+
+	serial, _ := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	template := &x509.Certificate{
+		SerialNumber: serial,
+		Subject:      pkix.Name{Organization: []string{"Gamejanitor"}, CommonName: "worker-" + workerID},
+		NotBefore:    time.Now(),
+		NotAfter:     time.Now().Add(5 * 365 * 24 * time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
+		DNSNames:     []string{"localhost"},
+		IPAddresses:  append([]net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("::1")}, workerIPs...),
+	}
+
+	certDER, err := x509.CreateCertificate(rand.Reader, template, caCert, &key.PublicKey, caKey)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("creating worker certificate: %w", err)
+	}
+
+	keyDER, err := x509.MarshalECPrivateKey(key)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("marshaling worker key: %w", err)
+	}
+
+	caCertPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caCert.Raw})
+	certOut := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+	keyOut := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
+
+	return caCertPEM, certOut, keyOut, nil
+}
+
 // ServerTLSConfig returns a TLS config for the gRPC server with mTLS.
 func ServerTLSConfig(dataDir string) (*tls.Config, error) {
 	dir := tlsDir(dataDir)
@@ -123,7 +160,7 @@ func ServerTLSConfig(dataDir string) (*tls.Config, error) {
 	return &tls.Config{
 		Certificates: []tls.Certificate{serverCert},
 		ClientCAs:    caPool,
-		ClientAuth:   tls.RequireAndVerifyClientCert,
+		ClientAuth:   tls.VerifyClientCertIfGiven,
 	}, nil
 }
 

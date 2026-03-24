@@ -2773,6 +2773,9 @@ func (x *RegisterRequest) GetMaxStorageMb() int64 {
 type RegisterResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Accepted      bool                   `protobuf:"varint,1,opt,name=accepted,proto3" json:"accepted,omitempty"`
+	CaCertPem     []byte                 `protobuf:"bytes,2,opt,name=ca_cert_pem,json=caCertPem,proto3" json:"ca_cert_pem,omitempty"`
+	ClientCertPem []byte                 `protobuf:"bytes,3,opt,name=client_cert_pem,json=clientCertPem,proto3" json:"client_cert_pem,omitempty"`
+	ClientKeyPem  []byte                 `protobuf:"bytes,4,opt,name=client_key_pem,json=clientKeyPem,proto3" json:"client_key_pem,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2812,6 +2815,27 @@ func (x *RegisterResponse) GetAccepted() bool {
 		return x.Accepted
 	}
 	return false
+}
+
+func (x *RegisterResponse) GetCaCertPem() []byte {
+	if x != nil {
+		return x.CaCertPem
+	}
+	return nil
+}
+
+func (x *RegisterResponse) GetClientCertPem() []byte {
+	if x != nil {
+		return x.ClientCertPem
+	}
+	return nil
+}
+
+func (x *RegisterResponse) GetClientKeyPem() []byte {
+	if x != nil {
+		return x.ClientKeyPem
+	}
+	return nil
 }
 
 type SFTPLoginRequest struct {
@@ -3210,9 +3234,12 @@ const file_proto_worker_proto_rawDesc = "" +
 	"\x11disk_available_mb\x18\f \x01(\x03R\x0fdiskAvailableMb\x12\"\n" +
 	"\rmax_memory_mb\x18\r \x01(\x03R\vmaxMemoryMb\x12\x17\n" +
 	"\amax_cpu\x18\x0e \x01(\x01R\x06maxCpu\x12$\n" +
-	"\x0emax_storage_mb\x18\x0f \x01(\x03R\fmaxStorageMb\".\n" +
+	"\x0emax_storage_mb\x18\x0f \x01(\x03R\fmaxStorageMb\"\x9c\x01\n" +
 	"\x10RegisterResponse\x12\x1a\n" +
-	"\baccepted\x18\x01 \x01(\bR\baccepted\"J\n" +
+	"\baccepted\x18\x01 \x01(\bR\baccepted\x12\x1e\n" +
+	"\vca_cert_pem\x18\x02 \x01(\fR\tcaCertPem\x12&\n" +
+	"\x0fclient_cert_pem\x18\x03 \x01(\fR\rclientCertPem\x12$\n" +
+	"\x0eclient_key_pem\x18\x04 \x01(\fR\fclientKeyPem\"J\n" +
 	"\x10SFTPLoginRequest\x12\x1a\n" +
 	"\busername\x18\x01 \x01(\tR\busername\x12\x1a\n" +
 	"\bpassword\x18\x02 \x01(\tR\bpassword\"o\n" +
@@ -3262,7 +3289,7 @@ const file_proto_worker_proto_rawDesc = "" +
 	"\x11ControllerService\x12=\n" +
 	"\bRegister\x12\x17.worker.RegisterRequest\x1a\x18.worker.RegisterResponse\x12@\n" +
 	"\tHeartbeat\x12\x18.worker.HeartbeatRequest\x1a\x19.worker.HeartbeatResponse\x12H\n" +
-	"\x11ValidateSFTPLogin\x12\x18.worker.SFTPLoginRequest\x1a\x19.worker.SFTPLoginResponseB4Z2github.com/warsmite/gamejanitor/internal/worker/pbb\x06proto3"
+	"\x11ValidateSFTPLogin\x12\x18.worker.SFTPLoginRequest\x1a\x19.worker.SFTPLoginResponseB+Z)github.com/warsmite/gamejanitor/worker/pbb\x06proto3"
 
 var (
 	file_proto_worker_proto_rawDescOnce sync.Once
