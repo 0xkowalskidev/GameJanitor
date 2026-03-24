@@ -15,7 +15,10 @@ let
       controller = cfg.controller;
       worker = cfg.worker;
       data_dir = cfg.dataDir;
+      web_ui = cfg.webUI;
     }
+    // lib.optionalAttrs (cfg.containerRuntime != "auto") { container_runtime = cfg.containerRuntime; }
+    // lib.optionalAttrs (cfg.containerSocket != null) { container_socket = cfg.containerSocket; }
     // lib.optionalAttrs (cfg.grpcPort != null) { grpc_port = cfg.grpcPort; }
     // lib.optionalAttrs (cfg.sftpPort != null) { sftp_port = cfg.sftpPort; }
     // lib.optionalAttrs (cfg.controllerAddress != null) { controller_address = cfg.controllerAddress; }
@@ -243,6 +246,24 @@ in {
       '';
     };
 
+    webUI = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Enable the embedded web UI. Disable for API-only deployments.";
+    };
+
+    containerRuntime = lib.mkOption {
+      type = lib.types.enum [ "auto" "docker" "podman" "process" ];
+      default = "auto";
+      description = "Container runtime. Auto-detects Podman then Docker by default.";
+    };
+
+    containerSocket = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      description = "Explicit container runtime socket path. Auto-detected if null.";
+    };
+
     environment = lib.mkOption {
       type = lib.types.attrsOf lib.types.str;
       default = {};
@@ -257,8 +278,8 @@ in {
   };
 
   config = lib.mkIf cfg.enable (let
-    portRangeStart = cfg.workerLimits.portRangeStart or (cfg.settings.port_range_start or 27000);
-    portRangeEnd = cfg.workerLimits.portRangeEnd or (cfg.settings.port_range_end or 28999);
+    portRangeStart = if cfg.workerLimits.portRangeStart != null then cfg.workerLimits.portRangeStart else 27000;
+    portRangeEnd = if cfg.workerLimits.portRangeEnd != null then cfg.workerLimits.portRangeEnd else 28999;
   in {
     assertions = [
       {
@@ -275,7 +296,7 @@ in {
       }
     ];
 
-    virtualisation.docker.enable = lib.mkIf hasLocalWorker true;
+    virtualisation.docker.enable = lib.mkIf (hasLocalWorker && cfg.containerRuntime != "podman" && cfg.containerRuntime != "process") true;
 
     systemd.services.gamejanitor = {
       description = "Gamejanitor Game Server Manager";
