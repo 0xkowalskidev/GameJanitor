@@ -309,6 +309,10 @@ games/
     store_test.go           # validates real game definitions
 ```
 
+## TODOs
+
+- **Test both Docker and Podman** — Integration tests currently run against whichever runtime auto-detects first. Need a way to explicitly test both (e.g., `GAMEJANITOR_TEST_SOCKET` env var with `test-docker`/`test-podman` flake scripts). The sidecar permission bug may behave differently between runtimes (Podman rootless maps UIDs differently).
+
 ## Running Tests
 
 ```bash
