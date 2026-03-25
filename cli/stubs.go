@@ -6,16 +6,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// --- Webhooks (TODO: implement when webhook API endpoints are wired) ---
-
-var webhooksCmd = &cobra.Command{
-	Use:   "webhooks",
-	Short: "Manage webhook endpoints",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return fmt.Errorf("webhooks command not yet implemented")
-	},
-}
-
 // --- Install (TODO: generate and enable systemd/launchd service) ---
 
 var installCmd = &cobra.Command{
