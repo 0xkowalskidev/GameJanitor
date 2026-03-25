@@ -20,31 +20,23 @@ func NewStatusHandlers(gameserverSvc *service.GameserverService, querySvc *servi
 	return &StatusHandlers{gameserverSvc: gameserverSvc, querySvc: querySvc, workerSvc: workerSvc, log: log}
 }
 
-type gameserverOverview struct {
-	ID            string  `json:"id"`
-	Name          string  `json:"name"`
-	GameID        string  `json:"game_id"`
-	Status        string  `json:"status"`
-	MemoryUsageMB int     `json:"memory_usage_mb"`
-	MemoryLimitMB int     `json:"memory_limit_mb"`
-	CPUPercent    float64 `json:"cpu_percent"`
-	PlayersOnline *int    `json:"players_online"`
-	MaxPlayers    *int    `json:"max_players"`
+type clusterStatus struct {
+	Workers            int     `json:"workers"`
+	WorkersCordoned    int     `json:"workers_cordoned"`
+	TotalMemoryMB      int64   `json:"total_memory_mb"`
+	AllocatedMemoryMB  int     `json:"allocated_memory_mb"`
+	TotalCPU           float64 `json:"total_cpu"`
+	AllocatedCPU       float64 `json:"allocated_cpu"`
+	TotalStorageMB     int64   `json:"total_storage_mb"`
+	AllocatedStorageMB int     `json:"allocated_storage_mb"`
 }
 
-type statusSummary struct {
-	Total   int `json:"total"`
-	Running int `json:"running"`
-	Stopped int `json:"stopped"`
-}
-
-type clusterSummary struct {
-	Workers           int     `json:"workers"`
-	WorkersCordoned   int     `json:"workers_cordoned"`
-	TotalMemoryMB     int64   `json:"total_memory_mb"`
-	AllocatedMemoryMB int     `json:"allocated_memory_mb"`
-	TotalCPU          float64 `json:"total_cpu"`
-	AllocatedCPU      float64 `json:"allocated_cpu"`
+type gameserverStatus struct {
+	Total      int `json:"total"`
+	Running    int `json:"running"`
+	Stopped    int `json:"stopped"`
+	Installing int `json:"installing"`
+	Error      int `json:"error"`
 }
 
 func (h *StatusHandlers) Get(w http.ResponseWriter, r *http.Request) {
@@ -55,6 +47,7 @@ func (h *StatusHandlers) Get(w http.ResponseWriter, r *http.Request) {
 			filter.IDs = gsIDs
 		}
 	}
+
 	gameservers, err := h.gameserverSvc.ListGameservers(filter)
 	if err != nil {
 		h.log.Error("listing gameservers for status", "error", err)
@@ -62,75 +55,49 @@ func (h *StatusHandlers) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	summary := statusSummary{Total: len(gameservers)}
-	overviews := make([]gameserverOverview, 0, len(gameservers))
-
-	for _, gs := range gameservers {
-		o := gameserverOverview{
-			ID:            gs.ID,
-			Name:          gs.Name,
-			GameID:        gs.GameID,
-			Status:        gs.Status,
-			MemoryLimitMB: gs.MemoryLimitMB,
+	gs := gameserverStatus{Total: len(gameservers)}
+	for _, g := range gameservers {
+		switch g.Status {
+		case service.StatusRunning, service.StatusStarted:
+			gs.Running++
+		case service.StatusStopped:
+			gs.Stopped++
+		case service.StatusInstalling:
+			gs.Installing++
+		case service.StatusError:
+			gs.Error++
 		}
-
-		isRunning := gs.Status == service.StatusStarted || gs.Status == service.StatusRunning
-
-		if isRunning {
-			summary.Running++
-
-			if gs.ContainerID != nil {
-				stats, err := h.gameserverSvc.GetGameserverStats(r.Context(), gs.ID)
-				if err != nil {
-					h.log.Warn("failed to get gameserver stats", "id", gs.ID, "error", err)
-				} else {
-					o.MemoryUsageMB = stats.MemoryUsageMB
-					o.CPUPercent = stats.CPUPercent
-				}
-			}
-
-			if qd := h.querySvc.GetQueryData(gs.ID); qd != nil {
-				o.PlayersOnline = &qd.PlayersOnline
-				o.MaxPlayers = &qd.MaxPlayers
-			}
-		} else if gs.Status == service.StatusStopped {
-			summary.Stopped++
-		}
-
-		overviews = append(overviews, o)
 	}
 
-	cluster := h.buildClusterSummary(gameservers)
+	cluster := h.buildClusterStatus()
 
 	respondOK(w, map[string]any{
-		"gameservers": overviews,
-		"summary":     summary,
 		"cluster":     cluster,
+		"gameservers": gs,
 	})
 }
 
-func (h *StatusHandlers) buildClusterSummary(gameservers []models.Gameserver) clusterSummary {
-	var cluster clusterSummary
+func (h *StatusHandlers) buildClusterStatus() clusterStatus {
+	var cs clusterStatus
 
 	workers, err := h.workerSvc.List()
 	if err != nil {
-		h.log.Error("listing workers for cluster summary", "error", err)
-		return cluster
+		h.log.Error("listing workers for cluster status", "error", err)
+		return cs
 	}
 
-	cluster.Workers = len(workers)
+	cs.Workers = len(workers)
 	for _, w := range workers {
-		cluster.TotalMemoryMB += w.MemoryTotalMB
-		cluster.TotalCPU += float64(w.CPUCores)
+		cs.TotalMemoryMB += w.MemoryTotalMB
+		cs.AllocatedMemoryMB += w.AllocatedMemoryMB
+		cs.TotalCPU += float64(w.CPUCores)
+		cs.AllocatedCPU += w.AllocatedCPU
+		cs.TotalStorageMB += w.DiskTotalMB
+		cs.AllocatedStorageMB += w.AllocatedStorageMB
 		if w.Cordoned {
-			cluster.WorkersCordoned++
+			cs.WorkersCordoned++
 		}
 	}
 
-	for _, gs := range gameservers {
-		cluster.AllocatedMemoryMB += gs.MemoryLimitMB
-		cluster.AllocatedCPU += gs.CPULimit
-	}
-
-	return cluster
+	return cs
 }

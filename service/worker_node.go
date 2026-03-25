@@ -33,6 +33,9 @@ type WorkerView struct {
 	GameserverCount   int      `json:"gameserver_count"`
 	AllocatedMemoryMB int      `json:"allocated_memory_mb"`
 	AllocatedCPU      float64  `json:"allocated_cpu"`
+	AllocatedStorageMB int     `json:"allocated_storage_mb"`
+	DiskTotalMB       int64    `json:"disk_total_mb"`
+	DiskAvailableMB   int64    `json:"disk_available_mb"`
 	MaxMemoryMB       *int     `json:"max_memory_mb"`
 	MaxCPU            *float64 `json:"max_cpu"`
 	MaxStorageMB      *int     `json:"max_storage_mb"`
@@ -48,12 +51,12 @@ func (s *WorkerNodeService) List() ([]WorkerView, error) {
 	}
 
 	infos := s.registry.ListWorkers()
-	gsCount, allocMem, allocCPU := s.nodeStats()
+	gsCount, allocMem, allocCPU, allocStorage := s.nodeStats()
 
 	views := make([]WorkerView, 0, len(infos))
 	for _, info := range infos {
 		node, _ := models.GetWorkerNode(s.db, info.ID)
-		views = append(views, s.buildView(info, gsCount[info.ID], allocMem[info.ID], allocCPU[info.ID], node))
+		views = append(views, s.buildView(info, gsCount[info.ID], allocMem[info.ID], allocCPU[info.ID], allocStorage[info.ID], node))
 	}
 	return views, nil
 }
@@ -68,9 +71,9 @@ func (s *WorkerNodeService) Get(id string) (*WorkerView, error) {
 		return nil, ErrNotFoundf("worker %s not found", id)
 	}
 
-	gsCount, allocMem, allocCPU := s.nodeStats()
+	gsCount, allocMem, allocCPU, allocStorage := s.nodeStats()
 	node, _ := models.GetWorkerNode(s.db, id)
-	v := s.buildView(info, gsCount[id], allocMem[id], allocCPU[id], node)
+	v := s.buildView(info, gsCount[id], allocMem[id], allocCPU[id], allocStorage[id], node)
 	return &v, nil
 }
 
@@ -117,7 +120,7 @@ func (s *WorkerNodeService) Update(ctx context.Context, id string, update *Worke
 	return nil
 }
 
-func (s *WorkerNodeService) buildView(info worker.WorkerInfo, gsCount, allocMem int, allocCPU float64, node *models.WorkerNode) WorkerView {
+func (s *WorkerNodeService) buildView(info worker.WorkerInfo, gsCount, allocMem int, allocCPU float64, allocStorage int, node *models.WorkerNode) WorkerView {
 	age := time.Since(info.LastSeen)
 	status := "stale"
 	if age < 15*time.Second {
@@ -137,7 +140,10 @@ func (s *WorkerNodeService) buildView(info worker.WorkerInfo, gsCount, allocMem 
 		MemoryAvailableMB: info.MemoryAvailableMB,
 		GameserverCount:   gsCount,
 		AllocatedMemoryMB: allocMem,
-		AllocatedCPU:      allocCPU,
+		AllocatedCPU:       allocCPU,
+		AllocatedStorageMB: allocStorage,
+		DiskTotalMB:       info.DiskTotalMB,
+		DiskAvailableMB:   info.DiskAvailableMB,
 		Status:            status,
 		LastSeen:          &lastSeen,
 	}
@@ -157,10 +163,11 @@ func (s *WorkerNodeService) buildView(info worker.WorkerInfo, gsCount, allocMem 
 	return v
 }
 
-func (s *WorkerNodeService) nodeStats() (gsCount map[string]int, allocMem map[string]int, allocCPU map[string]float64) {
+func (s *WorkerNodeService) nodeStats() (gsCount map[string]int, allocMem map[string]int, allocCPU map[string]float64, allocStorage map[string]int) {
 	gsCount = make(map[string]int)
 	allocMem = make(map[string]int)
 	allocCPU = make(map[string]float64)
+	allocStorage = make(map[string]int)
 	gameservers, err := models.ListGameservers(s.db, models.GameserverFilter{})
 	if err != nil {
 		s.log.Error("listing gameservers for worker stats", "error", err)
@@ -171,6 +178,9 @@ func (s *WorkerNodeService) nodeStats() (gsCount map[string]int, allocMem map[st
 			gsCount[*gs.NodeID]++
 			allocMem[*gs.NodeID] += gs.MemoryLimitMB
 			allocCPU[*gs.NodeID] += gs.CPULimit
+			if gs.StorageLimitMB != nil {
+				allocStorage[*gs.NodeID] += *gs.StorageLimitMB
+			}
 		}
 	}
 	return
