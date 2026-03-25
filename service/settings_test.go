@@ -8,6 +8,7 @@ import (
 
 	"github.com/warsmite/gamejanitor/service"
 	"github.com/warsmite/gamejanitor/testutil"
+	"github.com/warsmite/gamejanitor/validate"
 )
 
 func TestSettings_GetDefaults(t *testing.T) {
@@ -40,7 +41,11 @@ func TestSettings_SetAndGet_Int(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
 
-	err := svc.SettingsSvc.Set(service.SettingPortRangeStart, 30000)
+	// Must set end first since 30000 > default end of 28999
+	err := svc.SettingsSvc.Set(service.SettingPortRangeEnd, 31000)
+	require.NoError(t, err)
+
+	err = svc.SettingsSvc.Set(service.SettingPortRangeStart, 30000)
 	require.NoError(t, err)
 
 	assert.Equal(t, 30000, svc.SettingsSvc.GetInt(service.SettingPortRangeStart))
@@ -77,9 +82,70 @@ func TestSettings_ApplyConfig(t *testing.T) {
 
 	svc.SettingsSvc.ApplyConfig(map[string]any{
 		"auth_enabled":     true,
-		"port_range_start": 30000,
+		"port_range_start": 25000,
 	})
 
 	assert.True(t, svc.SettingsSvc.GetBool(service.SettingAuthEnabled))
-	assert.Equal(t, 30000, svc.SettingsSvc.GetInt(service.SettingPortRangeStart))
+	assert.Equal(t, 25000, svc.SettingsSvc.GetInt(service.SettingPortRangeStart))
+}
+
+func TestSettings_Validation_RejectsInvalidPort(t *testing.T) {
+	t.Parallel()
+	svc := testutil.NewTestServices(t)
+
+	err := svc.SettingsSvc.Set(service.SettingPortRangeStart, -1)
+	require.Error(t, err)
+	var fe validate.FieldErrors
+	assert.ErrorAs(t, err, &fe)
+	assert.Contains(t, err.Error(), "must be between 1 and 65535")
+
+	// Value should not have changed
+	assert.Equal(t, 27000, svc.SettingsSvc.GetInt(service.SettingPortRangeStart))
+}
+
+func TestSettings_Validation_RejectsInvalidPortMode(t *testing.T) {
+	t.Parallel()
+	svc := testutil.NewTestServices(t)
+
+	err := svc.SettingsSvc.Set(service.SettingPortMode, "banana")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "must be one of")
+}
+
+func TestSettings_Validation_RejectsNegativeMaxBackups(t *testing.T) {
+	t.Parallel()
+	svc := testutil.NewTestServices(t)
+
+	err := svc.SettingsSvc.Set(service.SettingMaxBackups, -5)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "must be >= 0")
+}
+
+func TestSettings_Validation_RejectsPortRangeStartAboveEnd(t *testing.T) {
+	t.Parallel()
+	svc := testutil.NewTestServices(t)
+
+	// Default end is 28999, setting start to 29000 should fail
+	err := svc.SettingsSvc.Set(service.SettingPortRangeStart, 29000)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "must be <= port_range_end")
+}
+
+func TestSettings_Validation_RejectsPortRangeEndBelowStart(t *testing.T) {
+	t.Parallel()
+	svc := testutil.NewTestServices(t)
+
+	// Default start is 27000, setting end to 26999 should fail
+	err := svc.SettingsSvc.Set(service.SettingPortRangeEnd, 26999)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "must be >= port_range_start")
+}
+
+func TestSettings_Validation_RejectsZeroRateLimit(t *testing.T) {
+	t.Parallel()
+	svc := testutil.NewTestServices(t)
+
+	err := svc.SettingsSvc.Set(service.SettingRateLimitPerIP, 0)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "must be >= 1")
 }

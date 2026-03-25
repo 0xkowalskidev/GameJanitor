@@ -9,6 +9,7 @@ import (
 	"github.com/warsmite/gamejanitor/constants"
 	"github.com/warsmite/gamejanitor/models"
 	"github.com/warsmite/gamejanitor/service"
+	"github.com/warsmite/gamejanitor/validate"
 )
 
 type envelope struct {
@@ -63,6 +64,10 @@ func parsePagination(r *http.Request) models.Pagination {
 
 // serviceErrorStatus extracts the HTTP status code from a ServiceError, falling back to 500.
 func serviceErrorStatus(err error) int {
+	var valErr validate.FieldErrors
+	if errors.As(err, &valErr) {
+		return http.StatusBadRequest
+	}
 	var svcErr *service.ServiceError
 	if errors.As(err, &svcErr) {
 		return svcErr.Code
@@ -71,9 +76,14 @@ func serviceErrorStatus(err error) int {
 }
 
 // serviceErrorMessage returns a safe error message for API responses.
-// ServiceErrors are user-facing and safe to expose. Other errors are internal
-// and get replaced with a generic message to avoid leaking implementation details.
+// ServiceErrors and validation errors are user-facing and safe to expose.
+// Other errors are internal and get replaced with a generic message to avoid
+// leaking implementation details.
 func serviceErrorMessage(err error) string {
+	var valErr validate.FieldErrors
+	if errors.As(err, &valErr) {
+		return valErr.Error()
+	}
 	var svcErr *service.ServiceError
 	if errors.As(err, &svcErr) {
 		return svcErr.Error()

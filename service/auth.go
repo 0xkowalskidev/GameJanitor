@@ -116,8 +116,9 @@ func (s *AuthService) GenerateAdminToken() (string, error) {
 }
 
 func (s *AuthService) CreateAdminToken(name string) (string, *models.Token, error) {
-	if name == "" {
-		return "", nil, ErrBadRequest("token name is required")
+	t := &models.Token{Name: name}
+	if err := t.Validate(); err != nil {
+		return "", nil, err
 	}
 
 	rawToken, err := generateSecureToken()
@@ -152,8 +153,9 @@ func (s *AuthService) CreateAdminToken(name string) (string, *models.Token, erro
 }
 
 func (s *AuthService) CreateCustomToken(name string, gameserverIDs []string, permissions []string, expiresAt *time.Time) (string, *models.Token, error) {
-	if name == "" {
-		return "", nil, ErrBadRequest("token name is required")
+	t := &models.Token{Name: name}
+	if err := t.Validate(); err != nil {
+		return "", nil, err
 	}
 
 	for _, gsID := range gameserverIDs {

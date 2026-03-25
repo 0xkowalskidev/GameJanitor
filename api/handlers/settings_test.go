@@ -37,8 +37,9 @@ func TestAPI_Settings_Update(t *testing.T) {
 	t.Parallel()
 	api := testutil.NewTestAPI(t)
 
+	// Use a value within the default range (27000-28999)
 	body, _ := json.Marshal(map[string]any{
-		"port_range_start": 30000,
+		"port_range_start": 27500,
 	})
 	req, _ := http.NewRequest("PATCH", api.Server.URL+"/api/settings", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -57,7 +58,7 @@ func TestAPI_Settings_Update(t *testing.T) {
 
 	portStart, ok := settings["port_range_start"]
 	assert.True(t, ok)
-	assert.Equal(t, float64(30000), portStart)
+	assert.Equal(t, float64(27500), portStart)
 }
 
 func TestAPI_Settings_Update_UnknownKey(t *testing.T) {

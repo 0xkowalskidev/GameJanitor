@@ -67,6 +67,10 @@ func (s *GameserverService) GetGameserver(id string) (*models.Gameserver, error)
 }
 
 func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gameserver) (string, error) {
+	if err := gs.ValidateCreate(); err != nil {
+		return "", err
+	}
+
 	// Serialize placement + port allocation + DB write to prevent concurrent creates
 	// from allocating the same ports or overcommitting a node.
 	s.placementMu.Lock()
@@ -313,6 +317,10 @@ func generatePassword(length int) (string, error) {
 // UpdateGameserver merges provided fields and writes to DB.
 // Returns migrationTriggered=true if resources changed and the server needs to move to a different node.
 func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *models.Gameserver) (migrationTriggered bool, err error) {
+	if err := gs.ValidateUpdate(); err != nil {
+		return false, err
+	}
+
 	existing, err := models.GetGameserver(s.db, gs.ID)
 	if err != nil {
 		return false, err
@@ -373,20 +381,6 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *models.Gam
 	}
 	if !gs.NodeTags.IsEmpty() {
 		existing.NodeTags = gs.NodeTags
-	}
-
-	// Input validation
-	if existing.MemoryLimitMB < 0 {
-		return false, ErrBadRequest("memory_limit_mb must be >= 0")
-	}
-	if existing.CPULimit < 0 {
-		return false, ErrBadRequest("cpu_limit must be >= 0")
-	}
-	if existing.StorageLimitMB != nil && *existing.StorageLimitMB < 0 {
-		return false, ErrBadRequest("storage_limit_mb must be >= 0")
-	}
-	if existing.BackupLimit != nil && *existing.BackupLimit < 0 {
-		return false, ErrBadRequest("backup_limit must be >= 0")
 	}
 
 	// Enforce require_* settings

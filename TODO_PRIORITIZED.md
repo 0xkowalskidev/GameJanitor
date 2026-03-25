@@ -14,7 +14,8 @@ Even numbers: Agent B
 
 ## Correctness / Data Integrity
 
-7. Settings have no validation — Can set port_range_start to -1 or nonsense values. No range/type checking.
+7. ~~Settings have no validation — Fixed: added validate package with shared helpers, per-key validators on settings, Validate() methods on models, wired into all service write paths.~~
+7b. Remove WorkerNodeUpdate struct — Only update struct in the codebase. Every other update path uses the model directly or individual params. Align with existing patterns.
 8. ~~Silent JSON unmarshal errors — Tags refactored to Labels type (map[string]string) with sql.Scanner/Valuer. mod.go parseEnv now logs errors.~~
 9. No CHECK constraints on status columns — Any string accepted in status columns.
 10. ~~Token creation doesn't validate gameserver IDs — CreateCustomToken now validates all IDs exist before creating token.~~
