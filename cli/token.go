@@ -17,18 +17,6 @@ var tokenCmd = &cobra.Command{
 	Short: "Manage auth tokens offline (direct DB access, no running server needed)",
 }
 
-var tokenCreateCmd = &cobra.Command{
-	Use:   "create",
-	Short: "Create a new auth token (idempotent — returns existing if name already taken)",
-	RunE:  runTokenCreate,
-}
-
-var tokenRotateCmd = &cobra.Command{
-	Use:   "rotate",
-	Short: "Rotate an existing token (deletes old, creates new)",
-	RunE:  runTokenRotate,
-}
-
 func init() {
 	tokenCreateCmd.Flags().StringP("data-dir", "d", "/var/lib/gamejanitor", "Data directory containing the database")
 	tokenCreateCmd.Flags().String("name", "", "Token name (required)")
@@ -41,7 +29,18 @@ func init() {
 	tokenRotateCmd.MarkFlagRequired("name")
 
 	tokenCmd.AddCommand(tokenCreateCmd, tokenRotateCmd)
-	tokenCmd.GroupID = "server"
+}
+
+var tokenCreateCmd = &cobra.Command{
+	Use:   "create",
+	Short: "Create a new auth token (idempotent)",
+	RunE:  runTokenCreate,
+}
+
+var tokenRotateCmd = &cobra.Command{
+	Use:   "rotate",
+	Short: "Rotate an existing token (deletes old, creates new)",
+	RunE:  runTokenRotate,
 }
 
 func openAuthService(cmd *cobra.Command) (*service.AuthService, func(), error) {

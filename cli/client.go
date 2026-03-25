@@ -35,6 +35,7 @@ func apiDelete(path string) (*apiResponse, error) {
 }
 
 func apiRequest(method, path string, body any) (*apiResponse, error) {
+	// TODO: resolve apiURL and authToken from cluster context when clusterName is set
 	url := strings.TrimRight(apiURL, "/") + path
 
 	var bodyReader io.Reader
@@ -53,14 +54,16 @@ func apiRequest(method, path string, body any) (*apiResponse, error) {
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	if authToken != "" {
+		req.Header.Set("Authorization", "Bearer "+authToken)
+	}
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("cannot connect to gamejanitor at %s: %w", apiURL, err)
+		return nil, fmt.Errorf("cannot connect to gamejanitor at %s\n  Is the server running? Start it with: gamejanitor serve\n  Or set up a remote cluster: gamejanitor cluster add <name> --address <url> --token <token>", apiURL)
 	}
 	defer resp.Body.Close()
 
-	// 204 No Content has no body
 	if resp.StatusCode == http.StatusNoContent {
 		return &apiResponse{Status: "ok"}, nil
 	}
@@ -77,7 +80,30 @@ func apiRequest(method, path string, body any) (*apiResponse, error) {
 	return &result, nil
 }
 
-// printJSONResponse prints the raw API response as indented JSON.
+// apiDownload performs a raw HTTP GET and returns the response body. Caller must close.
+func apiDownload(path string) (*http.Response, error) {
+	url := strings.TrimRight(apiURL, "/") + path
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating request: %w", err)
+	}
+	if authToken != "" {
+		req.Header.Set("Authorization", "Bearer "+authToken)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("cannot connect to gamejanitor at %s", apiURL)
+	}
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		return nil, fmt.Errorf("download failed: HTTP %d", resp.StatusCode)
+	}
+	return resp, nil
+}
+
+// --- Output helpers ---
+
 func printJSONResponse(resp *apiResponse) {
 	out := map[string]any{"status": resp.Status}
 	if resp.Data != nil {
@@ -111,99 +137,50 @@ func formatMemory(mb int) string {
 	return fmt.Sprintf("%d MB", mb)
 }
 
+func formatBytes(b int64) string {
+	const unit = 1024
+	if b < unit {
+		return fmt.Sprintf("%d B", b)
+	}
+	div, exp := int64(unit), 0
+	for n := b / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
+}
+
 func exitError(err error) error {
 	fmt.Fprintln(os.Stderr, "Error:", err)
 	os.Exit(1)
 	return nil
 }
 
-// Gameserver resolution: resolve a name or UUID prefix to a full gameserver ID.
+// --- Confirmation ---
 
-type gameserverEntry struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+func confirmAction(prompt string) bool {
+	if skipConfirmation || jsonOutput {
+		return true
+	}
+	fmt.Fprintf(os.Stderr, "%s [y/N]: ", prompt)
+	reader := bufio.NewReader(os.Stdin)
+	line, _ := reader.ReadString('\n')
+	answer := strings.TrimSpace(strings.ToLower(line))
+	return answer == "y" || answer == "yes"
 }
 
-var cachedGameservers []gameserverEntry
-
-func fetchGameserverList() ([]gameserverEntry, error) {
-	if cachedGameservers != nil {
-		return cachedGameservers, nil
-	}
-
-	resp, err := apiGet("/api/gameservers")
-	if err != nil {
-		return nil, err
-	}
-
-	if err := json.Unmarshal(resp.Data, &cachedGameservers); err != nil {
-		return nil, fmt.Errorf("parsing gameserver list: %w", err)
-	}
-	return cachedGameservers, nil
-}
-
-func resolveGameserverID(identifier string) (string, error) {
-	gameservers, err := fetchGameserverList()
-	if err != nil {
-		return "", err
-	}
-
-	// Exact ID match
-	for _, gs := range gameservers {
-		if gs.ID == identifier {
-			return gs.ID, nil
-		}
-	}
-
-	// UUID prefix match (min 4 chars)
-	if len(identifier) >= 4 {
-		var prefixMatches []gameserverEntry
-		lower := strings.ToLower(identifier)
-		for _, gs := range gameservers {
-			if strings.HasPrefix(strings.ToLower(gs.ID), lower) {
-				prefixMatches = append(prefixMatches, gs)
-			}
-		}
-		if len(prefixMatches) == 1 {
-			return prefixMatches[0].ID, nil
-		}
-		if len(prefixMatches) > 1 {
-			names := make([]string, len(prefixMatches))
-			for i, gs := range prefixMatches {
-				names[i] = fmt.Sprintf("%s (%s)", gs.Name, gs.ID[:8])
-			}
-			return "", fmt.Errorf("ambiguous ID prefix %q matches %d gameservers: %s", identifier, len(prefixMatches), strings.Join(names, ", "))
-		}
-	}
-
-	// Case-insensitive name match
-	var nameMatches []gameserverEntry
-	for _, gs := range gameservers {
-		if strings.EqualFold(gs.Name, identifier) {
-			nameMatches = append(nameMatches, gs)
-		}
-	}
-	if len(nameMatches) == 1 {
-		return nameMatches[0].ID, nil
-	}
-	if len(nameMatches) > 1 {
-		return "", fmt.Errorf("ambiguous name %q matches %d gameservers", identifier, len(nameMatches))
-	}
-
-	return "", fmt.Errorf("no gameserver found matching %q", identifier)
-}
-
-// Backup resolution: resolve a name or UUID prefix to a full backup ID.
+// --- ID Resolution ---
 
 type namedEntry struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 }
 
+var cachedGameservers []namedEntry
 var cachedBackups = map[string][]namedEntry{}
 var cachedSchedules = map[string][]namedEntry{}
 
-func resolveNamedID(identifier, resourceType string, entries []namedEntry) (string, error) {
+func resolveID(identifier, resourceType string, entries []namedEntry) (string, error) {
 	// Exact ID match
 	for _, e := range entries {
 		if e.ID == identifier {
@@ -249,6 +226,28 @@ func resolveNamedID(identifier, resourceType string, entries []namedEntry) (stri
 	return "", fmt.Errorf("no %s found matching %q", resourceType, identifier)
 }
 
+func fetchGameserverList() ([]namedEntry, error) {
+	if cachedGameservers != nil {
+		return cachedGameservers, nil
+	}
+	resp, err := apiGet("/api/gameservers")
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(resp.Data, &cachedGameservers); err != nil {
+		return nil, fmt.Errorf("parsing gameserver list: %w", err)
+	}
+	return cachedGameservers, nil
+}
+
+func resolveGameserverID(identifier string) (string, error) {
+	entries, err := fetchGameserverList()
+	if err != nil {
+		return "", err
+	}
+	return resolveID(identifier, "gameserver", entries)
+}
+
 func resolveBackupID(gsID, identifier string) (string, error) {
 	entries, ok := cachedBackups[gsID]
 	if !ok {
@@ -261,7 +260,7 @@ func resolveBackupID(gsID, identifier string) (string, error) {
 		}
 		cachedBackups[gsID] = entries
 	}
-	return resolveNamedID(identifier, "backup", entries)
+	return resolveID(identifier, "backup", entries)
 }
 
 func resolveScheduleID(gsID, identifier string) (string, error) {
@@ -276,18 +275,5 @@ func resolveScheduleID(gsID, identifier string) (string, error) {
 		}
 		cachedSchedules[gsID] = entries
 	}
-	return resolveNamedID(identifier, "schedule", entries)
-}
-
-// Confirmation prompt for destructive actions.
-
-func confirmAction(prompt string) bool {
-	if skipConfirmation || jsonOutput {
-		return true
-	}
-	fmt.Fprintf(os.Stderr, "%s [y/N]: ", prompt)
-	reader := bufio.NewReader(os.Stdin)
-	line, _ := reader.ReadString('\n')
-	answer := strings.TrimSpace(strings.ToLower(line))
-	return answer == "y" || answer == "yes"
+	return resolveID(identifier, "schedule", entries)
 }

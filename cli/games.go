@@ -9,7 +9,11 @@ import (
 
 var gamesCmd = &cobra.Command{
 	Use:   "games",
-	Short: "Manage game definitions",
+	Short: "List available games",
+}
+
+func init() {
+	gamesCmd.AddCommand(gamesListCmd, gamesGetCmd)
 }
 
 var gamesListCmd = &cobra.Command{
@@ -76,117 +80,4 @@ var gamesGetCmd = &cobra.Command{
 		fmt.Printf("Recommended Memory:  %s\n", formatMemory(game.RecommendedMemoryMB))
 		return nil
 	},
-}
-
-var gamesCreateCmd = &cobra.Command{
-	Use:   "create",
-	Short: "Create a new game definition",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		id, _ := cmd.Flags().GetString("id")
-		name, _ := cmd.Flags().GetString("name")
-		image, _ := cmd.Flags().GetString("image")
-		defaultPorts, _ := cmd.Flags().GetString("default-ports")
-		defaultEnv, _ := cmd.Flags().GetString("default-env")
-		recommendedMemory, _ := cmd.Flags().GetInt("recommended-memory")
-
-		if id == "" || name == "" || image == "" {
-			return exitError(fmt.Errorf("--id, --name, and --image are required"))
-		}
-
-		body := map[string]any{
-			"id":                     id,
-			"name":                   name,
-			"image":                  image,
-			"recommended_memory_mb":  recommendedMemory,
-		}
-		if defaultPorts != "" {
-			body["default_ports"] = json.RawMessage(defaultPorts)
-		}
-		if defaultEnv != "" {
-			body["default_env"] = json.RawMessage(defaultEnv)
-		}
-
-		resp, err := apiPost("/api/games", body)
-		if err != nil {
-			return exitError(err)
-		}
-
-		if jsonOutput {
-			printJSONResponse(resp)
-			return nil
-		}
-
-		fmt.Printf("Game %s created.\n", id)
-		return nil
-	},
-}
-
-var gamesUpdateCmd = &cobra.Command{
-	Use:   "update <id>",
-	Short: "Update a game definition",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		body := map[string]any{"id": args[0]}
-
-		if cmd.Flags().Changed("name") {
-			v, _ := cmd.Flags().GetString("name")
-			body["name"] = v
-		}
-		if cmd.Flags().Changed("image") {
-			v, _ := cmd.Flags().GetString("image")
-			body["image"] = v
-		}
-		if cmd.Flags().Changed("recommended-memory") {
-			v, _ := cmd.Flags().GetInt("recommended-memory")
-			body["recommended_memory_mb"] = v
-		}
-
-		resp, err := apiPatch("/api/games/"+args[0], body)
-		if err != nil {
-			return exitError(err)
-		}
-
-		if jsonOutput {
-			printJSONResponse(resp)
-			return nil
-		}
-
-		fmt.Printf("Game %s updated.\n", args[0])
-		return nil
-	},
-}
-
-var gamesDeleteCmd = &cobra.Command{
-	Use:   "delete <id>",
-	Short: "Delete a game definition",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		_, err := apiDelete("/api/games/" + args[0])
-		if err != nil {
-			return exitError(err)
-		}
-
-		if jsonOutput {
-			printJSONResponse(&apiResponse{Status: "ok"})
-			return nil
-		}
-
-		fmt.Printf("Game %s deleted.\n", args[0])
-		return nil
-	},
-}
-
-func init() {
-	gamesCreateCmd.Flags().String("id", "", "Game ID (slug)")
-	gamesCreateCmd.Flags().String("name", "", "Display name")
-	gamesCreateCmd.Flags().String("image", "", "Docker image")
-	gamesCreateCmd.Flags().String("default-ports", "", "Default ports JSON")
-	gamesCreateCmd.Flags().String("default-env", "", "Default env JSON")
-	gamesCreateCmd.Flags().Int("recommended-memory", 0, "Recommended memory (MB)")
-
-	gamesUpdateCmd.Flags().String("name", "", "Display name")
-	gamesUpdateCmd.Flags().String("image", "", "Docker image")
-	gamesUpdateCmd.Flags().Int("recommended-memory", 0, "Recommended memory (MB)")
-
-	gamesCmd.AddCommand(gamesListCmd, gamesGetCmd, gamesCreateCmd, gamesUpdateCmd, gamesDeleteCmd)
 }

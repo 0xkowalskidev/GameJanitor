@@ -4,9 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
-	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -14,6 +12,11 @@ import (
 var backupsCmd = &cobra.Command{
 	Use:   "backups",
 	Short: "Manage backups",
+}
+
+func init() {
+	backupsCreateCmd.Flags().String("name", "", "Backup name")
+	backupsCmd.AddCommand(backupsListCmd, backupsCreateCmd, backupsRestoreCmd, backupsDeleteCmd, backupsDownloadCmd)
 }
 
 var backupsListCmd = &cobra.Command{
@@ -54,7 +57,7 @@ var backupsListCmd = &cobra.Command{
 		w := newTabWriter()
 		fmt.Fprintln(w, "ID\tNAME\tSIZE\tCREATED")
 		for _, b := range backups {
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", b.ID[:8], b.Name, formatBytesStr(b.SizeBytes), b.CreatedAt)
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", b.ID[:8], b.Name, formatBytes(b.SizeBytes), b.CreatedAt)
 		}
 		w.Flush()
 		return nil
@@ -70,15 +73,15 @@ var backupsCreateCmd = &cobra.Command{
 		if err != nil {
 			return exitError(err)
 		}
+
 		name, _ := cmd.Flags().GetString("name")
-
-		if !jsonOutput {
-			fmt.Println("Creating backup...")
-		}
-
 		body := map[string]string{}
 		if name != "" {
 			body["name"] = name
+		}
+
+		if !jsonOutput {
+			fmt.Println("Creating backup...")
 		}
 
 		resp, err := apiPost("/api/gameservers/"+gsID+"/backups", body)
@@ -99,7 +102,7 @@ var backupsCreateCmd = &cobra.Command{
 		if err := json.Unmarshal(resp.Data, &backup); err != nil {
 			return fmt.Errorf("parsing response: %w", err)
 		}
-		fmt.Printf("Backup created: %s (%s, %s)\n", backup.Name, backup.ID, formatBytesStr(backup.SizeBytes))
+		fmt.Printf("Backup created: %s (%s, %s)\n", backup.Name, backup.ID, formatBytes(backup.SizeBytes))
 		return nil
 	},
 }
@@ -190,16 +193,11 @@ var backupsDownloadCmd = &cobra.Command{
 			return exitError(err)
 		}
 
-		url := strings.TrimRight(apiURL, "/") + "/api/gameservers/" + gsID + "/backups/" + backupID + "/download"
-		resp, err := http.Get(url)
+		resp, err := apiDownload("/api/gameservers/" + gsID + "/backups/" + backupID + "/download")
 		if err != nil {
-			return exitError(fmt.Errorf("downloading backup: %w", err))
+			return exitError(err)
 		}
 		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			return exitError(fmt.Errorf("download failed: HTTP %d", resp.StatusCode))
-		}
 
 		outPath := backupID[:8] + ".tar.gz"
 		if len(args) == 3 {
@@ -217,26 +215,7 @@ var backupsDownloadCmd = &cobra.Command{
 			return exitError(fmt.Errorf("writing backup: %w", err))
 		}
 
-		fmt.Printf("Downloaded backup to %s (%s)\n", outPath, formatBytesStr(written))
+		fmt.Printf("Downloaded backup to %s (%s)\n", outPath, formatBytes(written))
 		return nil
 	},
-}
-
-func formatBytesStr(b int64) string {
-	const unit = 1024
-	if b < unit {
-		return fmt.Sprintf("%d B", b)
-	}
-	div, exp := int64(unit), 0
-	for n := b / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
-}
-
-func init() {
-	backupsCreateCmd.Flags().String("name", "", "Backup name")
-
-	backupsCmd.AddCommand(backupsListCmd, backupsCreateCmd, backupsRestoreCmd, backupsDeleteCmd, backupsDownloadCmd)
 }

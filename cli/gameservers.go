@@ -10,11 +10,35 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// --- Gameservers group ---
+
 var gameserversCmd = &cobra.Command{
 	Use:     "gameservers",
 	Aliases: []string{"gs"},
 	Short:   "Manage gameservers",
 }
+
+func init() {
+	// The gameservers group also contains lifecycle commands for `gameservers start` etc.
+	gameserversCmd.AddCommand(
+		gameserversListCmd, gameserversGetCmd,
+		// CRUD shortcuts are registered under gameservers too
+		&cobra.Command{Use: "create", Short: createCmd.Short, RunE: createCmd.RunE, Args: createCmd.Args},
+		&cobra.Command{Use: "delete <name-or-id>", Short: deleteCmd.Short, RunE: deleteCmd.RunE, Args: deleteCmd.Args},
+		&cobra.Command{Use: "start <name-or-id>", Short: startCmd.Short, RunE: startCmd.RunE, Args: startCmd.Args},
+		&cobra.Command{Use: "stop <name-or-id>", Short: stopCmd.Short, RunE: stopCmd.RunE, Args: stopCmd.Args},
+		&cobra.Command{Use: "restart <name-or-id>", Short: restartCmd.Short, RunE: restartCmd.RunE, Args: restartCmd.Args},
+		&cobra.Command{Use: "status [name-or-id]", Short: statusCmd.Short, RunE: statusCmd.RunE, Args: statusCmd.Args},
+		&cobra.Command{Use: "logs <name-or-id>", Short: logsCmd.Short, RunE: logsCmd.RunE, Args: logsCmd.Args},
+		&cobra.Command{Use: "command <name-or-id> <command>", Short: commandCmd.Short, RunE: commandCmd.RunE, Args: commandCmd.Args},
+		&cobra.Command{Use: "update-game <name-or-id>", Short: updateGameCmd.Short, RunE: updateGameCmd.RunE, Args: updateGameCmd.Args},
+		&cobra.Command{Use: "reinstall <name-or-id>", Short: reinstallCmd.Short, RunE: reinstallCmd.RunE, Args: reinstallCmd.Args},
+		&cobra.Command{Use: "migrate <name-or-id>", Short: migrateCmd.Short, RunE: migrateCmd.RunE, Args: migrateCmd.Args},
+		gameserversUpdateCmd,
+	)
+}
+
+// --- List / Get ---
 
 var gameserversListCmd = &cobra.Command{
 	Use:   "list",
@@ -52,6 +76,11 @@ var gameserversListCmd = &cobra.Command{
 			return fmt.Errorf("parsing response: %w", err)
 		}
 
+		if len(gameservers) == 0 {
+			fmt.Println("No gameservers found.")
+			return nil
+		}
+
 		w := newTabWriter()
 		fmt.Fprintln(w, "ID\tNAME\tGAME\tSTATUS")
 		for _, gs := range gameservers {
@@ -67,7 +96,7 @@ var gameserversListCmd = &cobra.Command{
 }
 
 var gameserversGetCmd = &cobra.Command{
-	Use:   "get <gameserver>",
+	Use:   "get <name-or-id>",
 	Short: "Get a gameserver by name or ID",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -126,80 +155,137 @@ var gameserversGetCmd = &cobra.Command{
 	},
 }
 
-var gameserversCreateCmd = &cobra.Command{
+// --- Create ---
+
+var createCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create a new gameserver",
+	RunE:  runCreate,
+}
+
+func init() {
+	for _, cmd := range []*cobra.Command{createCmd} {
+		cmd.Flags().String("name", "", "Gameserver name")
+		cmd.Flags().String("game", "", "Game ID")
+		cmd.Flags().StringSlice("port", nil, "Port mapping (name:host:container/proto)")
+		cmd.Flags().StringSlice("env", nil, "Environment variable (KEY=VALUE)")
+		cmd.Flags().String("memory", "", "Memory limit (e.g. 512m, 4g, 2048)")
+		cmd.Flags().Float64("cpu", 0, "CPU limit in cores")
+		cmd.Flags().String("node", "", "Worker node ID for placement")
+		cmd.Flags().Bool("auto-restart", false, "Auto-restart on crash")
+	}
+
+	gameserversListCmd.Flags().String("game", "", "Filter by game ID")
+	gameserversListCmd.Flags().String("status", "", "Filter by status")
+}
+
+func runCreate(cmd *cobra.Command, args []string) error {
+	name, _ := cmd.Flags().GetString("name")
+	gameID, _ := cmd.Flags().GetString("game")
+	portFlags, _ := cmd.Flags().GetStringSlice("port")
+	envFlags, _ := cmd.Flags().GetStringSlice("env")
+	memoryStr, _ := cmd.Flags().GetString("memory")
+	cpu, _ := cmd.Flags().GetFloat64("cpu")
+
+	// TODO: interactive mode when name/game missing and stdin is TTY
+
+	if name == "" || gameID == "" {
+		return exitError(fmt.Errorf("--name and --game are required"))
+	}
+
+	memory, err := parseMemory(memoryStr)
+	if err != nil {
+		return exitError(err)
+	}
+
+	ports, err := parsePorts(portFlags)
+	if err != nil {
+		return exitError(err)
+	}
+
+	env := parseEnvFlags(envFlags)
+	nodeID, _ := cmd.Flags().GetString("node")
+	autoRestart, _ := cmd.Flags().GetBool("auto-restart")
+
+	body := map[string]any{
+		"name":            name,
+		"game_id":         gameID,
+		"ports":           ports,
+		"env":             env,
+		"memory_limit_mb": memory,
+		"cpu_limit":       cpu,
+		"auto_restart":    autoRestart,
+	}
+	if len(portFlags) == 0 {
+		body["port_mode"] = "auto"
+	}
+	if nodeID != "" {
+		body["node_id"] = nodeID
+	}
+
+	resp, err := apiPost("/api/gameservers", body)
+	if err != nil {
+		return exitError(err)
+	}
+
+	if jsonOutput {
+		printJSONResponse(resp)
+		return nil
+	}
+
+	var gs struct {
+		ID           string `json:"id"`
+		Name         string `json:"name"`
+		SFTPUsername string `json:"sftp_username"`
+		SFTPPassword string `json:"sftp_password"`
+	}
+	if err := json.Unmarshal(resp.Data, &gs); err != nil {
+		return fmt.Errorf("parsing response: %w", err)
+	}
+	fmt.Printf("Gameserver %s created (id: %s).\n", gs.Name, gs.ID)
+	if gs.SFTPUsername != "" && gs.SFTPPassword != "" {
+		fmt.Printf("SFTP username: %s\n", gs.SFTPUsername)
+		fmt.Printf("SFTP password: %s (will not be shown again)\n", gs.SFTPPassword)
+	}
+	return nil
+}
+
+// --- Delete ---
+
+var deleteCmd = &cobra.Command{
+	Use:   "delete <name-or-id>",
+	Short: "Delete a gameserver",
+	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		name, _ := cmd.Flags().GetString("name")
-		gameID, _ := cmd.Flags().GetString("game")
-		portFlags, _ := cmd.Flags().GetStringSlice("port")
-		envFlags, _ := cmd.Flags().GetStringSlice("env")
-		memoryStr, _ := cmd.Flags().GetString("memory")
-		cpu, _ := cmd.Flags().GetFloat64("cpu")
-		if name == "" || gameID == "" {
-			return exitError(fmt.Errorf("--name and --game are required"))
-		}
-		memory, err := parseMemory(memoryStr)
+		gsID, err := resolveGameserverID(args[0])
 		if err != nil {
 			return exitError(err)
 		}
 
-		ports, err := parsePorts(portFlags)
-		if err != nil {
-			return exitError(err)
+		if !confirmAction(fmt.Sprintf("Delete gameserver %s?", gsID[:8])) {
+			fmt.Println("Aborted.")
+			return nil
 		}
 
-		env := parseEnvFlags(envFlags)
-
-		nodeID, _ := cmd.Flags().GetString("node")
-		autoRestart, _ := cmd.Flags().GetBool("auto-restart")
-
-		body := map[string]any{
-			"name":            name,
-			"game_id":         gameID,
-			"ports":           ports,
-			"env":             env,
-			"memory_limit_mb": memory,
-			"cpu_limit":       cpu,
-			"auto_restart":    autoRestart,
-		}
-		if len(portFlags) == 0 {
-			body["port_mode"] = "auto"
-		}
-		if nodeID != "" {
-			body["node_id"] = nodeID
-		}
-
-		resp, err := apiPost("/api/gameservers", body)
+		_, err = apiDelete("/api/gameservers/" + gsID)
 		if err != nil {
 			return exitError(err)
 		}
 
 		if jsonOutput {
-			printJSONResponse(resp)
+			printJSONResponse(&apiResponse{Status: "ok"})
 			return nil
 		}
 
-		var gs struct {
-			ID           string `json:"id"`
-			Name         string `json:"name"`
-			SFTPUsername string `json:"sftp_username"`
-			SFTPPassword string `json:"sftp_password"`
-		}
-		if err := json.Unmarshal(resp.Data, &gs); err != nil {
-			return fmt.Errorf("parsing response: %w", err)
-		}
-		fmt.Printf("Gameserver %s created (id: %s).\n", gs.Name, gs.ID)
-		if gs.SFTPUsername != "" && gs.SFTPPassword != "" {
-			fmt.Printf("SFTP username: %s\n", gs.SFTPUsername)
-			fmt.Printf("SFTP password: %s (will not be shown again)\n", gs.SFTPPassword)
-		}
+		fmt.Printf("Gameserver %s deleted.\n", gsID[:8])
 		return nil
 	},
 }
 
+// --- Update (gameservers only, not top-level) ---
+
 var gameserversUpdateCmd = &cobra.Command{
-	Use:   "update <gameserver>",
+	Use:   "update <name-or-id>",
 	Short: "Update a gameserver (must be stopped)",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -242,6 +328,7 @@ var gameserversUpdateCmd = &cobra.Command{
 			v, _ := cmd.Flags().GetBool("auto-restart")
 			body["auto_restart"] = v
 		}
+
 		resp, err := apiPatch("/api/gameservers/"+gsID, body)
 		if err != nil {
 			return exitError(err)
@@ -257,37 +344,17 @@ var gameserversUpdateCmd = &cobra.Command{
 	},
 }
 
-var gameserversDeleteCmd = &cobra.Command{
-	Use:   "delete <gameserver>",
-	Short: "Delete a gameserver",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		gsID, err := resolveGameserverID(args[0])
-		if err != nil {
-			return exitError(err)
-		}
-
-		if !confirmAction(fmt.Sprintf("Delete gameserver %s?", gsID[:8])) {
-			fmt.Println("Aborted.")
-			return nil
-		}
-
-		_, err = apiDelete("/api/gameservers/" + gsID)
-		if err != nil {
-			return exitError(err)
-		}
-
-		if jsonOutput {
-			printJSONResponse(&apiResponse{Status: "ok"})
-			return nil
-		}
-
-		fmt.Printf("Gameserver %s deleted.\n", gsID[:8])
-		return nil
-	},
+func init() {
+	gameserversUpdateCmd.Flags().String("name", "", "Gameserver name")
+	gameserversUpdateCmd.Flags().StringSlice("port", nil, "Port mapping (name:host:container/proto)")
+	gameserversUpdateCmd.Flags().StringSlice("env", nil, "Environment variable (KEY=VALUE)")
+	gameserversUpdateCmd.Flags().String("memory", "", "Memory limit (e.g. 512m, 4g, 2048)")
+	gameserversUpdateCmd.Flags().Float64("cpu", 0, "CPU limit in cores")
+	gameserversUpdateCmd.Flags().Bool("auto-restart", false, "Auto-restart on crash")
 }
 
-// parseMemory parses human-friendly memory strings like "4g", "512m", "2048" into MB.
+// --- Parsing helpers ---
+
 func parseMemory(s string) (int, error) {
 	if s == "" {
 		return 0, nil
@@ -295,12 +362,10 @@ func parseMemory(s string) (int, error) {
 
 	s = strings.TrimSpace(strings.ToLower(s))
 
-	// Try plain number (assumed MB)
 	if mb, err := strconv.Atoi(s); err == nil {
 		return mb, nil
 	}
 
-	// Strip trailing "b" (e.g. "4gb" -> "4g", "512mb" -> "512m")
 	s = strings.TrimSuffix(s, "b")
 
 	if len(s) < 2 {
@@ -324,11 +389,9 @@ func parseMemory(s string) (int, error) {
 	}
 }
 
-// parsePorts parses --port flags in format "name:host_port:container_port/protocol"
 func parsePorts(flags []string) ([]map[string]any, error) {
 	var ports []map[string]any
 	for _, f := range flags {
-		// Split protocol from the rest
 		proto := "tcp"
 		if idx := strings.LastIndex(f, "/"); idx != -1 {
 			proto = f[idx+1:]
@@ -359,7 +422,6 @@ func parsePorts(flags []string) ([]map[string]any, error) {
 	return ports, nil
 }
 
-// parseEnvFlags parses --env flags in format "KEY=VALUE"
 func parseEnvFlags(flags []string) map[string]string {
 	env := make(map[string]string)
 	for _, f := range flags {
@@ -368,30 +430,4 @@ func parseEnvFlags(flags []string) map[string]string {
 		}
 	}
 	return env
-}
-
-func init() {
-	gameserversListCmd.Flags().String("game", "", "Filter by game ID")
-	gameserversListCmd.Flags().String("status", "", "Filter by status")
-
-	gameserversCreateCmd.Flags().String("name", "", "Gameserver name")
-	gameserversCreateCmd.Flags().String("game", "", "Game ID")
-	gameserversCreateCmd.Flags().StringSlice("port", nil, "Port mapping (name:host:container/proto)")
-	gameserversCreateCmd.Flags().StringSlice("env", nil, "Environment variable (KEY=VALUE)")
-	gameserversCreateCmd.Flags().String("memory", "", "Memory limit (e.g. 512m, 4g, 2048)")
-	gameserversCreateCmd.Flags().Float64("cpu", 0, "CPU limit")
-	gameserversCreateCmd.Flags().String("node", "", "Worker node ID for placement (multi-node only)")
-	gameserversCreateCmd.Flags().Bool("auto-restart", false, "Auto-restart on crash")
-
-	gameserversUpdateCmd.Flags().String("name", "", "Gameserver name")
-	gameserversUpdateCmd.Flags().StringSlice("port", nil, "Port mapping (name:host:container/proto)")
-	gameserversUpdateCmd.Flags().StringSlice("env", nil, "Environment variable (KEY=VALUE)")
-	gameserversUpdateCmd.Flags().String("memory", "", "Memory limit (e.g. 512m, 4g, 2048)")
-	gameserversUpdateCmd.Flags().Float64("cpu", 0, "CPU limit")
-	gameserversUpdateCmd.Flags().Bool("auto-restart", false, "Auto-restart on crash")
-
-	gameserversCmd.AddCommand(
-		gameserversListCmd, gameserversGetCmd, gameserversCreateCmd,
-		gameserversUpdateCmd, gameserversDeleteCmd,
-	)
 }

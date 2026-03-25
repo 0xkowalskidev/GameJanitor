@@ -9,7 +9,19 @@ import (
 
 var schedulesCmd = &cobra.Command{
 	Use:   "schedules",
-	Short: "Manage schedules",
+	Short: "Manage scheduled tasks",
+}
+
+func init() {
+	schedulesCreateCmd.Flags().String("name", "", "Schedule name")
+	schedulesCreateCmd.Flags().String("type", "", "Schedule type (restart, backup, command, update)")
+	schedulesCreateCmd.Flags().String("cron", "", "Cron expression")
+	schedulesCreateCmd.Flags().String("payload", "", "JSON payload (for command type)")
+	schedulesUpdateCmd.Flags().Bool("enabled", false, "Enable/disable schedule")
+	schedulesUpdateCmd.Flags().String("cron", "", "Cron expression")
+	schedulesUpdateCmd.Flags().String("name", "", "Schedule name")
+
+	schedulesCmd.AddCommand(schedulesListCmd, schedulesCreateCmd, schedulesUpdateCmd, schedulesDeleteCmd)
 }
 
 var schedulesListCmd = &cobra.Command{
@@ -38,7 +50,6 @@ var schedulesListCmd = &cobra.Command{
 			Type     string `json:"type"`
 			CronExpr string `json:"cron_expr"`
 			Enabled  bool   `json:"enabled"`
-			LastRun  string `json:"last_run"`
 			NextRun  string `json:"next_run"`
 		}
 		if err := json.Unmarshal(resp.Data, &schedules); err != nil {
@@ -77,13 +88,14 @@ var schedulesCreateCmd = &cobra.Command{
 		if err != nil {
 			return exitError(err)
 		}
+
 		name, _ := cmd.Flags().GetString("name")
 		schedType, _ := cmd.Flags().GetString("type")
 		cronExpr, _ := cmd.Flags().GetString("cron")
 		payload, _ := cmd.Flags().GetString("payload")
 
 		if name == "" || schedType == "" || cronExpr == "" {
-			return fmt.Errorf("--name, --type, and --cron are required")
+			return exitError(fmt.Errorf("--name, --type, and --cron are required"))
 		}
 
 		body := map[string]any{
@@ -94,7 +106,7 @@ var schedulesCreateCmd = &cobra.Command{
 		if payload != "" {
 			var p json.RawMessage
 			if err := json.Unmarshal([]byte(payload), &p); err != nil {
-				return fmt.Errorf("invalid payload JSON: %w", err)
+				return exitError(fmt.Errorf("invalid payload JSON: %w", err))
 			}
 			body["payload"] = p
 		}
@@ -134,8 +146,8 @@ var schedulesUpdateCmd = &cobra.Command{
 		if err != nil {
 			return exitError(err)
 		}
-		body := map[string]any{}
 
+		body := map[string]any{}
 		if cmd.Flags().Changed("enabled") {
 			enabled, _ := cmd.Flags().GetBool("enabled")
 			body["enabled"] = enabled
@@ -150,7 +162,7 @@ var schedulesUpdateCmd = &cobra.Command{
 		}
 
 		if len(body) == 0 {
-			return fmt.Errorf("no update flags specified")
+			return exitError(fmt.Errorf("no update flags specified"))
 		}
 
 		resp, err := apiPatch("/api/gameservers/"+gsID+"/schedules/"+id, body)
@@ -163,7 +175,7 @@ var schedulesUpdateCmd = &cobra.Command{
 			return nil
 		}
 
-		fmt.Printf("Schedule %s updated.\n", id)
+		fmt.Printf("Schedule %s updated.\n", id[:8])
 		return nil
 	},
 }
@@ -200,16 +212,4 @@ var schedulesDeleteCmd = &cobra.Command{
 		fmt.Printf("Schedule %s deleted.\n", id[:8])
 		return nil
 	},
-}
-
-func init() {
-	schedulesCreateCmd.Flags().String("name", "", "Schedule name")
-	schedulesCreateCmd.Flags().String("type", "", "Schedule type (restart, backup, command, update)")
-	schedulesCreateCmd.Flags().String("cron", "", "Cron expression")
-	schedulesCreateCmd.Flags().String("payload", "", "JSON payload (for command type)")
-	schedulesUpdateCmd.Flags().Bool("enabled", false, "Enable/disable schedule")
-	schedulesUpdateCmd.Flags().String("cron", "", "Cron expression")
-	schedulesUpdateCmd.Flags().String("name", "", "Schedule name")
-
-	schedulesCmd.AddCommand(schedulesListCmd, schedulesCreateCmd, schedulesUpdateCmd, schedulesDeleteCmd)
 }

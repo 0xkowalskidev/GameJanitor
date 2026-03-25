@@ -10,15 +10,12 @@ import (
 var genWorkerCertCmd = &cobra.Command{
 	Use:   "gen-worker-cert <worker-id>",
 	Short: "Generate a TLS client certificate for a worker node",
-	Long:  "Generates a worker certificate signed by the controller CA. Copy the CA cert, worker cert, and worker key to the worker node.",
 	Args:  cobra.ExactArgs(1),
 	RunE:  runGenWorkerCert,
 }
 
 func init() {
 	genWorkerCertCmd.Flags().StringP("data-dir", "d", "/var/lib/gamejanitor", "Data directory (must match the controller's data-dir)")
-	genWorkerCertCmd.GroupID = "server"
-	rootCmd.AddCommand(genWorkerCertCmd)
 }
 
 func runGenWorkerCert(cmd *cobra.Command, args []string) error {

@@ -7,72 +7,45 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// --- Start / Stop / Restart ---
+
 var startCmd = &cobra.Command{
-	Use:   "start <gameserver>",
-	Short: "Start a gameserver (or use --all / --node for bulk)",
+	Use:   "start <name-or-id>",
+	Short: "Start a gameserver",
 	Args:  cobra.MaximumNArgs(1),
 	RunE:  runAction("start", "Starting"),
 }
 
 var stopCmd = &cobra.Command{
-	Use:   "stop <gameserver>",
-	Short: "Stop a gameserver (or use --all / --node for bulk)",
+	Use:   "stop <name-or-id>",
+	Short: "Stop a gameserver",
 	Args:  cobra.MaximumNArgs(1),
 	RunE:  runAction("stop", "Stopping"),
 }
 
 var restartCmd = &cobra.Command{
-	Use:   "restart <gameserver>",
-	Short: "Restart a gameserver (or use --all / --node for bulk)",
+	Use:   "restart <name-or-id>",
+	Short: "Restart a gameserver",
 	Args:  cobra.MaximumNArgs(1),
 	RunE:  runAction("restart", "Restarting"),
 }
 
 var updateGameCmd = &cobra.Command{
-	Use:   "update-game <gameserver>",
+	Use:   "update-game <name-or-id>",
 	Short: "Update a gameserver's game to the latest version",
 	Args:  cobra.ExactArgs(1),
 	RunE:  runAction("update-game", "Updating game for"),
 }
 
-var reinstallCmd = &cobra.Command{
-	Use:   "reinstall <gameserver>",
-	Short: "Reinstall a gameserver (preserves data)",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		id, err := resolveGameserverID(args[0])
-		if err != nil {
-			return exitError(err)
-		}
-
-		if !confirmAction(fmt.Sprintf("Reinstall gameserver %s?", id[:8])) {
-			fmt.Println("Aborted.")
-			return nil
-		}
-
-		if !jsonOutput {
-			fmt.Printf("Reinstalling gameserver %s...\n", id[:8])
-		}
-
-		resp, err := apiPost("/api/gameservers/"+id+"/reinstall", nil)
-		if err != nil {
-			return exitError(err)
-		}
-
-		if jsonOutput {
-			printJSONResponse(resp)
-			return nil
-		}
-
-		var gs struct {
-			Status string `json:"status"`
-		}
-		if err := json.Unmarshal(resp.Data, &gs); err != nil {
-			return fmt.Errorf("parsing response: %w", err)
-		}
-		fmt.Printf("Gameserver %s is now %s.\n", id[:8], gs.Status)
-		return nil
-	},
+func init() {
+	for _, cmd := range []*cobra.Command{startCmd, stopCmd, restartCmd} {
+		cmd.Flags().Bool("all", false, "Apply to all gameservers")
+		cmd.Flags().String("node", "", "Apply to all gameservers on a specific node")
+	}
+	logsCmd.Flags().Int("tail", 100, "Number of lines to show")
+	logsCmd.Flags().BoolP("follow", "f", false, "Stream live logs")
+	logsCmd.Flags().Bool("service", false, "Show gamejanitor service logs instead of gameserver logs")
+	migrateCmd.Flags().String("node", "", "Target worker node ID")
 }
 
 func runAction(action, verb string) func(*cobra.Command, []string) error {
@@ -81,7 +54,7 @@ func runAction(action, verb string) func(*cobra.Command, []string) error {
 		nodeID, _ := cmd.Flags().GetString("node")
 
 		if all || nodeID != "" {
-			return runBulkAction(cmd, action, verb, all, nodeID)
+			return runBulkAction(action, verb, all, nodeID)
 		}
 
 		if len(args) == 0 {
@@ -118,7 +91,7 @@ func runAction(action, verb string) func(*cobra.Command, []string) error {
 	}
 }
 
-func runBulkAction(cmd *cobra.Command, action, verb string, all bool, nodeID string) error {
+func runBulkAction(action, verb string, all bool, nodeID string) error {
 	scope := "all gameservers"
 	if nodeID != "" {
 		scope = fmt.Sprintf("all gameservers on node %s", nodeID)
@@ -165,9 +138,9 @@ func runBulkAction(cmd *cobra.Command, action, verb string, all bool, nodeID str
 	succeeded := 0
 	for _, r := range results {
 		if r.Error != "" {
-			fmt.Printf("  ✗ %s (%s): %s\n", r.Name, r.ID[:8], r.Error)
+			fmt.Printf("  x %s (%s): %s\n", r.Name, r.ID[:8], r.Error)
 		} else {
-			fmt.Printf("  ✓ %s (%s): %s\n", r.Name, r.ID[:8], r.Status)
+			fmt.Printf("  + %s (%s): %s\n", r.Name, r.ID[:8], r.Status)
 			succeeded++
 		}
 	}
@@ -175,11 +148,19 @@ func runBulkAction(cmd *cobra.Command, action, verb string, all bool, nodeID str
 	return nil
 }
 
+// --- Status ---
+
 var statusCmd = &cobra.Command{
-	Use:   "status <gameserver>",
-	Short: "Get gameserver status with container info",
-	Args:  cobra.ExactArgs(1),
+	Use:   "status [name-or-id]",
+	Short: "Show gameserver or cluster status",
+	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// No argument: cluster overview (list all gameservers with status)
+		if len(args) == 0 {
+			return runStatusOverview()
+		}
+
+		// With argument: detailed status for one gameserver
 		gsID, err := resolveGameserverID(args[0])
 		if err != nil {
 			return exitError(err)
@@ -221,17 +202,65 @@ var statusCmd = &cobra.Command{
 	},
 }
 
+func runStatusOverview() error {
+	resp, err := apiGet("/api/gameservers")
+	if err != nil {
+		return exitError(err)
+	}
+
+	if jsonOutput {
+		printJSONResponse(resp)
+		return nil
+	}
+
+	var gameservers []struct {
+		ID     string `json:"id"`
+		Name   string `json:"name"`
+		GameID string `json:"game_id"`
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(resp.Data, &gameservers); err != nil {
+		return fmt.Errorf("parsing response: %w", err)
+	}
+
+	if len(gameservers) == 0 {
+		fmt.Println("No gameservers found.")
+		return nil
+	}
+
+	w := newTabWriter()
+	fmt.Fprintln(w, "NAME\tGAME\tSTATUS")
+	for _, gs := range gameservers {
+		fmt.Fprintf(w, "%s\t%s\t%s\n", gs.Name, gs.GameID, gs.Status)
+	}
+	w.Flush()
+	return nil
+}
+
+// --- Logs ---
+
 var logsCmd = &cobra.Command{
-	Use:   "logs <gameserver>",
-	Short: "Show gameserver container logs",
-	Args:  cobra.ExactArgs(1),
+	Use:   "logs <name-or-id>",
+	Short: "Show gameserver or service logs",
+	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		isService, _ := cmd.Flags().GetBool("service")
+		if isService {
+			// TODO: implement service log retrieval (journalctl integration)
+			return exitError(fmt.Errorf("--service flag not yet implemented"))
+		}
+
+		if len(args) == 0 {
+			return exitError(fmt.Errorf("requires a gameserver argument, or use --service for gamejanitor logs"))
+		}
+
 		gsID, err := resolveGameserverID(args[0])
 		if err != nil {
 			return exitError(err)
 		}
 
 		tail, _ := cmd.Flags().GetInt("tail")
+		// TODO: implement --follow (SSE streaming)
 		path := fmt.Sprintf("/api/gameservers/%s/logs?tail=%d", gsID, tail)
 
 		resp, err := apiGet(path)
@@ -258,9 +287,11 @@ var logsCmd = &cobra.Command{
 	},
 }
 
+// --- Command ---
+
 var commandCmd = &cobra.Command{
-	Use:   "command <gameserver> <command>",
-	Short: "Send a command to a running gameserver",
+	Use:   "command <name-or-id> <command>",
+	Short: "Send a console command to a gameserver",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		gsID, err := resolveGameserverID(args[0])
@@ -291,9 +322,53 @@ var commandCmd = &cobra.Command{
 	},
 }
 
+// --- Reinstall ---
+
+var reinstallCmd = &cobra.Command{
+	Use:   "reinstall <name-or-id>",
+	Short: "Reinstall a gameserver (preserves data)",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		id, err := resolveGameserverID(args[0])
+		if err != nil {
+			return exitError(err)
+		}
+
+		if !confirmAction(fmt.Sprintf("Reinstall gameserver %s?", id[:8])) {
+			fmt.Println("Aborted.")
+			return nil
+		}
+
+		if !jsonOutput {
+			fmt.Printf("Reinstalling gameserver %s...\n", id[:8])
+		}
+
+		resp, err := apiPost("/api/gameservers/"+id+"/reinstall", nil)
+		if err != nil {
+			return exitError(err)
+		}
+
+		if jsonOutput {
+			printJSONResponse(resp)
+			return nil
+		}
+
+		var gs struct {
+			Status string `json:"status"`
+		}
+		if err := json.Unmarshal(resp.Data, &gs); err != nil {
+			return fmt.Errorf("parsing response: %w", err)
+		}
+		fmt.Printf("Gameserver %s is now %s.\n", id[:8], gs.Status)
+		return nil
+	},
+}
+
+// --- Migrate ---
+
 var migrateCmd = &cobra.Command{
-	Use:   "migrate <gameserver> --node <target-node>",
-	Short: "Migrate a gameserver to a different worker node",
+	Use:   "migrate <name-or-id>",
+	Short: "Migrate a gameserver to another node",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		gsID, err := resolveGameserverID(args[0])
@@ -329,15 +404,4 @@ var migrateCmd = &cobra.Command{
 		fmt.Printf("Gameserver %s migrated to node %s.\n", gsID[:8], nodeID)
 		return nil
 	},
-}
-
-func init() {
-	for _, cmd := range []*cobra.Command{startCmd, stopCmd, restartCmd} {
-		cmd.Flags().Bool("all", false, "Apply to all gameservers")
-		cmd.Flags().String("node", "", "Apply to all gameservers on a specific node")
-	}
-	logsCmd.Flags().Int("tail", 100, "Number of lines to show")
-	migrateCmd.Flags().String("node", "", "Target worker node ID")
-
-	gameserversCmd.AddCommand(startCmd, stopCmd, restartCmd, updateGameCmd, reinstallCmd, statusCmd, logsCmd, commandCmd, migrateCmd)
 }
