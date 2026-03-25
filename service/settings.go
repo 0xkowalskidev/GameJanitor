@@ -253,6 +253,14 @@ func (s *SettingsService) IsKnown(key string) bool {
 	return ok
 }
 
+// IsReadOnly returns true if the key is a read-only infrastructure setting.
+func (s *SettingsService) IsReadOnly(key string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	_, ok := s.readOnly[key]
+	return ok
+}
+
 // ResolveConnectionIP returns the connection IP for a gameserver on the given node.
 // Priority: global override > worker external IP > worker LAN IP > empty (caller falls back to 127.0.0.1).
 func (s *SettingsService) ResolveConnectionIP(nodeID *string) (ip string, configured bool) {
