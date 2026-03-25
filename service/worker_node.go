@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/warsmite/gamejanitor/models"
+	"github.com/warsmite/gamejanitor/validate"
 	"github.com/warsmite/gamejanitor/worker"
 )
 
@@ -86,7 +87,19 @@ type WorkerNodeUpdate struct {
 	Tags         *models.Labels `json:"tags,omitempty"`
 }
 
+func (u *WorkerNodeUpdate) Validate() error {
+	var fe validate.FieldErrors
+	fe.MinIntPtr("max_memory_mb", u.MaxMemoryMB, 0)
+	fe.MinFloatPtr("max_cpu", u.MaxCPU, 0)
+	fe.MinIntPtr("max_storage_mb", u.MaxStorageMB, 0)
+	return fe.Err()
+}
+
 func (s *WorkerNodeService) Update(ctx context.Context, id string, update *WorkerNodeUpdate) error {
+	if err := update.Validate(); err != nil {
+		return err
+	}
+
 	if update.MaxMemoryMB != nil || update.MaxCPU != nil || update.MaxStorageMB != nil {
 		if err := models.SetWorkerNodeLimits(s.db, id, update.MaxMemoryMB, update.MaxCPU, update.MaxStorageMB); err != nil {
 			return err

@@ -12,7 +12,6 @@ import (
 	"log/slog"
 	"net/http"
 	"path"
-	"strings"
 	"time"
 
 	"github.com/warsmite/gamejanitor/models"
@@ -89,11 +88,14 @@ func (s *WebhookEndpointService) Get(id string) (*WebhookEndpointView, error) {
 }
 
 func (s *WebhookEndpointService) Create(url, description, secret string, events []string, enabled bool) (*WebhookEndpointView, error) {
-	if url == "" {
-		return nil, ErrBadRequest("url is required")
+	ep := &models.WebhookEndpoint{
+		Description: description,
+		URL:         url,
+		Secret:      secret,
+		Enabled:     enabled,
 	}
-	if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
-		return nil, ErrBadRequest("url must start with http:// or https://")
+	if err := ep.Validate(); err != nil {
+		return nil, err
 	}
 
 	if len(events) == 0 {
@@ -104,13 +106,7 @@ func (s *WebhookEndpointService) Create(url, description, secret string, events 
 	}
 
 	eventsJSON, _ := json.Marshal(events)
-	ep := &models.WebhookEndpoint{
-		Description: description,
-		URL:         url,
-		Secret:      secret,
-		Events:      string(eventsJSON),
-		Enabled:     enabled,
-	}
+	ep.Events = string(eventsJSON)
 	if err := models.CreateWebhookEndpoint(s.db, ep); err != nil {
 		return nil, err
 	}
@@ -133,9 +129,6 @@ func (s *WebhookEndpointService) Update(id string, description, url, secret *str
 		ep.Description = *description
 	}
 	if url != nil {
-		if !strings.HasPrefix(*url, "http://") && !strings.HasPrefix(*url, "https://") {
-			return nil, ErrBadRequest("url must start with http:// or https://")
-		}
 		ep.URL = *url
 	}
 	if secret != nil {
@@ -150,6 +143,10 @@ func (s *WebhookEndpointService) Update(id string, description, url, secret *str
 	}
 	if enabled != nil {
 		ep.Enabled = *enabled
+	}
+
+	if err := ep.Validate(); err != nil {
+		return nil, err
 	}
 
 	if err := models.UpdateWebhookEndpoint(s.db, ep); err != nil {

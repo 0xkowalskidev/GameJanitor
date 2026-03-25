@@ -32,7 +32,7 @@ func (s *ScheduleService) GetSchedule(id string) (*models.Schedule, error) {
 }
 
 func (s *ScheduleService) CreateSchedule(ctx context.Context, schedule *models.Schedule) error {
-	if err := validateScheduleType(schedule.Type); err != nil {
+	if err := schedule.ValidateCreate(); err != nil {
 		return err
 	}
 	if err := validateCronExpr(schedule.CronExpr); err != nil {
@@ -68,7 +68,7 @@ func (s *ScheduleService) CreateSchedule(ctx context.Context, schedule *models.S
 }
 
 func (s *ScheduleService) UpdateSchedule(ctx context.Context, schedule *models.Schedule) error {
-	if err := validateScheduleType(schedule.Type); err != nil {
+	if err := schedule.ValidateCreate(); err != nil {
 		return err
 	}
 	if err := validateCronExpr(schedule.CronExpr); err != nil {
@@ -153,20 +153,6 @@ func (s *ScheduleService) ToggleSchedule(ctx context.Context, id string) error {
 		Schedule:     schedule,
 	})
 
-	return nil
-}
-
-var validScheduleTypes = map[string]bool{
-	"restart": true,
-	"backup":  true,
-	"command": true,
-	"update":  true,
-}
-
-func validateScheduleType(t string) error {
-	if !validScheduleTypes[t] {
-		return ErrBadRequestf("invalid schedule type: %s (must be restart, backup, command, or update)", t)
-	}
 	return nil
 }
 

@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/warsmite/gamejanitor/models"
+	"github.com/warsmite/gamejanitor/validate"
 )
 
 // Setting key constants
@@ -51,6 +52,50 @@ var Defaults = map[string]any{
 	SettingRequireMemoryLimit:  false,
 	SettingRequireCPULimit:     false,
 	SettingRequireStorageLimit: false,
+}
+
+// settingValidators defines per-key validation rules applied after type coercion.
+// Keys without an entry need no validation beyond type checking.
+var settingValidators = map[string]func(any) error{
+	SettingPortRangeStart: validatePort,
+	SettingPortRangeEnd:   validatePort,
+	SettingPortUniqueness: validateOneOf("cluster", "node"),
+	SettingPortMode:       validateOneOf("auto", "manual"),
+	SettingMaxBackups:     validateMinInt(0),
+	SettingRateLimitPerIP:    validateMinInt(1),
+	SettingRateLimitPerToken: validateMinInt(1),
+	SettingRateLimitLogin:    validateMinInt(1),
+	SettingEventRetention:    validateMinInt(1),
+}
+
+func validatePort(v any) error {
+	n, _ := v.(int)
+	if n < 1 || n > 65535 {
+		return fmt.Errorf("must be between 1 and 65535 (got %d)", n)
+	}
+	return nil
+}
+
+func validateMinInt(min int) func(any) error {
+	return func(v any) error {
+		n, _ := v.(int)
+		if n < min {
+			return fmt.Errorf("must be >= %d (got %d)", min, n)
+		}
+		return nil
+	}
+}
+
+func validateOneOf(allowed ...string) func(any) error {
+	return func(v any) error {
+		s, _ := v.(string)
+		for _, a := range allowed {
+			if s == a {
+				return nil
+			}
+		}
+		return fmt.Errorf("must be one of %v (got %q)", allowed, s)
+	}
 }
 
 type SettingsService struct {
@@ -114,6 +159,13 @@ func (s *SettingsService) ApplyConfig(settings map[string]any) {
 		if err != nil {
 			s.log.Warn("invalid config value for setting", "key", key, "value", val, "error", err)
 			continue
+		}
+
+		if validator, ok := settingValidators[key]; ok {
+			if err := validator(typed); err != nil {
+				s.log.Warn("invalid config value for setting", "key", key, "value", val, "error", err)
+				continue
+			}
 		}
 
 		s.values[key] = typed
@@ -194,6 +246,10 @@ func (s *SettingsService) Set(key string, value any) error {
 		return fmt.Errorf("invalid value for %s: %w", key, err)
 	}
 
+	if err := s.validateSetting(key, typed); err != nil {
+		return err
+	}
+
 	if err := models.SetSetting(s.db, key, fmt.Sprintf("%v", typed)); err != nil {
 		return err
 	}
@@ -201,6 +257,39 @@ func (s *SettingsService) Set(key string, value any) error {
 	s.mu.Lock()
 	s.values[key] = typed
 	s.mu.Unlock()
+	return nil
+}
+
+// validateSetting runs per-key validation and cross-field checks.
+func (s *SettingsService) validateSetting(key string, typed any) error {
+	if validator, ok := settingValidators[key]; ok {
+		if err := validator(typed); err != nil {
+			var fe validate.FieldErrors
+			fe.Add(key, err.Error())
+			return fe.Err()
+		}
+	}
+
+	// Cross-field: port_range_start must be <= port_range_end
+	if key == SettingPortRangeStart {
+		start, _ := typed.(int)
+		end := s.GetInt(SettingPortRangeEnd)
+		if start > end {
+			var fe validate.FieldErrors
+			fe.Addf(key, "port_range_start (%d) must be <= port_range_end (%d)", start, end)
+			return fe.Err()
+		}
+	}
+	if key == SettingPortRangeEnd {
+		end, _ := typed.(int)
+		start := s.GetInt(SettingPortRangeStart)
+		if start > end {
+			var fe validate.FieldErrors
+			fe.Addf(key, "port_range_end (%d) must be >= port_range_start (%d)", end, start)
+			return fe.Err()
+		}
+	}
+
 	return nil
 }
 

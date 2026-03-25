@@ -80,11 +80,6 @@ func (h *GameserverHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if gs.Name == "" || gs.GameID == "" {
-		respondError(w, http.StatusBadRequest, "name and game_id are required")
-		return
-	}
-
 	rawPassword, err := h.svc.CreateGameserver(r.Context(), &gs)
 	if err != nil {
 		h.log.Error("creating gameserver", "error", err)
