@@ -35,42 +35,7 @@ type statusChangedData struct {
 	OldStatus    string             `json:"old_status"`
 	NewStatus    string             `json:"new_status"`
 	ErrorReason  string             `json:"error_reason,omitempty"`
-	Gameserver   *WebhookGameserver `json:"gameserver,omitempty"`
-}
-
-type WebhookGameserver struct {
-	Name          string  `json:"name"`
-	GameID        string  `json:"game_id"`
-	NodeID        *string `json:"node_id"`
-	MemoryLimitMB int     `json:"memory_limit_mb"`
-}
-
-type gameserverEventData struct {
-	Actor         Actor   `json:"actor"`
-	GameserverID  string  `json:"gameserver_id"`
-	Name          string  `json:"name"`
-	GameID        string  `json:"game_id"`
-	NodeID        *string `json:"node_id"`
-	MemoryLimitMB int     `json:"memory_limit_mb"`
-}
-
-type backupEventData struct {
-	Actor        Actor  `json:"actor"`
-	GameserverID string `json:"gameserver_id"`
-	BackupID     string `json:"backup_id"`
-	BackupName   string `json:"backup_name,omitempty"`
-	Error        string `json:"error,omitempty"`
-}
-
-type workerEventData struct {
-	WorkerID string `json:"worker_id"`
-}
-
-type scheduledTaskEventData struct {
-	GameserverID string `json:"gameserver_id"`
-	ScheduleID   string `json:"schedule_id"`
-	TaskType     string `json:"task_type"`
-	Error        string `json:"error,omitempty"`
+	Gameserver   *models.Gameserver `json:"gameserver,omitempty"`
 }
 
 type WebhookWorker struct {
@@ -143,69 +108,38 @@ func (w *WebhookWorker) enqueueEvent(event WebhookEvent) {
 		return
 	}
 
-	// Build payload data once (shared across all endpoints)
+	// Build payload data — action events carry their own resource state,
+	// lifecycle events are lightweight with just IDs.
 	var payloadData any
 	switch ev := event.(type) {
 	case StatusEvent:
-		data := statusChangedData{
+		gs, _ := models.GetGameserver(w.db, ev.GameserverID)
+		if gs != nil {
+			gs.PopulateNode(w.db)
+		}
+		payloadData = statusChangedData{
 			GameserverID: ev.GameserverID,
 			OldStatus:    ev.OldStatus,
 			NewStatus:    ev.NewStatus,
 			ErrorReason:  ev.ErrorReason,
-		}
-		gs, err := models.GetGameserver(w.db, ev.GameserverID)
-		if err != nil {
-			w.log.Warn("webhook: failed to fetch gameserver for enrichment", "gameserver_id", ev.GameserverID, "error", err)
-		} else if gs != nil {
-			data.Gameserver = &WebhookGameserver{
-				Name:          gs.Name,
-				GameID:        gs.GameID,
-				NodeID:        gs.NodeID,
-				MemoryLimitMB: gs.MemoryLimitMB,
-			}
-		}
-		payloadData = data
-
-	case GameserverEvent:
-		payloadData = gameserverEventData{
-			Actor:         ev.Actor,
-			GameserverID:  ev.GameserverID,
-			Name:          ev.Name,
-			GameID:        ev.GameID,
-			NodeID:        ev.NodeID,
-			MemoryLimitMB: ev.MemoryLimitMB,
+			Gameserver:   gs,
 		}
 
-	case BackupEvent:
-		payloadData = backupEventData{
-			Actor:        ev.Actor,
-			GameserverID: ev.GameserverID,
-			BackupID:     ev.BackupID,
-			BackupName:   ev.BackupName,
-			Error:        ev.Error,
-		}
-
-	case WorkerEvent:
-		payloadData = workerEventData{
-			WorkerID: ev.WorkerID,
-		}
-
+	// Action events — self-contained with full resource state
+	case GameserverActionEvent:
+		payloadData = ev
+	case BackupActionEvent:
+		payloadData = ev
+	case WorkerActionEvent:
+		payloadData = ev
 	case ScheduleActionEvent:
-		payloadData = map[string]any{
-			"actor":         ev.Actor,
-			"gameserver_id": ev.GameserverID,
-			"schedule_id":   ev.ScheduleID,
-			"schedule_name": ev.ScheduleName,
-		}
-
+		payloadData = ev
 	case ScheduledTaskEvent:
-		payloadData = scheduledTaskEventData{
-			GameserverID: ev.GameserverID,
-			ScheduleID:   ev.ScheduleID,
-			TaskType:     ev.TaskType,
-			Error:        ev.Error,
-		}
+		payloadData = ev
+	case ModActionEvent:
+		payloadData = ev
 
+	// Lifecycle events — lightweight, just IDs
 	case ImagePullingEvent:
 		payloadData = map[string]string{"gameserver_id": ev.GameserverID}
 	case ContainerCreatingEvent:

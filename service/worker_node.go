@@ -105,16 +105,13 @@ func (s *WorkerNodeService) Update(ctx context.Context, id string, update *Worke
 		}
 	}
 
-	s.broadcaster.Publish(WorkerEvent{
-		Type:         EventWorkerUpdated,
-		Timestamp:    time.Now(),
-		Actor:        ActorFromContext(ctx),
-		WorkerID:     id,
-		MaxMemoryMB:  update.MaxMemoryMB,
-		MaxCPU:       update.MaxCPU,
-		MaxStorageMB: update.MaxStorageMB,
-		Cordoned:     update.Cordoned,
-		Tags:         update.Tags,
+	view, _ := s.Get(id)
+	s.broadcaster.Publish(WorkerActionEvent{
+		Type:      EventWorkerUpdated,
+		Timestamp: time.Now(),
+		Actor:     ActorFromContext(ctx),
+		WorkerID:  id,
+		Worker:    view,
 	})
 
 	return nil

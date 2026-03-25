@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"time"
+
+	"github.com/warsmite/gamejanitor/models"
 )
 
 // Action events — user/schedule initiated, carry actor
@@ -209,82 +211,73 @@ func ActorFromContext(ctx context.Context) Actor {
 	return Actor{Type: "anonymous"}
 }
 
-type GameserverEvent struct {
-	Type          string    `json:"type"`
-	Timestamp     time.Time `json:"timestamp"`
-	Actor         Actor     `json:"actor"`
-	GameserverID  string    `json:"gameserver_id"`
-	Name          string    `json:"name"`
-	GameID        string    `json:"game_id"`
-	NodeID        *string   `json:"node_id"`
-	MemoryLimitMB int       `json:"memory_limit_mb"`
+// Action events — include full resource state so webhook consumers never need a follow-up API call.
+
+type GameserverActionEvent struct {
+	Type         string             `json:"type"`
+	Timestamp    time.Time          `json:"timestamp"`
+	Actor        Actor              `json:"actor"`
+	GameserverID string             `json:"gameserver_id"`
+	Gameserver   *models.Gameserver `json:"gameserver"`
 }
 
-func (e GameserverEvent) EventType() string        { return e.Type }
-func (e GameserverEvent) EventTimestamp() time.Time { return e.Timestamp }
+func (e GameserverActionEvent) EventType() string        { return e.Type }
+func (e GameserverActionEvent) EventTimestamp() time.Time { return e.Timestamp }
 
-type BackupEvent struct {
-	Type         string    `json:"type"`
-	Timestamp    time.Time `json:"timestamp"`
-	Actor        Actor     `json:"actor"`
-	GameserverID string    `json:"gameserver_id"`
-	BackupID     string    `json:"backup_id"`
-	BackupName   string    `json:"backup_name,omitempty"`
-	Error        string    `json:"error,omitempty"`
+type BackupActionEvent struct {
+	Type         string         `json:"type"`
+	Timestamp    time.Time      `json:"timestamp"`
+	Actor        Actor          `json:"actor"`
+	GameserverID string         `json:"gameserver_id"`
+	Backup       *models.Backup `json:"backup"`
+	Error        string         `json:"error,omitempty"`
 }
 
-func (e BackupEvent) EventType() string        { return e.Type }
-func (e BackupEvent) EventTimestamp() time.Time { return e.Timestamp }
+func (e BackupActionEvent) EventType() string        { return e.Type }
+func (e BackupActionEvent) EventTimestamp() time.Time { return e.Timestamp }
 
-type WorkerEvent struct {
-	Type         string    `json:"type"`
-	Timestamp    time.Time `json:"timestamp"`
-	Actor        Actor     `json:"actor"`
-	WorkerID     string    `json:"worker_id"`
-	MaxMemoryMB  *int      `json:"max_memory_mb,omitempty"`
-	MaxCPU       *float64  `json:"max_cpu,omitempty"`
-	MaxStorageMB *int      `json:"max_storage_mb,omitempty"`
-	Cordoned     *bool     `json:"cordoned,omitempty"`
-	Tags         *[]string `json:"tags,omitempty"`
+type WorkerActionEvent struct {
+	Type      string      `json:"type"`
+	Timestamp time.Time   `json:"timestamp"`
+	Actor     Actor       `json:"actor"`
+	WorkerID  string      `json:"worker_id"`
+	Worker    *WorkerView `json:"worker,omitempty"`
 }
 
-func (e WorkerEvent) EventType() string        { return e.Type }
-func (e WorkerEvent) EventTimestamp() time.Time { return e.Timestamp }
+func (e WorkerActionEvent) EventType() string        { return e.Type }
+func (e WorkerActionEvent) EventTimestamp() time.Time { return e.Timestamp }
 
 type ScheduleActionEvent struct {
-	Type         string    `json:"type"`
-	Timestamp    time.Time `json:"timestamp"`
-	Actor        Actor     `json:"actor"`
-	GameserverID string    `json:"gameserver_id"`
-	ScheduleID   string    `json:"schedule_id"`
-	ScheduleName string    `json:"schedule_name"`
+	Type         string           `json:"type"`
+	Timestamp    time.Time        `json:"timestamp"`
+	Actor        Actor            `json:"actor"`
+	GameserverID string           `json:"gameserver_id"`
+	Schedule     *models.Schedule `json:"schedule"`
 }
 
 func (e ScheduleActionEvent) EventType() string        { return e.Type }
 func (e ScheduleActionEvent) EventTimestamp() time.Time { return e.Timestamp }
 
 type ScheduledTaskEvent struct {
-	Type         string    `json:"type"`
-	Timestamp    time.Time `json:"timestamp"`
-	Actor        Actor     `json:"actor"`
-	GameserverID string    `json:"gameserver_id"`
-	ScheduleID   string    `json:"schedule_id"`
-	TaskType     string    `json:"task_type"`
-	Error        string    `json:"error,omitempty"`
+	Type         string           `json:"type"`
+	Timestamp    time.Time        `json:"timestamp"`
+	Actor        Actor            `json:"actor"`
+	GameserverID string           `json:"gameserver_id"`
+	Schedule     *models.Schedule `json:"schedule"`
+	TaskType     string           `json:"task_type"`
+	Error        string           `json:"error,omitempty"`
 }
 
 func (e ScheduledTaskEvent) EventType() string        { return e.Type }
 func (e ScheduledTaskEvent) EventTimestamp() time.Time { return e.Timestamp }
 
-type ModEvent struct {
-	Type         string    `json:"type"`
-	Timestamp    time.Time `json:"timestamp"`
-	Actor        Actor     `json:"actor"`
-	GameserverID string    `json:"gameserver_id"`
-	ModID        string    `json:"mod_id"`
-	ModName      string    `json:"mod_name"`
-	Source       string    `json:"source"`
+type ModActionEvent struct {
+	Type         string              `json:"type"`
+	Timestamp    time.Time           `json:"timestamp"`
+	Actor        Actor               `json:"actor"`
+	GameserverID string              `json:"gameserver_id"`
+	Mod          *models.InstalledMod `json:"mod"`
 }
 
-func (e ModEvent) EventType() string        { return e.Type }
-func (e ModEvent) EventTimestamp() time.Time { return e.Timestamp }
+func (e ModActionEvent) EventType() string        { return e.Type }
+func (e ModActionEvent) EventTimestamp() time.Time { return e.Timestamp }

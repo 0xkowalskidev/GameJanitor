@@ -86,9 +86,11 @@ func (s *EventStoreSubscriber) storeEvent(event WebhookEvent) {
 
 func extractGameserverID(event WebhookEvent) string {
 	switch e := event.(type) {
-	case GameserverEvent:
+	case GameserverActionEvent:
 		return e.GameserverID
-	case BackupEvent:
+	case BackupActionEvent:
+		return e.GameserverID
+	case ModActionEvent:
 		return e.GameserverID
 	case ScheduleActionEvent:
 		return e.GameserverID
@@ -118,11 +120,13 @@ func extractGameserverID(event WebhookEvent) string {
 
 func extractActor(event WebhookEvent) Actor {
 	switch e := event.(type) {
-	case GameserverEvent:
+	case GameserverActionEvent:
 		return e.Actor
-	case BackupEvent:
+	case BackupActionEvent:
 		return e.Actor
-	case WorkerEvent:
+	case WorkerActionEvent:
+		return e.Actor
+	case ModActionEvent:
 		return e.Actor
 	case ScheduleActionEvent:
 		return e.Actor

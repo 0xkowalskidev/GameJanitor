@@ -61,8 +61,7 @@ func (s *ScheduleService) CreateSchedule(ctx context.Context, schedule *models.S
 		Timestamp:    time.Now(),
 		Actor:        ActorFromContext(ctx),
 		GameserverID: schedule.GameserverID,
-		ScheduleID:   schedule.ID,
-		ScheduleName: schedule.Name,
+		Schedule:     schedule,
 	})
 
 	return nil
@@ -91,8 +90,7 @@ func (s *ScheduleService) UpdateSchedule(ctx context.Context, schedule *models.S
 		Timestamp:    time.Now(),
 		Actor:        ActorFromContext(ctx),
 		GameserverID: schedule.GameserverID,
-		ScheduleID:   schedule.ID,
-		ScheduleName: schedule.Name,
+		Schedule:     schedule,
 	})
 
 	return nil
@@ -112,18 +110,15 @@ func (s *ScheduleService) DeleteSchedule(ctx context.Context, id string) error {
 	}
 
 	gsID := ""
-	name := ""
 	if schedule != nil {
 		gsID = schedule.GameserverID
-		name = schedule.Name
 	}
 	s.broadcaster.Publish(ScheduleActionEvent{
 		Type:         EventScheduleDelete,
 		Timestamp:    time.Now(),
 		Actor:        ActorFromContext(ctx),
 		GameserverID: gsID,
-		ScheduleID:   id,
-		ScheduleName: name,
+		Schedule:     schedule,
 	})
 
 	return nil
@@ -155,8 +150,7 @@ func (s *ScheduleService) ToggleSchedule(ctx context.Context, id string) error {
 		Timestamp:    time.Now(),
 		Actor:        ActorFromContext(ctx),
 		GameserverID: schedule.GameserverID,
-		ScheduleID:   id,
-		ScheduleName: schedule.Name,
+		Schedule:     schedule,
 	})
 
 	return nil

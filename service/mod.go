@@ -258,14 +258,12 @@ func (s *ModService) Install(ctx context.Context, gameserverID string, sourceTyp
 		return nil, fmt.Errorf("saving installed mod: %w", err)
 	}
 
-	s.broadcaster.Publish(ModEvent{
+	s.broadcaster.Publish(ModActionEvent{
 		Type:         EventModInstalled,
 		Timestamp:    time.Now(),
 		Actor:        ActorFromContext(ctx),
 		GameserverID: gameserverID,
-		ModID:        mod.ID,
-		ModName:      mod.Name,
-		Source:       sourceType,
+		Mod:          mod,
 	})
 
 	return mod, nil
@@ -300,14 +298,12 @@ func (s *ModService) Uninstall(ctx context.Context, gameserverID string, modID s
 
 	s.log.Info("mod uninstalled", "gameserver_id", gameserverID, "mod_id", modID, "source", mod.Source, "name", mod.Name)
 
-	s.broadcaster.Publish(ModEvent{
+	s.broadcaster.Publish(ModActionEvent{
 		Type:         EventModUninstalled,
 		Timestamp:    time.Now(),
 		Actor:        ActorFromContext(ctx),
 		GameserverID: gameserverID,
-		ModID:        modID,
-		ModName:      mod.Name,
-		Source:       mod.Source,
+		Mod:          mod,
 	})
 
 	return nil
@@ -363,14 +359,12 @@ func (s *ModService) installWorkshop(ctx context.Context, gs *models.Gameserver,
 		s.log.Warn("failed to write workshop manifest", "gameserver_id", gs.ID, "error", err)
 	}
 
-	s.broadcaster.Publish(ModEvent{
+	s.broadcaster.Publish(ModActionEvent{
 		Type:         EventModInstalled,
 		Timestamp:    time.Now(),
 		Actor:        ActorFromContext(ctx),
 		GameserverID: gs.ID,
-		ModID:        mod.ID,
-		ModName:      mod.Name,
-		Source:       "workshop",
+		Mod:          mod,
 	})
 
 	return mod, nil

@@ -202,15 +202,12 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *models.Gam
 
 	gs.PopulateNode(s.db)
 
-	s.broadcaster.Publish(GameserverEvent{
-		Type:          EventGameserverCreate,
-		Timestamp:     time.Now(),
-		Actor:         ActorFromContext(ctx),
-		GameserverID:  gs.ID,
-		Name:          gs.Name,
-		GameID:        gs.GameID,
-		NodeID:        gs.NodeID,
-		MemoryLimitMB: gs.MemoryLimitMB,
+	s.broadcaster.Publish(GameserverActionEvent{
+		Type:         EventGameserverCreate,
+		Timestamp:    time.Now(),
+		Actor:        ActorFromContext(ctx),
+		GameserverID: gs.ID,
+		Gameserver:   gs,
 	})
 
 	return rawPassword, nil
@@ -479,15 +476,13 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *models.Gam
 		}
 	}
 
-	s.broadcaster.Publish(GameserverEvent{
-		Type:          EventGameserverUpdate,
-		Timestamp:     time.Now(),
-		Actor:         ActorFromContext(ctx),
-		GameserverID:  existing.ID,
-		Name:          existing.Name,
-		GameID:        existing.GameID,
-		NodeID:        existing.NodeID,
-		MemoryLimitMB: existing.MemoryLimitMB,
+	existing.PopulateNode(s.db)
+	s.broadcaster.Publish(GameserverActionEvent{
+		Type:         EventGameserverUpdate,
+		Timestamp:    time.Now(),
+		Actor:        ActorFromContext(ctx),
+		GameserverID: existing.ID,
+		Gameserver:   existing,
 	})
 
 	return needsMigration, nil
@@ -589,15 +584,13 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 		return err
 	}
 
-	s.broadcaster.Publish(GameserverEvent{
-		Type:          EventGameserverDelete,
-		Timestamp:     time.Now(),
-		Actor:         ActorFromContext(ctx),
-		GameserverID:  gs.ID,
-		Name:          gs.Name,
-		GameID:        gs.GameID,
-		NodeID:        gs.NodeID,
-		MemoryLimitMB: gs.MemoryLimitMB,
+	gs.PopulateNode(s.db)
+	s.broadcaster.Publish(GameserverActionEvent{
+		Type:         EventGameserverDelete,
+		Timestamp:    time.Now(),
+		Actor:        ActorFromContext(ctx),
+		GameserverID: gs.ID,
+		Gameserver:   gs,
 	})
 
 	return nil

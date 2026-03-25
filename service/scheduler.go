@@ -171,7 +171,7 @@ func (s *Scheduler) executeTask(scheduleID string) {
 			Timestamp:    time.Now(),
 			Actor:        Actor{Type: "schedule", ScheduleID: scheduleID},
 			GameserverID: schedule.GameserverID,
-			ScheduleID:   scheduleID,
+			Schedule:     schedule,
 			TaskType:     schedule.Type,
 			Error:        taskErr.Error(),
 		})
@@ -182,7 +182,7 @@ func (s *Scheduler) executeTask(scheduleID string) {
 			Timestamp:    time.Now(),
 			Actor:        Actor{Type: "schedule", ScheduleID: scheduleID},
 			GameserverID: schedule.GameserverID,
-			ScheduleID:   scheduleID,
+			Schedule:     schedule,
 			TaskType:     schedule.Type,
 		})
 	}

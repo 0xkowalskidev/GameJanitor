@@ -152,10 +152,11 @@ func TestGameserver_Create_EventPublished(t *testing.T) {
 		case evt := <-ch:
 			if evt.EventType() == service.EventGameserverCreate {
 				found = true
-				gsEvt, ok := evt.(service.GameserverEvent)
+				gsEvt, ok := evt.(service.GameserverActionEvent)
 				assert.True(t, ok)
 				assert.Equal(t, gs.ID, gsEvt.GameserverID)
-				assert.Equal(t, testutil.TestGameID, gsEvt.GameID)
+				assert.NotNil(t, gsEvt.Gameserver)
+				assert.Equal(t, testutil.TestGameID, gsEvt.Gameserver.GameID)
 			}
 		default:
 			goto done

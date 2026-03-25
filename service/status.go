@@ -290,7 +290,7 @@ func (m *StatusManager) onWorkerRegistered(nodeID string, w worker.Worker) {
 	m.log.Info("starting event watcher for remote worker", "worker_id", nodeID)
 	m.watchWorkerEvents(ctx, nodeID, w)
 
-	m.broadcaster.Publish(WorkerEvent{
+	m.broadcaster.Publish(WorkerActionEvent{
 		Type:      EventWorkerConnected,
 		Timestamp: time.Now(),
 		Actor:     SystemActor,
@@ -319,7 +319,7 @@ func (m *StatusManager) onWorkerUnregistered(nodeID string) {
 	}
 	m.workerMu.Unlock()
 
-	m.broadcaster.Publish(WorkerEvent{
+	m.broadcaster.Publish(WorkerActionEvent{
 		Type:      EventWorkerDisconnected,
 		Timestamp: time.Now(),
 		Actor:     SystemActor,

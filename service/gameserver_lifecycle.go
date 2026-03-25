@@ -52,14 +52,13 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 		return nil
 	}
 
-	s.broadcaster.Publish(GameserverEvent{
+	gs.PopulateNode(s.db)
+	s.broadcaster.Publish(GameserverActionEvent{
 		Type:         EventGameserverStart,
 		Timestamp:    time.Now(),
 		Actor:        ActorFromContext(ctx),
 		GameserverID: id,
-		Name:         gs.Name,
-		GameID:       gs.GameID,
-		NodeID:       gs.NodeID,
+		Gameserver:   gs,
 	})
 
 	game := s.gameStore.GetGame(gs.GameID)
@@ -182,14 +181,13 @@ func (s *GameserverService) Stop(ctx context.Context, id string) error {
 		return nil
 	}
 
-	s.broadcaster.Publish(GameserverEvent{
+	gs.PopulateNode(s.db)
+	s.broadcaster.Publish(GameserverActionEvent{
 		Type:         EventGameserverStop,
 		Timestamp:    time.Now(),
 		Actor:        ActorFromContext(ctx),
 		GameserverID: id,
-		Name:         gs.Name,
-		GameID:       gs.GameID,
-		NodeID:       gs.NodeID,
+		Gameserver:   gs,
 	})
 
 	s.broadcaster.Publish(ContainerStoppingEvent{GameserverID: id, Timestamp: time.Now()})
@@ -231,14 +229,13 @@ func (s *GameserverService) Restart(ctx context.Context, id string) error {
 		return ErrNotFoundf("gameserver %s not found", id)
 	}
 
-	s.broadcaster.Publish(GameserverEvent{
+	gs.PopulateNode(s.db)
+	s.broadcaster.Publish(GameserverActionEvent{
 		Type:         EventGameserverRestart,
 		Timestamp:    time.Now(),
 		Actor:        ActorFromContext(ctx),
 		GameserverID: id,
-		Name:         gs.Name,
-		GameID:       gs.GameID,
-		NodeID:       gs.NodeID,
+		Gameserver:   gs,
 	})
 
 	if gs.Status != StatusStopped && gs.Status != StatusError {
@@ -266,14 +263,13 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) (er
 
 	s.log.Info("updating game for gameserver", "id", id, "game", game.ID)
 
-	s.broadcaster.Publish(GameserverEvent{
+	gs.PopulateNode(s.db)
+	s.broadcaster.Publish(GameserverActionEvent{
 		Type:         EventGameserverUpdateGame,
 		Timestamp:    time.Now(),
 		Actor:        ActorFromContext(ctx),
 		GameserverID: id,
-		Name:         gs.Name,
-		GameID:       gs.GameID,
-		NodeID:       gs.NodeID,
+		Gameserver:   gs,
 	})
 
 	s.broadcaster.Publish(ImagePullingEvent{GameserverID: id, Timestamp: time.Now()})
@@ -355,14 +351,13 @@ func (s *GameserverService) Reinstall(ctx context.Context, id string) (err error
 
 	s.log.Info("reinstalling gameserver (full wipe)", "id", id)
 
-	s.broadcaster.Publish(GameserverEvent{
+	gs.PopulateNode(s.db)
+	s.broadcaster.Publish(GameserverActionEvent{
 		Type:         EventGameserverReinstall,
 		Timestamp:    time.Now(),
 		Actor:        ActorFromContext(ctx),
 		GameserverID: id,
-		Name:         gs.Name,
-		GameID:       gs.GameID,
-		NodeID:       gs.NodeID,
+		Gameserver:   gs,
 	})
 
 	s.broadcaster.Publish(ImagePullingEvent{GameserverID: id, Timestamp: time.Now()})

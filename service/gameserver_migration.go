@@ -73,14 +73,13 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 
 	s.log.Info("migrating gameserver", "id", gameserverID, "from_node", currentNodeID, "to_node", targetNodeID)
 
-	s.broadcaster.Publish(GameserverEvent{
+	gs.PopulateNode(s.db)
+	s.broadcaster.Publish(GameserverActionEvent{
 		Type:         EventGameserverMigrate,
 		Timestamp:    time.Now(),
 		Actor:        ActorFromContext(ctx),
 		GameserverID: gameserverID,
-		Name:         gs.Name,
-		GameID:       gs.GameID,
-		NodeID:       gs.NodeID,
+		Gameserver:   gs,
 	})
 
 	defer func() {
