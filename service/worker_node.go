@@ -11,13 +11,14 @@ import (
 )
 
 type WorkerNodeService struct {
-	db       *sql.DB
-	registry *worker.Registry
-	log      *slog.Logger
+	db          *sql.DB
+	registry    *worker.Registry
+	broadcaster *EventBus
+	log         *slog.Logger
 }
 
-func NewWorkerNodeService(db *sql.DB, registry *worker.Registry, log *slog.Logger) *WorkerNodeService {
-	return &WorkerNodeService{db: db, registry: registry, log: log}
+func NewWorkerNodeService(db *sql.DB, registry *worker.Registry, broadcaster *EventBus, log *slog.Logger) *WorkerNodeService {
+	return &WorkerNodeService{db: db, registry: registry, broadcaster: broadcaster, log: log}
 }
 
 // WorkerView is the enriched API representation of a worker node.
@@ -99,6 +100,13 @@ func (s *WorkerNodeService) Update(id string, update *WorkerNodeUpdate) error {
 			return err
 		}
 	}
+
+	s.broadcaster.Publish(WorkerEvent{
+		Type:      EventWorkerUpdated,
+		Timestamp: time.Now(),
+		WorkerID:  id,
+	})
+
 	return nil
 }
 
