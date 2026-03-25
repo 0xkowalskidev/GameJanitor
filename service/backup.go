@@ -337,12 +337,12 @@ func (s *BackupService) DeleteBackup(ctx context.Context, backupID string) error
 
 	s.log.Info("deleting backup", "backup_id", backupID, "gameserver_id", backup.GameserverID)
 
-	if err := s.store.Delete(ctx, backup.GameserverID, backup.ID); err != nil {
-		return fmt.Errorf("removing backup from store: %w", err)
+	if err := models.DeleteBackup(s.db, backupID); err != nil {
+		return fmt.Errorf("deleting backup record: %w", err)
 	}
 
-	if err := models.DeleteBackup(s.db, backupID); err != nil {
-		return err
+	if err := s.store.Delete(ctx, backup.GameserverID, backup.ID); err != nil {
+		s.log.Warn("backup record deleted but store file removal failed", "backup_id", backupID, "error", err)
 	}
 
 	s.broadcaster.Publish(BackupActionEvent{
@@ -363,13 +363,17 @@ func (s *BackupService) DeleteBackupsByGameserver(ctx context.Context, gameserve
 		return fmt.Errorf("listing backups for cleanup: %w", err)
 	}
 
+	if err := models.DeleteBackupsByGameserver(s.db, gameserverID); err != nil {
+		return fmt.Errorf("deleting backup records: %w", err)
+	}
+
 	for _, b := range backups {
 		if err := s.store.Delete(ctx, gameserverID, b.ID); err != nil {
-			s.log.Warn("failed to remove backup from store during cleanup", "backup_id", b.ID, "error", err)
+			s.log.Warn("backup record deleted but store file removal failed", "backup_id", b.ID, "error", err)
 		}
 	}
 
-	return models.DeleteBackupsByGameserver(s.db, gameserverID)
+	return nil
 }
 
 // enforceRetention deletes the oldest backups if the gameserver has reached its retention limit.
