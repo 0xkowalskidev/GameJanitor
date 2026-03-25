@@ -34,6 +34,20 @@ Format:
 - **Also fixed:** Same nil worker panic in `service/stats_poller.go:117` — returns false to stop polling.
 - **Notes:** Many other `WorkerFor` call sites in the codebase also lack nil checks (console.go, file.go, gameserver_inspect.go, etc). These are synchronous paths so less likely to hit in practice, but should be audited.
 
+## Sidecar file ops don't reject path traversal
+- **Test:** `TestWorker_FilePathTraversal` in `worker/local_test.go` (integration, skipped)
+- **Expected:** `ReadFile(ctx, vol, "../../etc/passwd")` should return an error.
+- **Actual:** Returns the container's `/etc/passwd` contents without error. The sidecar executes `cat` inside an Alpine container, so `../../etc/passwd` resolves to the container's `/etc/passwd` — not a host escape, but reads files outside `/data`.
+- **Severity:** should fix
+- **Notes:** The direct-access code path has `resolveVolumePath` with `strings.HasPrefix` protection, but the sidecar path (`local_fileops_sidecar.go`) doesn't enforce the same check before passing paths to container exec commands. Fix: validate paths in `LocalWorker` before delegating to either direct or sidecar.
+
+## Sidecar file ops fail with Permission denied on Docker volumes
+- **Test:** `TestWorker_VolumeOperations`, `TestWorker_BackupRestoreRoundTrip`, `TestWorker_Rename` in `worker/local_test.go` (integration, skipped)
+- **Expected:** Write/mkdir/rename operations should work on Docker volumes.
+- **Actual:** `Permission denied` — sidecar container runs as `1001:1001` but Docker volume root directory is owned by `root`.
+- **Severity:** should fix
+- **Notes:** This is the same underlying issue as the "File delete fails (Docker)" bug in MEMORY.md. Affects all sidecar file operations, not just delete. The direct-access path works but is only available when Docker volume mountpoints are accessible on the host (not when gamejanitor runs inside Docker itself).
+
 ---
 
 # API Surface Issues
