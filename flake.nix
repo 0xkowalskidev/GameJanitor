@@ -135,6 +135,19 @@
             exec go test -race ./... "$@"
           '';
 
+          test-coverage = pkgs.writeShellScriptBin "test-coverage" ''
+            set -e
+            go test -coverprofile=/tmp/gamejanitor-coverage.out ./service/ ./models/ ./api/handlers/ ./games/ ./worker/ ./naming/ "$@"
+            echo ""
+            echo "=== Per-package coverage ==="
+            go tool cover -func=/tmp/gamejanitor-coverage.out | grep "^total:"
+            echo ""
+            echo "=== Per-package breakdown ==="
+            go test -cover ./service/ ./models/ ./api/handlers/ ./games/ ./worker/ ./naming/ 2>&1 | grep "coverage:"
+            echo ""
+            echo "HTML report: go tool cover -html=/tmp/gamejanitor-coverage.out"
+          '';
+
           cleanup = pkgs.writeShellScriptBin "cleanup" ''
             for runtime in docker podman; do
               if ! command -v "$runtime" &>/dev/null; then
@@ -182,6 +195,7 @@
             test
             test-all
             test-race
+            test-coverage
           ];
 
           shellHook = ''
