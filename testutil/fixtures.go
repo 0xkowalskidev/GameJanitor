@@ -22,6 +22,11 @@ const TestGameID = "test-game"
 
 func StrPtr(s string) *string { return &s }
 
+// PastTime returns a time.Time that is `hours` hours in the past.
+func PastTime(hours int) time.Time {
+	return time.Now().Add(-time.Duration(hours) * time.Hour)
+}
+
 // CreateTestGameserver creates a gameserver with sensible defaults for tests that
 // need one but aren't testing creation itself. Requires a registered worker.
 // The test game definition requires REQUIRED_VAR to be set — this helper provides it.

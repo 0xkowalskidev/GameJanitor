@@ -78,6 +78,13 @@ Format:
 - **Severity:** should fix
 - **Notes:** The synchronous paths (console, file, inspect) are less likely to hit in practice because the worker was just used to start the container. But worker disconnection between operations is possible in multi-node setups. Fix: each call site should check for nil and return a clear "worker unavailable" error instead of panicking.
 
+## CPUEnforced always overwritten to false on any update
+- **Test:** `TestUpdateMerge_CPUEnforcedOverwrittenOnEveryUpdate` in `service/update_merge_test.go` (skipped)
+- **Expected:** Updating only the name of a gameserver should not change `cpu_enforced`.
+- **Actual:** `UpdateGameserver` at `service/gameserver.go:387` always sets `existing.CPUEnforced = gs.CPUEnforced`. Unlike every other field which has a zero-value guard (`if gs.X != 0`), `CPUEnforced` is a bool — its zero value is `false`, so there's no way to distinguish "caller didn't set it" from "caller set it to false". Every PATCH that updates any field silently disables CPU enforcement.
+- **Severity:** should fix
+- **Notes:** Fix options: (1) use `*bool` for CPUEnforced in the update struct so nil means "don't change", (2) use a separate update request struct with optional fields, (3) only update CPUEnforced when CPULimit is also being changed.
+
 ---
 
 # API Surface Issues
