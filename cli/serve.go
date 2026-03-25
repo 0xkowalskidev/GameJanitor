@@ -21,6 +21,7 @@ import (
 	"github.com/warsmite/gamejanitor/db"
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/models"
+	"github.com/warsmite/gamejanitor/netinfo"
 	"github.com/warsmite/gamejanitor/service"
 	gjsftp "github.com/warsmite/gamejanitor/sftp"
 	"github.com/warsmite/gamejanitor/tlsutil"
@@ -344,6 +345,19 @@ func runServe(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("failed to create local worker token: %w", err)
 		}
+
+		// When bound to a wildcard address, advertise the detected LAN IP
+		// so the controller can dial back with a valid address and matching TLS SAN.
+		advertiseHost := cfg.Bind
+		if advertiseHost == "0.0.0.0" || advertiseHost == "::" || advertiseHost == "" {
+			netInfo := netinfo.Detect(logger)
+			if netInfo.LANIP != "" {
+				advertiseHost = netInfo.LANIP
+			} else {
+				advertiseHost = "127.0.0.1"
+			}
+		}
+
 		workerCfg := config.Config{
 			Bind:              cfg.Bind,
 			Controller:        false,
@@ -355,7 +369,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 			WorkerToken:       rawToken,
 			ContainerRuntime:  cfg.ContainerRuntime,
 			ContainerSocket:   cfg.ContainerSocket,
-			AdvertiseAddress:  fmt.Sprintf("%s:%d", cfg.Bind, cfg.WorkerGRPCPort),
+			AdvertiseAddress:  fmt.Sprintf("%s:%d", advertiseHost, cfg.WorkerGRPCPort),
 		}
 		go func() {
 			if err := runWorkerAgent(workerCfg, logger); err != nil {
