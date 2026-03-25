@@ -10,7 +10,9 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/url"
 	"path"
 	"strings"
 	"time"
@@ -88,11 +90,16 @@ func (s *WebhookEndpointService) Get(id string) (*WebhookEndpointView, error) {
 	return &v, nil
 }
 
-func (s *WebhookEndpointService) Create(url, description, secret string, events []string, enabled bool) (*WebhookEndpointView, error) {
-	if url == "" {
+type CreateEndpointResult struct {
+	Endpoint WebhookEndpointView `json:"endpoint"`
+	Warning  string              `json:"warning,omitempty"`
+}
+
+func (s *WebhookEndpointService) Create(rawURL, description, secret string, events []string, enabled bool) (*CreateEndpointResult, error) {
+	if rawURL == "" {
 		return nil, ErrBadRequest("url is required")
 	}
-	if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
+	if !strings.HasPrefix(rawURL, "http://") && !strings.HasPrefix(rawURL, "https://") {
 		return nil, ErrBadRequest("url must start with http:// or https://")
 	}
 
@@ -106,7 +113,7 @@ func (s *WebhookEndpointService) Create(url, description, secret string, events 
 	eventsJSON, _ := json.Marshal(events)
 	ep := &models.WebhookEndpoint{
 		Description: description,
-		URL:         url,
+		URL:         rawURL,
 		Secret:      secret,
 		Events:      string(eventsJSON),
 		Enabled:     enabled,
@@ -116,8 +123,39 @@ func (s *WebhookEndpointService) Create(url, description, secret string, events 
 	}
 
 	s.log.Info("webhook endpoint created", "id", ep.ID, "url", ep.URL)
-	v := toEndpointView(ep)
-	return &v, nil
+
+	result := &CreateEndpointResult{Endpoint: toEndpointView(ep)}
+	if warning := checkURLReachability(rawURL); warning != "" {
+		result.Warning = warning
+		s.log.Warn("webhook endpoint created but URL may be unreachable", "id", ep.ID, "url", ep.URL, "warning", warning)
+	}
+
+	return result, nil
+}
+
+// checkURLReachability does a TCP dial to the URL's host:port to catch obvious misconfigurations.
+func checkURLReachability(rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Sprintf("could not parse URL: %s", err)
+	}
+
+	host := parsed.Hostname()
+	port := parsed.Port()
+	if port == "" {
+		if parsed.Scheme == "https" {
+			port = "443"
+		} else {
+			port = "80"
+		}
+	}
+
+	conn, err := net.DialTimeout("tcp", net.JoinHostPort(host, port), 5*time.Second)
+	if err != nil {
+		return fmt.Sprintf("URL is not reachable: %s", err)
+	}
+	conn.Close()
+	return ""
 }
 
 func (s *WebhookEndpointService) Update(id string, description, url, secret *string, events []string, enabled *bool) (*WebhookEndpointView, error) {
