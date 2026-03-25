@@ -359,65 +359,110 @@ Built `testutil/` package: test DB, fake Worker, service wiring, API test server
 
 Bugs found: PortMode default, naming rejection, nil worker panics (2 fixed). See `TESTING_BUGS.md`.
 
-### Phase 4: Multi-Node & Races
+### Phase 4: Multi-Node & Races — DONE
 
-The multi-node orchestration paths — the highest-risk area.
+Migration (7 tests), concurrent port allocation (3 tests), resource enforcement (7 tests).
 
-**`service/gameserver_migration_test.go`** (new file):
-- TestMigration_HappyPath — migrate worker-1 → worker-2, verify node_id updated, ports reallocated on target
-- TestMigration_TargetNodeMustHaveCapacity — target node full, expect error
-- TestMigration_SourceAndTargetMustBeOnline — target worker not registered, expect error
-- TestMigration_FailureDuringTransfer — FailNext("RestoreVolume"), verify source data preserved
-- TestMigration_AutoTrigger — update resources beyond current node, verify migration fires
+### Phase 5: Webhook Delivery & API Permissions — DONE
 
-**`service/gameserver_ports_test.go`** (extend):
-- TestPortAllocation_ConcurrentCreates_NoDuplicatePorts — N goroutines creating simultaneously, verify all allocated ports unique
-- TestPortAllocation_PortsFreedOnDelete — create, delete, create again, verify reuse
-- TestPortAllocation_MultipleGameserversFillRange — create several, verify contiguous blocks don't overlap
+Webhook HMAC/retry/state (7 tests), gameserver updates (5 tests), API permission matrix (5 tests).
 
-**`service/resource_enforcement_test.go`** (new file):
-- TestResourceEnforcement_MemoryExceedsNodeLimit
-- TestResourceEnforcement_CPUExceedsNodeLimit
-- TestResourceEnforcement_StorageExceedsNodeLimit
-- TestResourceEnforcement_RequireMemoryLimitSetting — enable setting, create with 0 memory, expect error
-- TestResourceEnforcement_RequireCPULimitSetting
-- TestResourceEnforcement_RequireStorageLimitSetting
-- TestResourceEnforcement_ZeroMemoryMeansUnlimited — known bug from MEMORY.md
+### Phase 6: Worker Integration — DONE
 
-### Phase 5: Webhook Delivery & API Permissions
+Docker container lifecycle and event watching (2 pass). Sidecar file ops and path traversal (4 skipped — documented bugs).
 
-**`service/webhook_delivery_test.go`** (new file):
-- TestWebhookDelivery_HMACSignature — verify X-Webhook-Signature header is correct HMAC-SHA256
-- TestWebhookDelivery_RetryBackoff — verify exponential backoff calculation
-- TestWebhookDelivery_MaxAttempts — verify delivery marked failed after max attempts
-- TestWebhookDelivery_EventFiltering — wildcard, namespace glob, specific event type
-- TestWebhookDelivery_DisabledEndpointSkipped
+### Phase 7: Async Pipeline — DONE
 
-**`api/handlers/permissions_test.go`** (new file):
-- TestAPI_PermissionMatrix — for each protected endpoint, verify custom token without the right permission gets 403
-- TestAPI_GameserverScoping — custom token scoped to gs-1 can't access gs-2 via API
-- TestAPI_AdminEndpoints_RejectCustomTokens — POST /api/gameservers, /api/tokens, /api/workers
+`NewTestServicesWithSubscribers` helper. Status derivation, event persistence, status_changed events (5 tests).
 
-**`service/gameserver_update_test.go`** (new file):
-- TestUpdate_NameChange
-- TestUpdate_EnvChange
-- TestUpdate_NonAdminBlockedFromResources — non-admin can't change memory/CPU
-- TestUpdate_EnvTriggersReinstall — changing triggers_install env var clears installed flag
+### Phase 8: Service Depth — file, console, ready watcher
 
-### Phase 6: Worker Integration (Docker required)
+These services delegate to the fake worker and are straightforward to test. Currently 0% coverage.
 
-Build-tagged with `//go:build integration`. Requires Docker daemon.
+**`service/file_test.go`** (new file):
+- ListFiles, ReadFile, WriteFile, DeletePath, CreateDirectory, RenamePath — happy paths through the dispatcher
+- Path validation: `/data` prefix enforcement, traversal rejection at the service layer
+- Gameserver not found → error
 
-**`worker/local_test.go`**:
-- TestWorker_ContainerLifecycle — pull Alpine, create, start, inspect, stop, remove
-- TestWorker_VolumeOperations — create, write, read, list, delete
-- TestWorker_DirectAccessDetection — verify probe and caching
-- TestWorker_BackupRestoreRoundTrip — backup volume, restore to new volume, verify data integrity
-- TestWorker_FilePathTraversal — attempt `../../etc/passwd`, verify rejected
+**`service/console_test.go`** (new file):
+- GetLogs — returns log reader for a running gameserver
+- GetLogs — gameserver not found, not running
+- SendCommand — happy path, verify exec called on worker
+- SendCommand — game doesn't support commands (disabled capability)
+- ListLogSessions, GetLogSession — historical log file listing
 
-### Subagent Note
+**`service/ready_test.go`** (new file, uses `NewTestServicesWithSubscribers`):
+- Ready pattern detected — start gameserver, verify status promoted to running
+- Install marker detected — start gameserver, verify `installed` flag set to true in DB
+- No ready pattern (game has none) — immediate promotion after start
+- Ready watcher stopped on gameserver stop
 
-Subagents are useful for read-only research (codebase exploration, spec review) but cannot write files in this project's permission configuration. All test writing is done directly in the main conversation.
+### Phase 9: API Handler Coverage
+
+Currently 8%. Each handler is thin (parse → call service → format response), but input validation and error mapping happen here. Test the contract, not the business logic.
+
+**`api/handlers/backups_test.go`** (new file):
+- POST /api/gameservers/{id}/backups — 201 with backup record
+- GET /api/gameservers/{id}/backups — list
+- DELETE /api/gameservers/{id}/backups/{backupId} — 204
+- POST restore — verify accepted response
+
+**`api/handlers/schedules_test.go`** (new file):
+- CRUD endpoints — 201, 200, 204
+- Invalid cron → 400
+- Invalid type → 400
+
+**`api/handlers/files_test.go`** (new file):
+- GET list, GET content, PUT content, DELETE, POST upload, POST mkdir
+- Path traversal attempt → 400
+- Gameserver not found → 404
+
+**`api/handlers/settings_test.go`** (new file):
+- GET /api/settings — returns all settings
+- PATCH /api/settings — update a value, verify it persists
+- Read-only settings can't be changed
+
+**`api/handlers/webhooks_test.go`** (new file):
+- CRUD endpoints
+- POST test delivery
+- GET deliveries list
+
+### Phase 10: Mod Service (stubbed HTTP)
+
+The mod sources hit external APIs, but `ModService` has internal logic worth testing: loader selection, install path resolution, DB tracking, file cleanup on uninstall. Stub the HTTP calls.
+
+**`service/mod_test.go`** (new file):
+- InstallMod — happy path with a fake mod source that returns a file
+- UninstallMod — removes file and DB record
+- ListInstalledMods — returns mods for a gameserver
+- InstallMod — precondition check (requires_env not set)
+- InstallMod — already installed → error
+- Mod source validation — unknown source type rejected
+
+Requires a `FakeModSource` or HTTP test server to avoid hitting Modrinth/uMod/Workshop.
+
+### Phase 11: StatusManager & Recovery
+
+The highest-complexity untested area. StatusManager watches container events, handles auto-restart, and reconciles DB state on startup. Requires careful setup with `NewTestServicesWithSubscribers`.
+
+**`service/status_manager_test.go`** (new file):
+- Container "die" event → gameserver status set to stopped
+- Container "die" on running gameserver with auto_restart → gameserver restarted
+- Auto-restart capped at 3 attempts → stops retrying, sets error state
+- Auto-restart counter reset when gameserver reaches running
+- Stale container event (old ContainerID) → ignored
+- Recovery on startup: DB says "running" but container is gone → status corrected to stopped
+
+### Not planned
+
+| Area | Reason |
+|------|--------|
+| `worker/process.go` (45 functions at 0%) | Process runtime with bwrap/Box64. Platform-specific, needs manual testing. |
+| `worker/remote.go` (33 functions at 0%) | gRPC client. Tested implicitly by the fake worker abstraction. Real gRPC tests need both sides running. |
+| `worker/agent.go` (28 functions at 0%) | gRPC server. Same as remote — needs real gRPC setup. |
+| `worker/oci.go` (8 functions at 0%) | OCI image pull/extract. Network-dependent, Android DNS hacks. |
+| `service/mod_source_*.go` (18 functions at 0%) | External API clients. Modrinth, uMod, Workshop. Would need HTTP stubs per provider — high effort, low bug density since they're simple HTTP+JSON. |
+| `service/backup_store.go` S3 path (10 functions at 0%) | S3Store needs a real or mocked S3 endpoint. LocalStore is tested via backup tests. |
 
 ## What We Explicitly Don't Test
 
