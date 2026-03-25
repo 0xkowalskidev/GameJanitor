@@ -119,7 +119,7 @@ var clusterCmd = &cobra.Command{
 }
 
 func init() {
-	clusterCmd.AddCommand(clusterAddCmd, clusterUseCmd, clusterListCmd, clusterRemoveCmd, clusterCurrentCmd, clusterClearCmd)
+	clusterCmd.AddCommand(clusterAddCmd, clusterUseCmd, clusterListCmd, clusterRemoveCmd, clusterCurrentCmd)
 
 	clusterAddCmd.Flags().String("address", "", "Cluster API address (e.g. https://gj.example.com)")
 	clusterAddCmd.Flags().String("token", "", "Auth token for this cluster")
@@ -163,16 +163,26 @@ var clusterAddCmd = &cobra.Command{
 }
 
 var clusterUseCmd = &cobra.Command{
-	Use:   "use <name>",
-	Short: "Switch to a cluster",
-	Args:  cobra.ExactArgs(1),
+	Use:   "use [name]",
+	Short: "Switch to a cluster (no argument clears to localhost default)",
+	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		name := args[0]
-
 		cfg, err := loadClustersConfig()
 		if err != nil {
 			return err
 		}
+
+		// No argument: clear current context
+		if len(args) == 0 {
+			cfg.Current = ""
+			if err := saveClustersConfig(cfg); err != nil {
+				return err
+			}
+			fmt.Println("Cluster context cleared. Using default (http://localhost:8080).")
+			return nil
+		}
+
+		name := args[0]
 
 		if _, ok := cfg.Clusters[name]; !ok {
 			return exitError(fmt.Errorf("cluster %q not found\n  Run 'gamejanitor cluster list' to see available clusters", name))
@@ -298,21 +308,3 @@ var clusterCurrentCmd = &cobra.Command{
 	},
 }
 
-var clusterClearCmd = &cobra.Command{
-	Use:   "clear",
-	Short: "Clear the current cluster (use default localhost)",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := loadClustersConfig()
-		if err != nil {
-			return err
-		}
-
-		cfg.Current = ""
-		if err := saveClustersConfig(cfg); err != nil {
-			return err
-		}
-
-		fmt.Println("Cluster context cleared. Using default (http://localhost:8080).")
-		return nil
-	},
-}
