@@ -453,22 +453,141 @@ The highest-complexity untested area. StatusManager watches container events, ha
 - Stale container event (old ContainerID) → ignored
 - Recovery on startup: DB says "running" but container is gone → status corrected to stopped
 
-### Not planned
+### Archetype Scenario Tests — DONE
+
+End-to-end workflows from each user archetype's perspective, testing the full stack above the Worker interface.
+
+**Newbie/homelab:** zero-config create→start→stop, safe defaults, SFTP credentials, password regeneration
+**Power user:** multi-node placement + migration, scoped tokens, backup + schedule workflow, file management with path traversal
+**Business:** business mode secure defaults, resource limits enforced, webhook setup, capacity planning across a 3-node cluster
+**API-level:** full HTTP workflow (newbie), auth enforcement (business), response envelope consistency
+
+### Not planned (unit tests)
 
 | Area | Reason |
 |------|--------|
-| `worker/process.go` (45 functions at 0%) | Process runtime with bwrap/Box64. Platform-specific, needs manual testing. |
-| `worker/remote.go` (33 functions at 0%) | gRPC client. Tested implicitly by the fake worker abstraction. Real gRPC tests need both sides running. |
-| `worker/agent.go` (28 functions at 0%) | gRPC server. Same as remote — needs real gRPC setup. |
-| `worker/oci.go` (8 functions at 0%) | OCI image pull/extract. Network-dependent, Android DNS hacks. |
-| `service/mod_source_*.go` (18 functions at 0%) | External API clients. Modrinth, uMod, Workshop. Would need HTTP stubs per provider — high effort, low bug density since they're simple HTTP+JSON. |
-| `service/backup_store.go` S3 path (10 functions at 0%) | S3Store needs a real or mocked S3 endpoint. LocalStore is tested via backup tests. |
+| `worker/process.go` | Process runtime with bwrap/Box64. Platform-specific, needs manual testing. |
+| `worker/remote.go` | gRPC client. Tested implicitly by the fake worker abstraction. |
+| `worker/agent.go` | gRPC server. Needs both sides running. |
+| `worker/oci.go` | OCI image pull/extract. Network-dependent. |
+| `service/mod_source_*.go` | External API clients. Simple HTTP+JSON, low bug density. |
+| `service/backup_store.go` S3 path | Needs a real or mocked S3 endpoint. LocalStore tested via backup tests. |
+
+---
+
+## True End-to-End Tests
+
+Everything above tests the orchestration logic with a fake worker. The fake worker returns instantly, has no real containers, no real ports, no real log streams. This is the right approach for fast, reliable unit/integration tests.
+
+But there's a class of bugs we can only catch with real containers:
+- Game ready patterns that don't match actual game output
+- Docker volume permissions (the sidecar bug)
+- Real port binding conflicts
+- Container resource limits actually applied
+- Backup/restore data integrity through real tar/gzip streams
+- SFTP access to real volume data
+- Container event timing (start → ready → die)
+
+### Architecture
+
+End-to-end tests start a real gamejanitor instance (HTTP + gRPC + SFTP) with a real container runtime. They use a lightweight test game image that starts fast and emits predictable output.
+
+```
+┌─────────────────────────────────────────┐
+│ Test process                            │
+│  - Starts gamejanitor as a subprocess   │
+│  - Talks to it via HTTP API             │
+│  - Connects via SFTP                    │
+│  - Asserts on container state via Docker│
+│  - Cleans up all containers/volumes     │
+└─────────────────────────────────────────┘
+         │ HTTP            │ SFTP
+         ▼                 ▼
+┌─────────────────────────────────────────┐
+│ Gamejanitor instance (real binary)      │
+│  - Real SQLite DB (temp dir)            │
+│  - Real Docker/Podman worker            │
+│  - Real gRPC controller↔worker          │
+│  - Real SFTP server                     │
+└─────────────────────────────────────────┘
+         │
+         ▼
+┌─────────────────────────────────────────┐
+│ Docker/Podman                           │
+│  - Real containers (test game image)    │
+│  - Real volumes                         │
+│  - Real port bindings                   │
+└─────────────────────────────────────────┘
+```
+
+### Test Game Image
+
+A minimal Docker image that:
+- Starts in <2 seconds
+- Emits `[gamejanitor:installed]` on first run
+- Emits the ready pattern after a short delay
+- Listens on a configurable port (for query verification)
+- Supports `/scripts/send-command` (echoes input)
+- Exits cleanly on SIGTERM
+
+This replaces the real game images (steamcmd + game binaries = 10GB+) with something fast and deterministic. Lives in `testdata/test-game-image/` with its own Dockerfile.
+
+### Test Scenarios
+
+Build-tagged with `//go:build e2e`. Run with `go test -tags e2e ./e2e/`.
+
+**Lifecycle:**
+- Create gameserver → start → wait for ready → verify "running" status → stop → verify "stopped"
+- Start → verify install marker detected → `installed=true` in API response
+- Restart → verify container ID changes
+- Delete → verify container and volume removed from Docker
+
+**File access:**
+- SFTP login with credentials from create response
+- Upload a file via SFTP → read it back via API (or vice versa)
+- API file write → verify file exists in container volume
+
+**Backup/restore:**
+- Create gameserver → write files → backup → delete files → restore → verify files returned
+- Backup size matches in API response
+
+**Ports:**
+- Create two gameservers of the same game → verify different host ports assigned
+- Verify ports are actually bound on the host (TCP dial succeeds)
+
+**Multi-node (if two runtimes available):**
+- Start controller + remote worker → create gameserver → verify placed on worker
+- Migrate gameserver between workers → verify data transferred
+
+### Prerequisites
+
+- Docker or Podman running
+- Test game image built (`testdata/test-game-image/`)
+- ~30 seconds per test (container start + ready + stop)
+- `test-e2e` script in flake.nix: `go test -tags e2e -timeout 5m ./e2e/`
+
+### When to run
+
+- Manually before releases
+- In CI on merge to main (not on every PR — too slow)
+- After changes to: worker/, docker/, container lifecycle, SFTP, backup/restore
+
+---
+
+## Long-Term Testing Vision
+
+The test suite should evolve alongside the three user archetypes:
+
+**Newbie tests** — As the onboarding UX matures, tests should cover the first-run experience: game selection, one-click create, "it just works" verification. These should be the project's smoke tests — if they break, nothing works.
+
+**Power user tests** — As the CLI is rewritten, tests should cover the CLI contract: `gamejanitor gameserver create`, context switching between controllers, `gamejanitor install` for systemd setup. These protect the API contract that power users depend on.
+
+**Business tests** — As multi-node and the hosting service grow, tests should cover scale (100+ gameservers on 10+ nodes), webhook delivery reliability under load, API versioning/backwards compatibility, and the billing integration surface. The business mode defaults should be the hardest-tested path because paying customers have the lowest tolerance for bugs.
 
 ## What We Explicitly Don't Test
 
-- **UI/frontend** — separate concern, not covered by Go test suite (needs its own frontend testing strategy)
-- **CLI commands** — thin wrappers over API client, low bug density
+- **UI/frontend** — separate concern, needs its own frontend testing strategy (Playwright or similar)
 - **Generated protobuf** — generated code, tested implicitly by gRPC usage
 - **OCI image pulling** — network-dependent, tested manually
 - **Box64/bwrap** — platform-specific, tested manually on target hardware
-- **External APIs** — Modrinth, uMod, Steam Workshop (network-dependent, stub at HTTP level if needed later)
+- **External mod APIs** — Modrinth, uMod, Steam Workshop (network-dependent, stub at HTTP level if needed later)
