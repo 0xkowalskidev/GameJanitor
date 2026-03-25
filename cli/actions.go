@@ -86,7 +86,7 @@ func runAction(action, verb string) func(*cobra.Command, []string) error {
 		if err := json.Unmarshal(resp.Data, &gs); err != nil {
 			return fmt.Errorf("parsing response: %w", err)
 		}
-		fmt.Printf("Gameserver %s is now %s.\n", id[:8], gs.Status)
+		fmt.Printf("Gameserver %s is now %s.\n", id[:8], colorStatus(gs.Status))
 		return nil
 	}
 }
@@ -140,7 +140,7 @@ func runBulkAction(action, verb string, all bool, nodeID string) error {
 		if r.Error != "" {
 			fmt.Printf("  x %s (%s): %s\n", r.Name, r.ID[:8], r.Error)
 		} else {
-			fmt.Printf("  + %s (%s): %s\n", r.Name, r.ID[:8], r.Status)
+			fmt.Printf("  + %s (%s): %s\n", r.Name, r.ID[:8], colorStatus(r.Status))
 			succeeded++
 		}
 	}
@@ -190,7 +190,7 @@ var statusCmd = &cobra.Command{
 			return fmt.Errorf("parsing response: %w", err)
 		}
 
-		fmt.Printf("Status: %s\n", status.Status)
+		fmt.Printf("Status: %s\n", colorStatus(status.Status))
 		if status.Container != nil {
 			fmt.Printf("Container:\n")
 			fmt.Printf("  State:      %s\n", status.Container.State)
@@ -231,7 +231,7 @@ func runStatusOverview() error {
 	w := newTabWriter()
 	fmt.Fprintln(w, "NAME\tGAME\tSTATUS")
 	for _, gs := range gameservers {
-		fmt.Fprintf(w, "%s\t%s\t%s\n", gs.Name, gs.GameID, gs.Status)
+		fmt.Fprintf(w, "%s\t%s\t%s\n", gs.Name, gs.GameID, colorStatus(gs.Status))
 	}
 	w.Flush()
 	return nil
@@ -391,7 +391,7 @@ var reinstallCmd = &cobra.Command{
 		if err := json.Unmarshal(resp.Data, &gs); err != nil {
 			return fmt.Errorf("parsing response: %w", err)
 		}
-		fmt.Printf("Gameserver %s is now %s.\n", id[:8], gs.Status)
+		fmt.Printf("Gameserver %s is now %s.\n", id[:8], colorStatus(gs.Status))
 		return nil
 	},
 }

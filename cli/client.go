@@ -10,6 +10,8 @@ import (
 	"os"
 	"strings"
 	"text/tabwriter"
+
+	"github.com/charmbracelet/lipgloss"
 )
 
 type apiResponse struct {
@@ -129,6 +131,27 @@ func printJSONResponse(resp *apiResponse) {
 
 func newTabWriter() *tabwriter.Writer {
 	return tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+}
+
+// colorStatus applies color to gameserver status strings.
+// Green=running, yellow=installing/starting/stopping, red=error/crashed, gray=stopped/unknown.
+// Returns the string unchanged when NO_COLOR is set or in JSON mode.
+func colorStatus(status string) string {
+	if jsonOutput || os.Getenv("NO_COLOR") != "" {
+		return status
+	}
+	switch status {
+	case "running", "ready":
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("2")).Render(status)
+	case "installing", "starting", "stopping", "updating", "migrating", "restoring":
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Render(status)
+	case "error", "crashed", "install_failed":
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("1")).Render(status)
+	case "stopped", "created":
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Render(status)
+	default:
+		return status
+	}
 }
 
 func formatMemory(mb int) string {

@@ -88,7 +88,7 @@ var gameserversListCmd = &cobra.Command{
 			if len(id) > 8 {
 				id = id[:8]
 			}
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", id, gs.Name, gs.GameID, gs.Status)
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", id, gs.Name, gs.GameID, colorStatus(gs.Status))
 		}
 		w.Flush()
 		return nil
@@ -136,7 +136,7 @@ var gameserversGetCmd = &cobra.Command{
 		fmt.Printf("ID:         %s\n", gs.ID)
 		fmt.Printf("Name:       %s\n", gs.Name)
 		fmt.Printf("Game:       %s\n", gs.GameID)
-		fmt.Printf("Status:     %s\n", gs.Status)
+		fmt.Printf("Status:     %s\n", colorStatus(gs.Status))
 		fmt.Printf("Memory:     %s\n", formatMemory(gs.MemoryLimitMB))
 		if gs.CPULimit > 0 {
 			fmt.Printf("CPU:        %.1f cores\n", gs.CPULimit)

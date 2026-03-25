@@ -63,7 +63,7 @@ var workersListCmd = &cobra.Command{
 		fmt.Fprintln(w, "ID\tLAN IP\tCPU\tMEMORY\tGAMESERVERS\tSTATUS")
 		for _, wk := range workers {
 			memory := fmt.Sprintf("%s / %s", formatMemory(int(wk.MemoryAvailableMB)), formatMemory(int(wk.MemoryTotalMB)))
-			status := wk.Status
+			status := colorStatus(wk.Status)
 			if wk.Cordoned {
 				status += " (cordoned)"
 			}
@@ -113,7 +113,7 @@ var workersGetCmd = &cobra.Command{
 
 		w := newTabWriter()
 		fmt.Fprintf(w, "ID:\t%s\n", wk.ID)
-		status := wk.Status
+		status := colorStatus(wk.Status)
 		if wk.Cordoned {
 			status += " (cordoned)"
 		}
