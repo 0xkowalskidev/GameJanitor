@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 // --- Gameservers group ---
@@ -19,23 +20,31 @@ var gameserversCmd = &cobra.Command{
 }
 
 func init() {
-	// The gameservers group also contains lifecycle commands for `gameservers start` etc.
 	gameserversCmd.AddCommand(
-		gameserversListCmd, gameserversGetCmd,
-		// CRUD shortcuts are registered under gameservers too
-		&cobra.Command{Use: "create", Short: createCmd.Short, RunE: createCmd.RunE, Args: createCmd.Args},
-		&cobra.Command{Use: "delete <name-or-id>", Short: deleteCmd.Short, RunE: deleteCmd.RunE, Args: deleteCmd.Args},
-		&cobra.Command{Use: "start <name-or-id>", Short: startCmd.Short, RunE: startCmd.RunE, Args: startCmd.Args},
-		&cobra.Command{Use: "stop <name-or-id>", Short: stopCmd.Short, RunE: stopCmd.RunE, Args: stopCmd.Args},
-		&cobra.Command{Use: "restart <name-or-id>", Short: restartCmd.Short, RunE: restartCmd.RunE, Args: restartCmd.Args},
-		&cobra.Command{Use: "status [name-or-id]", Short: statusCmd.Short, RunE: statusCmd.RunE, Args: statusCmd.Args},
-		&cobra.Command{Use: "logs <name-or-id>", Short: logsCmd.Short, RunE: logsCmd.RunE, Args: logsCmd.Args},
-		&cobra.Command{Use: "command <name-or-id> <command>", Short: commandCmd.Short, RunE: commandCmd.RunE, Args: commandCmd.Args},
-		&cobra.Command{Use: "update-game <name-or-id>", Short: updateGameCmd.Short, RunE: updateGameCmd.RunE, Args: updateGameCmd.Args},
-		&cobra.Command{Use: "reinstall <name-or-id>", Short: reinstallCmd.Short, RunE: reinstallCmd.RunE, Args: reinstallCmd.Args},
-		&cobra.Command{Use: "migrate <name-or-id>", Short: migrateCmd.Short, RunE: migrateCmd.RunE, Args: migrateCmd.Args},
-		gameserversUpdateCmd,
+		gameserversListCmd, gameserversGetCmd, gameserversUpdateCmd,
 	)
+}
+
+// registerGameserverSubcommands clones top-level gameserver commands under the `gameservers` group
+// so `gs create`, `gs start` etc. work. Must be called after all init() functions have run
+// so that flags on the source commands are fully registered.
+func registerGameserverSubcommands() {
+	for _, src := range []*cobra.Command{
+		createCmd, deleteCmd, startCmd, stopCmd, restartCmd,
+		statusCmd, logsCmd, commandCmd, updateGameCmd, reinstallCmd, migrateCmd,
+	} {
+		clone := &cobra.Command{
+			Use:               src.Use,
+			Short:             src.Short,
+			Args:              src.Args,
+			ValidArgsFunction: src.ValidArgsFunction,
+			RunE:              src.RunE,
+		}
+		src.Flags().VisitAll(func(f *pflag.Flag) {
+			clone.Flags().AddFlag(f)
+		})
+		gameserversCmd.AddCommand(clone)
+	}
 }
 
 // --- List / Get ---

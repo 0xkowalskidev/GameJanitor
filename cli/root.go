@@ -71,6 +71,7 @@ func init() {
 }
 
 func Execute() error {
+	registerGameserverSubcommands()
 	return rootCmd.Execute()
 }
 
