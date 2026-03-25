@@ -58,15 +58,26 @@ func TestMigration_TargetNodeMustHaveCapacity(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-2", testutil.WithMaxMemoryMB(512))
 	ctx := testutil.TestContext()
 
-	gs := testutil.CreateTestGameserver(t, svc)
+	gs := &models.Gameserver{
+		Name:          "Migration Source",
+		GameID:        testutil.TestGameID,
+		MemoryLimitMB: 512,
+		Env:           []byte(`{"REQUIRED_VAR":"v"}`),
+	}
+	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
+	require.NoError(t, err)
 
-	// test-game gets recommended_memory_mb=512 from applyGameDefaults.
-	// worker-2 has 512MB limit, so the gameserver exactly fills it.
-	// Create a second gameserver on worker-2 first to fill it.
-	gs2 := testutil.CreateTestGameserver(t, svc)
-	_ = gs2
+	// Fill worker-2's 512MB limit with another gameserver
+	gs2 := &models.Gameserver{
+		Name:          "Filler",
+		GameID:        testutil.TestGameID,
+		MemoryLimitMB: 512,
+		Env:           []byte(`{"REQUIRED_VAR":"v"}`),
+	}
+	_, err = svc.GameserverSvc.CreateGameserver(ctx, gs2)
+	require.NoError(t, err)
 
-	err := svc.GameserverSvc.MigrateGameserver(ctx, gs.ID, "worker-2")
+	err = svc.GameserverSvc.MigrateGameserver(ctx, gs.ID, "worker-2")
 	require.Error(t, err, "should reject migration when target node is full")
 }
 
