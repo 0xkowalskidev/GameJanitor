@@ -99,11 +99,9 @@ func RegisterFakeWorker(t *testing.T, svc *ServiceBundle, nodeID string, opts ..
 	fw.ReadyPattern = "Server is ready"
 
 	cfg := fakeWorkerConfig{
-		maxMemoryMB:    16384,
-		maxCPU:         8.0,
-		maxStorageMB:   102400,
-		portRangeStart: 27000,
-		portRangeEnd:   28999,
+		maxMemoryMB:  16384,
+		maxCPU:       8.0,
+		maxStorageMB: 102400,
 	}
 	for _, opt := range opts {
 		opt(&cfg)
@@ -116,8 +114,8 @@ func RegisterFakeWorker(t *testing.T, svc *ServiceBundle, nodeID string, opts ..
 	}
 
 	// Persist the worker node record in the DB so placement queries find it
-	_, err := svc.DB.Exec(`INSERT INTO worker_nodes (id, port_range_start, port_range_end, max_memory_mb, max_cpu, max_storage_mb, tags) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		nodeID, cfg.portRangeStart, cfg.portRangeEnd, cfg.maxMemoryMB, cfg.maxCPU, cfg.maxStorageMB, tagsJSON)
+	_, err := svc.DB.Exec(`INSERT INTO worker_nodes (id, max_memory_mb, max_cpu, max_storage_mb, tags) VALUES (?, ?, ?, ?, ?)`,
+		nodeID, cfg.maxMemoryMB, cfg.maxCPU, cfg.maxStorageMB, tagsJSON)
 	if err != nil {
 		t.Fatalf("inserting worker node: %v", err)
 	}
@@ -133,12 +131,10 @@ func RegisterFakeWorker(t *testing.T, svc *ServiceBundle, nodeID string, opts ..
 }
 
 type fakeWorkerConfig struct {
-	maxMemoryMB    int
-	maxCPU         float64
-	maxStorageMB   int
-	portRangeStart int
-	portRangeEnd   int
-	tags           []string
+	maxMemoryMB  int
+	maxCPU       float64
+	maxStorageMB int
+	tags         []string
 }
 
 type FakeWorkerOption func(*fakeWorkerConfig)
@@ -153,13 +149,6 @@ func WithMaxCPU(cpu float64) FakeWorkerOption {
 
 func WithMaxStorageMB(mb int) FakeWorkerOption {
 	return func(c *fakeWorkerConfig) { c.maxStorageMB = mb }
-}
-
-func WithPortRange(start, end int) FakeWorkerOption {
-	return func(c *fakeWorkerConfig) {
-		c.portRangeStart = start
-		c.portRangeEnd = end
-	}
 }
 
 func WithTags(tags []string) FakeWorkerOption {

@@ -49,11 +49,9 @@ type Config struct {
 }
 
 type WorkerLimitsConfig struct {
-	MaxMemoryMB    int     `yaml:"max_memory_mb"`
-	MaxCPU         float64 `yaml:"max_cpu"`
-	MaxStorageMB   int     `yaml:"max_storage_mb"`
-	PortRangeStart int     `yaml:"port_range_start"`
-	PortRangeEnd   int     `yaml:"port_range_end"`
+	MaxMemoryMB  int     `yaml:"max_memory_mb"`
+	MaxCPU       float64 `yaml:"max_cpu"`
+	MaxStorageMB int     `yaml:"max_storage_mb"`
 }
 
 type TLSConfig struct {

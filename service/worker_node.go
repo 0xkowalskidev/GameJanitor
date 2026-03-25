@@ -31,8 +31,6 @@ type WorkerView struct {
 	GameserverCount   int      `json:"gameserver_count"`
 	AllocatedMemoryMB int      `json:"allocated_memory_mb"`
 	AllocatedCPU      float64  `json:"allocated_cpu"`
-	PortRangeStart    *int     `json:"port_range_start"`
-	PortRangeEnd      *int     `json:"port_range_end"`
 	MaxMemoryMB       *int     `json:"max_memory_mb"`
 	MaxCPU            *float64 `json:"max_cpu"`
 	MaxStorageMB      *int     `json:"max_storage_mb"`
@@ -74,10 +72,6 @@ func (s *WorkerNodeService) Get(id string) (*WorkerView, error) {
 	return &v, nil
 }
 
-func (s *WorkerNodeService) SetPortRange(id string, start, end *int) error {
-	return models.SetWorkerNodePortRange(s.db, id, start, end)
-}
-
 func (s *WorkerNodeService) SetCordoned(id string, cordoned bool) error {
 	return models.SetWorkerNodeCordoned(s.db, id, cordoned)
 }
@@ -115,8 +109,6 @@ func (s *WorkerNodeService) buildView(info worker.WorkerInfo, gsCount, allocMem 
 		LastSeen:          &lastSeen,
 	}
 	if node != nil {
-		v.PortRangeStart = node.PortRangeStart
-		v.PortRangeEnd = node.PortRangeEnd
 		v.MaxMemoryMB = node.MaxMemoryMB
 		v.MaxCPU = node.MaxCPU
 		v.MaxStorageMB = node.MaxStorageMB

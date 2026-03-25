@@ -182,8 +182,6 @@ func NewRouter(opts RouterOptions) http.Handler {
 			r.Get("/", workerHandlers.List)
 			r.Route("/{workerID}", func(r chi.Router) {
 				r.Get("/", workerHandlers.Get)
-				r.Patch("/port-range", workerHandlers.SetPortRange)
-				r.Delete("/port-range", workerHandlers.ClearPortRange)
 				r.Patch("/limits", workerHandlers.SetLimits)
 				r.Delete("/limits", workerHandlers.ClearLimits)
 				r.Post("/cordon", workerHandlers.Cordon)

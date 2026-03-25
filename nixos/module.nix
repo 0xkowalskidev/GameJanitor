@@ -29,8 +29,6 @@ let
         max_memory_mb = cfg.workerLimits.maxMemoryMB;
         max_cpu = cfg.workerLimits.maxCPU;
         max_storage_mb = cfg.workerLimits.maxStorageMB;
-        port_range_start = cfg.workerLimits.portRangeStart;
-        port_range_end = cfg.workerLimits.portRangeEnd;
       };
     }
     // lib.optionalAttrs (cfg.tls.ca != null) {
@@ -151,17 +149,6 @@ in {
         description = "Total storage available for gameservers on this worker (MB).";
       };
 
-      portRangeStart = lib.mkOption {
-        type = lib.types.nullOr lib.types.port;
-        default = null;
-        description = "Port range start for this worker.";
-      };
-
-      portRangeEnd = lib.mkOption {
-        type = lib.types.nullOr lib.types.port;
-        default = null;
-        description = "Port range end for this worker.";
-      };
     };
 
     tls = {
@@ -285,8 +272,8 @@ in {
   };
 
   config = lib.mkIf cfg.enable (let
-    portRangeStart = if cfg.workerLimits.portRangeStart != null then cfg.workerLimits.portRangeStart else 27000;
-    portRangeEnd = if cfg.workerLimits.portRangeEnd != null then cfg.workerLimits.portRangeEnd else 28999;
+    portRangeStart = cfg.settings.port_range_start or 27000;
+    portRangeEnd = cfg.settings.port_range_end or 28999;
   in {
     assertions = [
       {

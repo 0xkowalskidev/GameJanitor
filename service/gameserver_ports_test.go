@@ -2,12 +2,14 @@ package service_test
 
 import (
 	"encoding/json"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/warsmite/gamejanitor/models"
+	"github.com/warsmite/gamejanitor/service"
 	"github.com/warsmite/gamejanitor/testutil"
 )
 
@@ -94,7 +96,9 @@ func TestPortAllocation_ContiguousBlock(t *testing.T) {
 	ctx := testutil.TestContext()
 
 	// Small port range: 27000-27010, test game needs 2 ports
-	testutil.RegisterFakeWorker(t, svc, "worker-1", testutil.WithPortRange(27000, 27010))
+		svc.SettingsSvc.Set(service.SettingPortRangeStart, 27000)
+	svc.SettingsSvc.Set(service.SettingPortRangeEnd, 27010)
+	testutil.RegisterFakeWorker(t, svc, "worker-1")
 
 	gs := &models.Gameserver{
 		Name:     "Port Test",
@@ -125,7 +129,9 @@ func TestPortAllocation_Exhaustion(t *testing.T) {
 	ctx := testutil.TestContext()
 
 	// Tiny range: only 2 ports, test game needs 2 — first create succeeds, second fails
-	testutil.RegisterFakeWorker(t, svc, "worker-1", testutil.WithPortRange(27000, 27001))
+		svc.SettingsSvc.Set(service.SettingPortRangeStart, 27000)
+	svc.SettingsSvc.Set(service.SettingPortRangeEnd, 27001)
+	testutil.RegisterFakeWorker(t, svc, "worker-1")
 
 	gs1 := &models.Gameserver{
 		Name:     "First",
@@ -162,4 +168,134 @@ func TestPlacement_CapacityOverflow(t *testing.T) {
 	}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.Error(t, err, "should reject gameserver exceeding node capacity")
+}
+
+func TestPortAllocation_PortsFreedOnDelete(t *testing.T) {
+	t.Parallel()
+	svc := testutil.NewTestServices(t)
+	ctx := testutil.TestContext()
+
+	// Only 2 ports available — test game needs exactly 2
+		svc.SettingsSvc.Set(service.SettingPortRangeStart, 27000)
+	svc.SettingsSvc.Set(service.SettingPortRangeEnd, 27001)
+	testutil.RegisterFakeWorker(t, svc, "worker-1")
+
+	gs1 := &models.Gameserver{
+		Name: "First", GameID: testutil.TestGameID, PortMode: "auto",
+		Env: []byte(`{"REQUIRED_VAR":"v"}`),
+	}
+	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs1)
+	require.NoError(t, err)
+
+	// Range is full — second create should fail
+	gs2 := &models.Gameserver{
+		Name: "Second", GameID: testutil.TestGameID, PortMode: "auto",
+		Env: []byte(`{"REQUIRED_VAR":"v"}`),
+	}
+	_, err = svc.GameserverSvc.CreateGameserver(ctx, gs2)
+	require.Error(t, err, "range should be full")
+
+	// Delete first gameserver — frees the ports
+	require.NoError(t, svc.GameserverSvc.DeleteGameserver(ctx, gs1.ID))
+
+	// Now the same range should work again
+	gs3 := &models.Gameserver{
+		Name: "Third", GameID: testutil.TestGameID, PortMode: "auto",
+		Env: []byte(`{"REQUIRED_VAR":"v"}`),
+	}
+	_, err = svc.GameserverSvc.CreateGameserver(ctx, gs3)
+	require.NoError(t, err, "ports should be reusable after delete")
+}
+
+func TestPortAllocation_MultipleGameserversFillRange(t *testing.T) {
+	t.Parallel()
+	svc := testutil.NewTestServices(t)
+	ctx := testutil.TestContext()
+
+	// Range of 10 ports, test game needs 2 each — should fit 5 gameservers
+		svc.SettingsSvc.Set(service.SettingPortRangeStart, 27000)
+	svc.SettingsSvc.Set(service.SettingPortRangeEnd, 27009)
+	testutil.RegisterFakeWorker(t, svc, "worker-1")
+
+	allPorts := make(map[int]bool)
+	for i := 0; i < 5; i++ {
+		gs := &models.Gameserver{
+			Name: "Fill-" + string(rune('A'+i)), GameID: testutil.TestGameID, PortMode: "auto",
+			Env: []byte(`{"REQUIRED_VAR":"v"}`),
+		}
+		_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
+		require.NoError(t, err, "gameserver %d should fit", i)
+
+		var ports []map[string]any
+		require.NoError(t, json.Unmarshal(gs.Ports, &ports))
+		for _, p := range ports {
+			hp := int(p["host_port"].(float64))
+			assert.False(t, allPorts[hp], "port %d allocated twice", hp)
+			allPorts[hp] = true
+		}
+	}
+	assert.Len(t, allPorts, 10, "all 10 ports in range should be allocated")
+
+	// 6th should fail — range exhausted
+	gs6 := &models.Gameserver{
+		Name: "Overflow", GameID: testutil.TestGameID, PortMode: "auto",
+		Env: []byte(`{"REQUIRED_VAR":"v"}`),
+	}
+	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs6)
+	require.Error(t, err)
+}
+
+// TestPortAllocation_ConcurrentCreates verifies that the placement mutex
+// prevents duplicate port allocation when multiple goroutines create
+// gameservers simultaneously.
+func TestPortAllocation_ConcurrentCreates(t *testing.T) {
+	t.Parallel()
+	svc := testutil.NewTestServices(t)
+	ctx := testutil.TestContext()
+
+	// 20 ports, 2 per gameserver = room for 10. Launch 10 goroutines.
+		svc.SettingsSvc.Set(service.SettingPortRangeStart, 27000)
+	svc.SettingsSvc.Set(service.SettingPortRangeEnd, 27019)
+	testutil.RegisterFakeWorker(t, svc, "worker-1")
+
+	const n = 10
+	var wg sync.WaitGroup
+	errs := make([]error, n)
+	gameservers := make([]*models.Gameserver, n)
+
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			gs := &models.Gameserver{
+				Name: "Concurrent", GameID: testutil.TestGameID, PortMode: "auto",
+				Env: []byte(`{"REQUIRED_VAR":"v"}`),
+			}
+			_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
+			errs[idx] = err
+			if err == nil {
+				gameservers[idx] = gs
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	// All 10 should succeed — we have exactly enough ports
+	successCount := 0
+	allPorts := make(map[int]bool)
+	for i := 0; i < n; i++ {
+		if errs[i] != nil {
+			continue
+		}
+		successCount++
+		var ports []map[string]any
+		require.NoError(t, json.Unmarshal(gameservers[i].Ports, &ports))
+		for _, p := range ports {
+			hp := int(p["host_port"].(float64))
+			assert.False(t, allPorts[hp], "port %d allocated to multiple gameservers", hp)
+			allPorts[hp] = true
+		}
+	}
+	assert.Equal(t, n, successCount, "all concurrent creates should succeed")
+	assert.Len(t, allPorts, n*2, "each gameserver uses 2 ports, all should be unique")
 }

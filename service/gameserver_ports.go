@@ -9,8 +9,16 @@ import (
 	"github.com/warsmite/gamejanitor/models"
 )
 
+// UsedHostPorts returns all host ports in use.
+// In cluster scope: checks all nodes (ports are cluster-unique).
+// In node scope: checks only the given node.
 func (s *GameserverService) UsedHostPorts(nodeID string, excludeID string) (map[int]bool, error) {
-	allGS, err := models.ListGameservers(s.db, models.GameserverFilter{NodeID: &nodeID})
+	var filter models.GameserverFilter
+	if s.settingsSvc.GetString(SettingPortScope) == "node" {
+		filter.NodeID = &nodeID
+	}
+
+	allGS, err := models.ListGameservers(s.db, filter)
 	if err != nil {
 		return nil, fmt.Errorf("listing gameservers for port check: %w", err)
 	}
@@ -33,13 +41,7 @@ func (s *GameserverService) UsedHostPorts(nodeID string, excludeID string) (map[
 	return used, nil
 }
 
-func (s *GameserverService) portRangeForNode(nodeID string) (int, int) {
-	if nodeID != "" {
-		node, err := models.GetWorkerNode(s.db, nodeID)
-		if err == nil && node != nil && node.PortRangeStart != nil && node.PortRangeEnd != nil {
-			return *node.PortRangeStart, *node.PortRangeEnd
-		}
-	}
+func (s *GameserverService) portRange() (int, int) {
 	return s.settingsSvc.GetInt(SettingPortRangeStart), s.settingsSvc.GetInt(SettingPortRangeEnd)
 }
 
@@ -156,7 +158,7 @@ func (s *GameserverService) AllocatePorts(game *games.Game, nodeID string, exclu
 		portIndex[p] = i
 	}
 
-	rangeStart, rangeEnd := s.portRangeForNode(nodeID)
+	rangeStart, rangeEnd := s.portRange()
 
 	used, err := s.UsedHostPorts(nodeID, excludeID)
 	if err != nil {

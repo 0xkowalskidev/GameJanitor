@@ -93,8 +93,6 @@ var workersGetCmd = &cobra.Command{
 			GameserverCount   int      `json:"gameserver_count"`
 			AllocatedMemoryMB int      `json:"allocated_memory_mb"`
 			AllocatedCPU      float64  `json:"allocated_cpu"`
-			PortRangeStart    *int     `json:"port_range_start"`
-			PortRangeEnd      *int     `json:"port_range_end"`
 			MaxMemoryMB       *int     `json:"max_memory_mb"`
 			MaxCPU            *float64 `json:"max_cpu"`
 			MaxStorageMB      *int     `json:"max_storage_mb"`
@@ -123,11 +121,6 @@ var workersGetCmd = &cobra.Command{
 		fmt.Fprintf(w, "Allocated Memory:\t%s\n", formatMemory(wk.AllocatedMemoryMB))
 		fmt.Fprintf(w, "Allocated CPU:\t%.1f\n", wk.AllocatedCPU)
 
-		if wk.PortRangeStart != nil && wk.PortRangeEnd != nil {
-			fmt.Fprintf(w, "Port Range:\t%d-%d\n", *wk.PortRangeStart, *wk.PortRangeEnd)
-		} else {
-			fmt.Fprintf(w, "Port Range:\tdefault\n")
-		}
 		if wk.MaxMemoryMB != nil {
 			fmt.Fprintf(w, "Max Memory:\t%s\n", formatMemory(*wk.MaxMemoryMB))
 		}
@@ -139,53 +132,6 @@ var workersGetCmd = &cobra.Command{
 		}
 		fmt.Fprintf(w, "Last Seen:\t%s\n", wk.LastSeen)
 		w.Flush()
-		return nil
-	},
-}
-
-var workersSetPortRangeCmd = &cobra.Command{
-	Use:   "set-port-range <worker-id>",
-	Short: "Set a custom port range for a worker",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		start, _ := cmd.Flags().GetInt("start")
-		end, _ := cmd.Flags().GetInt("end")
-		if start == 0 || end == 0 {
-			return exitError(fmt.Errorf("--start and --end are required"))
-		}
-
-		body := map[string]any{
-			"port_range_start": start,
-			"port_range_end":   end,
-		}
-
-		resp, err := apiPatch("/api/workers/"+args[0]+"/port-range", body)
-		if err != nil {
-			return exitError(err)
-		}
-
-		if jsonOutput {
-			printJSONResponse(resp)
-			return nil
-		}
-
-		fmt.Printf("Port range set to %d-%d for worker %s.\n", start, end, args[0])
-		return nil
-	},
-}
-
-var workersClearPortRangeCmd = &cobra.Command{
-	Use:   "clear-port-range <worker-id>",
-	Short: "Clear custom port range (revert to global default)",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		_, err := apiDelete("/api/workers/" + args[0] + "/port-range")
-		if err != nil {
-			return exitError(err)
-		}
-		if !jsonOutput {
-			fmt.Printf("Port range cleared for worker %s.\n", args[0])
-		}
 		return nil
 	},
 }
@@ -280,16 +226,12 @@ var workersUncordonCmd = &cobra.Command{
 }
 
 func init() {
-	workersSetPortRangeCmd.Flags().Int("start", 0, "Port range start (required)")
-	workersSetPortRangeCmd.Flags().Int("end", 0, "Port range end (required)")
-
 	workersSetLimitsCmd.Flags().Int("max-memory", 0, "Max memory in MB (0 to clear)")
 	workersSetLimitsCmd.Flags().Float64("max-cpu", 0, "Max CPU cores (0 to clear)")
 	workersSetLimitsCmd.Flags().Int("max-storage", 0, "Max storage in MB (0 to clear)")
 
 	workersCmd.AddCommand(
 		workersListCmd, workersGetCmd,
-		workersSetPortRangeCmd, workersClearPortRangeCmd,
 		workersSetLimitsCmd, workersClearLimitsCmd,
 		workersCordonCmd, workersUncordonCmd,
 	)

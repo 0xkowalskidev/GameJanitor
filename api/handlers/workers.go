@@ -45,49 +45,6 @@ func (h *WorkerHandlers) respondWithWorker(w http.ResponseWriter, workerID strin
 	respondOK(w, view)
 }
 
-func (h *WorkerHandlers) SetPortRange(w http.ResponseWriter, r *http.Request) {
-	workerID := chi.URLParam(r, "workerID")
-
-	var req struct {
-		PortRangeStart int `json:"port_range_start"`
-		PortRangeEnd   int `json:"port_range_end"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
-		return
-	}
-	if req.PortRangeStart < 1024 || req.PortRangeStart > 65535 {
-		respondError(w, http.StatusBadRequest, "port_range_start must be 1024-65535")
-		return
-	}
-	if req.PortRangeEnd < 1024 || req.PortRangeEnd > 65535 {
-		respondError(w, http.StatusBadRequest, "port_range_end must be 1024-65535")
-		return
-	}
-	if req.PortRangeEnd <= req.PortRangeStart {
-		respondError(w, http.StatusBadRequest, "port_range_end must be greater than port_range_start")
-		return
-	}
-
-	if err := h.svc.SetPortRange(workerID, &req.PortRangeStart, &req.PortRangeEnd); err != nil {
-		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
-		return
-	}
-
-	h.log.Info("worker port range set via API", "worker_id", workerID, "start", req.PortRangeStart, "end", req.PortRangeEnd)
-	h.respondWithWorker(w, workerID)
-}
-
-func (h *WorkerHandlers) ClearPortRange(w http.ResponseWriter, r *http.Request) {
-	workerID := chi.URLParam(r, "workerID")
-	if err := h.svc.SetPortRange(workerID, nil, nil); err != nil {
-		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
-		return
-	}
-	h.log.Info("worker port range cleared via API", "worker_id", workerID)
-	h.respondWithWorker(w, workerID)
-}
-
 func (h *WorkerHandlers) SetLimits(w http.ResponseWriter, r *http.Request) {
 	workerID := chi.URLParam(r, "workerID")
 

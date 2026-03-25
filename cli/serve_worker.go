@@ -219,12 +219,6 @@ func enrollWithController(cfg config.Config, grpcPort int, logger *slog.Logger) 
 		regReq.DiskAvailableMb = hb.DiskAvailableMb
 
 		if wl := cfg.WorkerLimits; wl != nil {
-			if wl.PortRangeStart > 0 {
-				regReq.PortRangeStart = int32(wl.PortRangeStart)
-			}
-			if wl.PortRangeEnd > 0 {
-				regReq.PortRangeEnd = int32(wl.PortRangeEnd)
-			}
 			if wl.MaxMemoryMB > 0 {
 				regReq.MaxMemoryMb = int64(wl.MaxMemoryMB)
 			}
@@ -328,12 +322,6 @@ func runRegistrationLoop(cfg config.Config, workerID, ownAddr string, tlsConfig 
 
 		// Report worker limits from config
 		if wl := cfg.WorkerLimits; wl != nil {
-			if wl.PortRangeStart > 0 {
-				regReq.PortRangeStart = int32(wl.PortRangeStart)
-			}
-			if wl.PortRangeEnd > 0 {
-				regReq.PortRangeEnd = int32(wl.PortRangeEnd)
-			}
 			if wl.MaxMemoryMB > 0 {
 				regReq.MaxMemoryMb = int64(wl.MaxMemoryMB)
 			}

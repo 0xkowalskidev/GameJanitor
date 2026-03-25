@@ -88,14 +88,6 @@ func (c *ControllerGRPC) Register(ctx context.Context, req *pb.RegisterRequest) 
 		}
 	}
 
-	// Persist worker-reported port range if provided
-	if req.PortRangeStart > 0 && req.PortRangeEnd > 0 {
-		start, end := int(req.PortRangeStart), int(req.PortRangeEnd)
-		if err := models.SetWorkerNodePortRange(c.db, req.WorkerId, &start, &end); err != nil {
-			c.log.Error("failed to set worker port range on register", "worker_id", req.WorkerId, "error", err)
-		}
-	}
-
 	// Persist worker-reported resource limits (ENV-configured on worker takes precedence over API)
 	if req.MaxMemoryMb > 0 || req.MaxCpu > 0 || req.MaxStorageMb > 0 {
 		var maxMem *int

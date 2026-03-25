@@ -15,6 +15,7 @@ const (
 	SettingConnectionAddress   = "connection_address"
 	SettingPortRangeStart      = "port_range_start"
 	SettingPortRangeEnd        = "port_range_end"
+	SettingPortScope           = "port_scope"
 	SettingPortMode            = "port_mode"
 	SettingMaxBackups          = "max_backups"
 	SettingAuthEnabled         = "auth_enabled"
@@ -36,6 +37,7 @@ var Defaults = map[string]any{
 	SettingConnectionAddress:   "",
 	SettingPortRangeStart:      27000,
 	SettingPortRangeEnd:        28999,
+	SettingPortScope:           "cluster",
 	SettingPortMode:            "auto",
 	SettingMaxBackups:          10,
 	SettingAuthEnabled:         false,

@@ -8,12 +8,10 @@ import (
 
 type WorkerNode struct {
 	ID             string     `json:"id"`
-	GRPCAddress    string     `json:"grpc_address"`
-	LanIP          string     `json:"lan_ip"`
-	ExternalIP     string     `json:"external_ip"`
-	PortRangeStart *int       `json:"port_range_start"`
-	PortRangeEnd   *int       `json:"port_range_end"`
-	MaxMemoryMB    *int       `json:"max_memory_mb"`
+	GRPCAddress  string     `json:"grpc_address"`
+	LanIP        string     `json:"lan_ip"`
+	ExternalIP   string     `json:"external_ip"`
+	MaxMemoryMB  *int       `json:"max_memory_mb"`
 	MaxCPU         *float64   `json:"max_cpu"`
 	MaxStorageMB   *int       `json:"max_storage_mb"`
 	Cordoned       bool       `json:"cordoned"`
@@ -24,7 +22,7 @@ type WorkerNode struct {
 	UpdatedAt      time.Time  `json:"updated_at"`
 }
 
-const workerNodeColumns = "id, grpc_address, lan_ip, external_ip, port_range_start, port_range_end, max_memory_mb, max_cpu, max_storage_mb, cordoned, tags, sftp_port, last_seen, created_at, updated_at"
+const workerNodeColumns = "id, grpc_address, lan_ip, external_ip, max_memory_mb, max_cpu, max_storage_mb, cordoned, tags, sftp_port, last_seen, created_at, updated_at"
 
 // UpsertWorkerNode inserts or updates a worker node's IP and last_seen fields.
 // Does not touch port_range columns — those are managed separately via SetWorkerNodePortRange.
@@ -52,7 +50,7 @@ func GetWorkerNode(db *sql.DB, id string) (*WorkerNode, error) {
 	err := db.QueryRow(
 		"SELECT " + workerNodeColumns + " FROM worker_nodes WHERE id = ?",
 		id,
-	).Scan(&n.ID, &n.GRPCAddress, &n.LanIP, &n.ExternalIP, &n.PortRangeStart, &n.PortRangeEnd, &n.MaxMemoryMB, &n.MaxCPU, &n.MaxStorageMB, &n.Cordoned, &n.Tags, &n.SFTPPort, &n.LastSeen, &n.CreatedAt, &n.UpdatedAt)
+	).Scan(&n.ID, &n.GRPCAddress, &n.LanIP, &n.ExternalIP, &n.MaxMemoryMB, &n.MaxCPU, &n.MaxStorageMB, &n.Cordoned, &n.Tags, &n.SFTPPort, &n.LastSeen, &n.CreatedAt, &n.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -72,30 +70,12 @@ func ListWorkerNodes(db *sql.DB) ([]WorkerNode, error) {
 	var nodes []WorkerNode
 	for rows.Next() {
 		var n WorkerNode
-		if err := rows.Scan(&n.ID, &n.GRPCAddress, &n.LanIP, &n.ExternalIP, &n.PortRangeStart, &n.PortRangeEnd, &n.MaxMemoryMB, &n.MaxCPU, &n.MaxStorageMB, &n.Cordoned, &n.Tags, &n.SFTPPort, &n.LastSeen, &n.CreatedAt, &n.UpdatedAt); err != nil {
+		if err := rows.Scan(&n.ID, &n.GRPCAddress, &n.LanIP, &n.ExternalIP, &n.MaxMemoryMB, &n.MaxCPU, &n.MaxStorageMB, &n.Cordoned, &n.Tags, &n.SFTPPort, &n.LastSeen, &n.CreatedAt, &n.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scanning worker node row: %w", err)
 		}
 		nodes = append(nodes, n)
 	}
 	return nodes, rows.Err()
-}
-
-func SetWorkerNodePortRange(db *sql.DB, id string, start, end *int) error {
-	result, err := db.Exec(
-		"UPDATE worker_nodes SET port_range_start = ?, port_range_end = ?, updated_at = ? WHERE id = ?",
-		start, end, time.Now(), id,
-	)
-	if err != nil {
-		return fmt.Errorf("setting port range for worker node %s: %w", id, err)
-	}
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("checking rows affected for worker node %s: %w", id, err)
-	}
-	if rows == 0 {
-		return fmt.Errorf("worker node %s not found", id)
-	}
-	return nil
 }
 
 func SetWorkerNodeSFTPPort(db *sql.DB, id string, sftpPort int) error {

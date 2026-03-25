@@ -163,29 +163,28 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 		s.log.Warn("failed to clean up migration data from store", "migration_id", migrationID, "error", err)
 	}
 
-	// Lock placement to prevent port races with concurrent creates/migrations
-	s.placementMu.Lock()
-
-	// Reallocate ports on target node's range
-	game := s.gameStore.GetGame(gs.GameID)
-	if game == nil {
-		s.placementMu.Unlock()
-		return ErrNotFoundf("game %s not found", gs.GameID)
-	}
-	newPorts, err := s.AllocatePorts(game, targetNodeID, "")
-	if err != nil {
-		s.placementMu.Unlock()
-		return fmt.Errorf("allocating ports on target node: %w", err)
-	}
-
-	// Update DB: node_id and ports
+	// Update node assignment (and reallocate ports if using per-node port scope)
 	gs.NodeID = &targetNodeID
-	gs.Ports = newPorts
-	if err := models.UpdateGameserver(s.db, gs); err != nil {
+
+	if s.settingsSvc.GetString(SettingPortScope) == "node" {
+		s.placementMu.Lock()
+		game := s.gameStore.GetGame(gs.GameID)
+		if game == nil {
+			s.placementMu.Unlock()
+			return ErrNotFoundf("game %s not found", gs.GameID)
+		}
+		newPorts, err := s.AllocatePorts(game, targetNodeID, "")
+		if err != nil {
+			s.placementMu.Unlock()
+			return fmt.Errorf("allocating ports on target node: %w", err)
+		}
+		gs.Ports = newPorts
 		s.placementMu.Unlock()
+	}
+
+	if err := models.UpdateGameserver(s.db, gs); err != nil {
 		return fmt.Errorf("updating gameserver node assignment: %w", err)
 	}
-	s.placementMu.Unlock()
 
 	// Clean up old volume on source worker
 	if err := sourceWorker.RemoveVolume(ctx, gs.VolumeName); err != nil {
