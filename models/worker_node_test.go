@@ -29,8 +29,6 @@ func TestWorkerNode_UpsertAndGet(t *testing.T) {
 	assert.Equal(t, "127.0.0.1:9090", got.GRPCAddress)
 	assert.Equal(t, "192.168.1.10", got.LanIP)
 	assert.Equal(t, "1.2.3.4", got.ExternalIP)
-	assert.Nil(t, got.PortRangeStart)
-	assert.Nil(t, got.PortRangeEnd)
 	assert.Nil(t, got.MaxMemoryMB)
 	assert.Nil(t, got.MaxCPU)
 	assert.Nil(t, got.MaxStorageMB)
@@ -106,52 +104,6 @@ func TestWorkerNode_List(t *testing.T) {
 	// Ordered by ID
 	assert.Equal(t, "worker-a", list[0].ID)
 	assert.Equal(t, "worker-b", list[1].ID)
-}
-
-func TestWorkerNode_SetPortRange(t *testing.T) {
-	t.Parallel()
-	db := testutil.NewTestDB(t)
-
-	node := &models.WorkerNode{ID: "worker-pr", GRPCAddress: "127.0.0.1:9090"}
-	require.NoError(t, models.UpsertWorkerNode(db, node))
-
-	start, end := 25000, 25100
-	require.NoError(t, models.SetWorkerNodePortRange(db, "worker-pr", &start, &end))
-
-	got, err := models.GetWorkerNode(db, "worker-pr")
-	require.NoError(t, err)
-	require.NotNil(t, got)
-	require.NotNil(t, got.PortRangeStart)
-	require.NotNil(t, got.PortRangeEnd)
-	assert.Equal(t, 25000, *got.PortRangeStart)
-	assert.Equal(t, 25100, *got.PortRangeEnd)
-}
-
-func TestWorkerNode_SetPortRange_ClearWithNil(t *testing.T) {
-	t.Parallel()
-	db := testutil.NewTestDB(t)
-
-	node := &models.WorkerNode{ID: "worker-prc", GRPCAddress: "127.0.0.1:9090"}
-	require.NoError(t, models.UpsertWorkerNode(db, node))
-
-	start, end := 25000, 25100
-	require.NoError(t, models.SetWorkerNodePortRange(db, "worker-prc", &start, &end))
-	require.NoError(t, models.SetWorkerNodePortRange(db, "worker-prc", nil, nil))
-
-	got, err := models.GetWorkerNode(db, "worker-prc")
-	require.NoError(t, err)
-	require.NotNil(t, got)
-	assert.Nil(t, got.PortRangeStart)
-	assert.Nil(t, got.PortRangeEnd)
-}
-
-func TestWorkerNode_SetPortRange_NotFound(t *testing.T) {
-	t.Parallel()
-	db := testutil.NewTestDB(t)
-
-	err := models.SetWorkerNodePortRange(db, "nonexistent", nil, nil)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not found")
 }
 
 func TestWorkerNode_SetSFTPPort(t *testing.T) {
