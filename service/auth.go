@@ -156,6 +156,16 @@ func (s *AuthService) CreateCustomToken(name string, gameserverIDs []string, per
 		return "", nil, ErrBadRequest("token name is required")
 	}
 
+	for _, gsID := range gameserverIDs {
+		gs, err := models.GetGameserver(s.db, gsID)
+		if err != nil {
+			return "", nil, fmt.Errorf("validating gameserver ID %s: %w", gsID, err)
+		}
+		if gs == nil {
+			return "", nil, ErrBadRequestf("gameserver %s not found", gsID)
+		}
+	}
+
 	for _, p := range permissions {
 		if !isValidPermission(p) {
 			return "", nil, ErrBadRequestf("invalid permission: %s", p)

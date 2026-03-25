@@ -118,6 +118,15 @@ func TestAuth_CustomToken_EmptyGameserverIDs_AllAccess(t *testing.T) {
 	assert.True(t, service.HasPermission(validated, gs.ID, service.PermGameserverStart))
 }
 
+func TestAuth_CustomToken_InvalidGameserverID(t *testing.T) {
+	t.Parallel()
+	svc := testutil.NewTestServices(t)
+
+	_, _, err := svc.AuthSvc.CreateCustomToken("bad-scope", []string{"nonexistent-gs"}, []string{service.PermGameserverStart}, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+}
+
 func TestAuth_CustomToken_WrongPermission(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
