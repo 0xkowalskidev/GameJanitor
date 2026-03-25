@@ -26,17 +26,6 @@ var eventsCmd = &cobra.Command{
 	},
 }
 
-// --- Cluster context (TODO: implement ~/.config/gamejanitor/clusters.yaml management) ---
-
-var clusterCmd = &cobra.Command{
-	Use:     "cluster",
-	Aliases: []string{"ctx"},
-	Short:   "Manage cluster connections",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return fmt.Errorf("cluster command not yet implemented")
-	},
-}
-
 // --- Install (TODO: generate and enable systemd/launchd service) ---
 
 var installCmd = &cobra.Command{

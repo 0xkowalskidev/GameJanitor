@@ -35,8 +35,8 @@ func apiDelete(path string) (*apiResponse, error) {
 }
 
 func apiRequest(method, path string, body any) (*apiResponse, error) {
-	// TODO: resolve apiURL and authToken from cluster context when clusterName is set
-	url := strings.TrimRight(apiURL, "/") + path
+	resolvedURL, resolvedToken := resolveClusterContext()
+	url := strings.TrimRight(resolvedURL, "/") + path
 
 	var bodyReader io.Reader
 	if body != nil {
@@ -54,13 +54,13 @@ func apiRequest(method, path string, body any) (*apiResponse, error) {
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	if authToken != "" {
-		req.Header.Set("Authorization", "Bearer "+authToken)
+	if resolvedToken != "" {
+		req.Header.Set("Authorization", "Bearer "+resolvedToken)
 	}
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("cannot connect to gamejanitor at %s\n  Is the server running? Start it with: gamejanitor serve\n  Or set up a remote cluster: gamejanitor cluster add <name> --address <url> --token <token>", apiURL)
+		return nil, fmt.Errorf("cannot connect to gamejanitor at %s\n  Is the server running? Start it with: gamejanitor serve\n  Or set up a remote cluster: gamejanitor cluster add <name> --address <url> --token <token>", resolvedURL)
 	}
 	defer resp.Body.Close()
 
@@ -82,24 +82,32 @@ func apiRequest(method, path string, body any) (*apiResponse, error) {
 
 // apiDownload performs a raw HTTP GET and returns the response body. Caller must close.
 func apiDownload(path string) (*http.Response, error) {
-	url := strings.TrimRight(apiURL, "/") + path
+	resolvedURL, resolvedToken := resolveClusterContext()
+	url := strings.TrimRight(resolvedURL, "/") + path
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating request: %w", err)
 	}
-	if authToken != "" {
-		req.Header.Set("Authorization", "Bearer "+authToken)
+	if resolvedToken != "" {
+		req.Header.Set("Authorization", "Bearer "+resolvedToken)
 	}
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("cannot connect to gamejanitor at %s", apiURL)
+		return nil, fmt.Errorf("cannot connect to gamejanitor at %s", resolvedURL)
 	}
 	if resp.StatusCode != http.StatusOK {
 		resp.Body.Close()
 		return nil, fmt.Errorf("download failed: HTTP %d", resp.StatusCode)
 	}
 	return resp, nil
+}
+
+// --- JSON helpers ---
+
+func mustMarshal(v any) json.RawMessage {
+	data, _ := json.Marshal(v)
+	return data
 }
 
 // --- Output helpers ---
