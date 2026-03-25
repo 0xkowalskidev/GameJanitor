@@ -12,11 +12,12 @@ import (
 type StatusHandlers struct {
 	gameserverSvc *service.GameserverService
 	querySvc      *service.QueryService
+	workerSvc     *service.WorkerNodeService
 	log           *slog.Logger
 }
 
-func NewStatusHandlers(gameserverSvc *service.GameserverService, querySvc *service.QueryService, log *slog.Logger) *StatusHandlers {
-	return &StatusHandlers{gameserverSvc: gameserverSvc, querySvc: querySvc, log: log}
+func NewStatusHandlers(gameserverSvc *service.GameserverService, querySvc *service.QueryService, workerSvc *service.WorkerNodeService, log *slog.Logger) *StatusHandlers {
+	return &StatusHandlers{gameserverSvc: gameserverSvc, querySvc: querySvc, workerSvc: workerSvc, log: log}
 }
 
 type gameserverOverview struct {
@@ -35,6 +36,15 @@ type statusSummary struct {
 	Total   int `json:"total"`
 	Running int `json:"running"`
 	Stopped int `json:"stopped"`
+}
+
+type clusterSummary struct {
+	Workers           int     `json:"workers"`
+	WorkersCordoned   int     `json:"workers_cordoned"`
+	TotalMemoryMB     int64   `json:"total_memory_mb"`
+	AllocatedMemoryMB int     `json:"allocated_memory_mb"`
+	TotalCPU          float64 `json:"total_cpu"`
+	AllocatedCPU      float64 `json:"allocated_cpu"`
 }
 
 func (h *StatusHandlers) Get(w http.ResponseWriter, r *http.Request) {
@@ -90,8 +100,37 @@ func (h *StatusHandlers) Get(w http.ResponseWriter, r *http.Request) {
 		overviews = append(overviews, o)
 	}
 
+	cluster := h.buildClusterSummary(gameservers)
+
 	respondOK(w, map[string]any{
 		"gameservers": overviews,
 		"summary":     summary,
+		"cluster":     cluster,
 	})
+}
+
+func (h *StatusHandlers) buildClusterSummary(gameservers []models.Gameserver) clusterSummary {
+	var cluster clusterSummary
+
+	workers, err := h.workerSvc.List()
+	if err != nil {
+		h.log.Error("listing workers for cluster summary", "error", err)
+		return cluster
+	}
+
+	cluster.Workers = len(workers)
+	for _, w := range workers {
+		cluster.TotalMemoryMB += w.MemoryTotalMB
+		cluster.TotalCPU += float64(w.CPUCores)
+		if w.Cordoned {
+			cluster.WorkersCordoned++
+		}
+	}
+
+	for _, gs := range gameservers {
+		cluster.AllocatedMemoryMB += gs.MemoryLimitMB
+		cluster.AllocatedCPU += gs.CPULimit
+	}
+
+	return cluster
 }
