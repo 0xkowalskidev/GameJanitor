@@ -140,14 +140,13 @@ var getCmd = &cobra.Command{
 // --- Create ---
 
 var createCmd = &cobra.Command{
-	Use:   "create",
+	Use:   "create <name> <game>",
 	Short: "Create a new gameserver",
+	Args:  cobra.ExactArgs(2),
 	RunE:  runCreate,
 }
 
 func init() {
-	createCmd.Flags().String("name", "", "Gameserver name")
-	createCmd.Flags().String("game", "", "Game ID")
 	createCmd.Flags().StringSlice("port", nil, "Port mapping (name:host:container/proto)")
 	createCmd.Flags().StringSlice("env", nil, "Environment variable (KEY=VALUE)")
 	createCmd.Flags().String("memory", "", "Memory limit (e.g. 512m, 4g, 2048)")
@@ -157,18 +156,12 @@ func init() {
 }
 
 func runCreate(cmd *cobra.Command, args []string) error {
-	name, _ := cmd.Flags().GetString("name")
-	gameID, _ := cmd.Flags().GetString("game")
+	name := args[0]
+	gameID := args[1]
 	portFlags, _ := cmd.Flags().GetStringSlice("port")
 	envFlags, _ := cmd.Flags().GetStringSlice("env")
 	memoryStr, _ := cmd.Flags().GetString("memory")
 	cpu, _ := cmd.Flags().GetFloat64("cpu")
-
-	// TODO: interactive mode when name/game missing and stdin is TTY
-
-	if name == "" || gameID == "" {
-		return exitError(fmt.Errorf("--name and --game are required"))
-	}
 
 	memory, err := parseMemory(memoryStr)
 	if err != nil {

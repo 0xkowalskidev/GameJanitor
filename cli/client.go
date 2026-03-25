@@ -219,8 +219,8 @@ func resolveID(identifier, resourceType string, entries []namedEntry) (string, e
 		}
 	}
 
-	// UUID prefix match (min 4 chars)
-	if len(identifier) >= 4 {
+	// UUID prefix match (min 2 chars)
+	if len(identifier) >= 2 {
 		var matches []namedEntry
 		lower := strings.ToLower(identifier)
 		for _, e := range entries {

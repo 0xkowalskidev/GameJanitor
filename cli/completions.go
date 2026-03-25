@@ -111,6 +111,14 @@ func registerCompletions() {
 	// status takes optional gameserver arg
 	statusCmd.ValidArgsFunction = completeGameserverName
 
+	// create takes <name> <game> — complete game ID for second arg
+	createCmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) == 1 {
+			return completeGameID(cmd, nil, toComplete)
+		}
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+
 	// Backups/schedules take gameserver as first arg
 	for _, cmd := range backupsCmd.Commands() {
 		cmd.ValidArgsFunction = completeGameserverNameAtPos(0)
