@@ -26,7 +26,6 @@ func newGameserver(id, name, gameID string, nodeID *string) *models.Gameserver {
 	}
 }
 
-func strPtr(s string) *string { return &s }
 
 func TestGameserver_CreateAndGet(t *testing.T) {
 	t.Parallel()
@@ -87,11 +86,11 @@ func TestGameserver_ListFilters(t *testing.T) {
 	t.Parallel()
 	db := testutil.NewTestDB(t)
 
-	gs1 := newGameserver("gs-1", "Server1", "minecraft-java", strPtr("node-a"))
+	gs1 := newGameserver("gs-1", "Server1", "minecraft-java", testutil.StrPtr("node-a"))
 	gs1.Status = "running"
-	gs2 := newGameserver("gs-2", "Server2", "rust", strPtr("node-b"))
+	gs2 := newGameserver("gs-2", "Server2", "rust", testutil.StrPtr("node-b"))
 	gs2.Status = "stopped"
-	gs3 := newGameserver("gs-3", "Server3", "minecraft-java", strPtr("node-a"))
+	gs3 := newGameserver("gs-3", "Server3", "minecraft-java", testutil.StrPtr("node-a"))
 	gs3.Status = "stopped"
 
 	require.NoError(t, models.CreateGameserver(db, gs1))
@@ -131,13 +130,13 @@ func TestGameserver_AllocationQueries(t *testing.T) {
 	t.Parallel()
 	db := testutil.NewTestDB(t)
 
-	gs1 := newGameserver("gs-1", "S1", "test-game", strPtr("node-a"))
+	gs1 := newGameserver("gs-1", "S1", "test-game", testutil.StrPtr("node-a"))
 	gs1.MemoryLimitMB = 2048
 	gs1.CPULimit = 2.0
-	gs2 := newGameserver("gs-2", "S2", "test-game", strPtr("node-a"))
+	gs2 := newGameserver("gs-2", "S2", "test-game", testutil.StrPtr("node-a"))
 	gs2.MemoryLimitMB = 4096
 	gs2.CPULimit = 1.5
-	gs3 := newGameserver("gs-3", "S3", "test-game", strPtr("node-b"))
+	gs3 := newGameserver("gs-3", "S3", "test-game", testutil.StrPtr("node-b"))
 	gs3.MemoryLimitMB = 1024
 
 	require.NoError(t, models.CreateGameserver(db, gs1))
@@ -161,9 +160,9 @@ func TestGameserver_AllocationExcluding(t *testing.T) {
 	t.Parallel()
 	db := testutil.NewTestDB(t)
 
-	gs1 := newGameserver("gs-1", "S1", "test-game", strPtr("node-a"))
+	gs1 := newGameserver("gs-1", "S1", "test-game", testutil.StrPtr("node-a"))
 	gs1.MemoryLimitMB = 2048
-	gs2 := newGameserver("gs-2", "S2", "test-game", strPtr("node-a"))
+	gs2 := newGameserver("gs-2", "S2", "test-game", testutil.StrPtr("node-a"))
 	gs2.MemoryLimitMB = 4096
 
 	require.NoError(t, models.CreateGameserver(db, gs1))

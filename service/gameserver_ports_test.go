@@ -26,7 +26,7 @@ func TestPlacement_RanksWorkersByHeadroom(t *testing.T) {
 		GameID:        testutil.TestGameID,
 		MemoryLimitMB: 2048,
 		Env:           []byte(`{"REQUIRED_VAR":"x"}`),
-		NodeID:        strPtr("worker-1"),
+		NodeID:        testutil.StrPtr("worker-1"),
 	}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs1)
 	require.NoError(t, err)
@@ -44,8 +44,6 @@ func TestPlacement_RanksWorkersByHeadroom(t *testing.T) {
 	assert.Equal(t, "worker-2", *gs2.NodeID)
 }
 
-func strPtr(s string) *string { return &s }
-
 func TestPlacement_TagFiltering(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
@@ -54,10 +52,6 @@ func TestPlacement_TagFiltering(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-gpu", testutil.WithTags([]string{"gpu"}))
 	testutil.RegisterFakeWorker(t, svc, "worker-plain")
 
-	// Set tags on the gpu worker in the DB
-	_, err := svc.DB.Exec(`UPDATE worker_nodes SET tags = ? WHERE id = ?`, `["gpu"]`, "worker-gpu")
-	require.NoError(t, err)
-
 	// Request a gameserver that requires the "gpu" tag
 	gs := &models.Gameserver{
 		Name:     "GPU Server",
@@ -65,7 +59,7 @@ func TestPlacement_TagFiltering(t *testing.T) {
 		NodeTags: `["gpu"]`,
 		Env:      []byte(`{"REQUIRED_VAR":"hello"}`),
 	}
-	_, err = svc.GameserverSvc.CreateGameserver(ctx, gs)
+	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.NoError(t, err)
 	require.NotNil(t, gs.NodeID)
 	assert.Equal(t, "worker-gpu", *gs.NodeID)

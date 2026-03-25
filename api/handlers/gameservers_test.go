@@ -103,12 +103,25 @@ func TestAPI_GetGameserver_Success(t *testing.T) {
 	gsID := createResult.Data.ID
 	require.NotEmpty(t, gsID)
 
-	// Get it
+	// Get it and verify response body has the right data
 	getResp, err := http.Get(api.Server.URL + "/api/gameservers/" + gsID)
 	require.NoError(t, err)
 	defer getResp.Body.Close()
 
 	assert.Equal(t, http.StatusOK, getResp.StatusCode)
+
+	var getResult struct {
+		Status string `json:"status"`
+		Data   struct {
+			ID     string `json:"id"`
+			Name   string `json:"name"`
+			GameID string `json:"game_id"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.NewDecoder(getResp.Body).Decode(&getResult))
+	assert.Equal(t, gsID, getResult.Data.ID)
+	assert.Equal(t, "Get Test", getResult.Data.Name)
+	assert.Equal(t, testutil.TestGameID, getResult.Data.GameID)
 }
 
 func TestAPI_DeleteGameserver_Success(t *testing.T) {
@@ -142,6 +155,12 @@ func TestAPI_DeleteGameserver_Success(t *testing.T) {
 	defer delResp.Body.Close()
 
 	assert.Equal(t, http.StatusNoContent, delResp.StatusCode)
+
+	// Verify it's actually gone
+	getResp, err := http.Get(api.Server.URL + "/api/gameservers/" + gsID)
+	require.NoError(t, err)
+	defer getResp.Body.Close()
+	assert.Equal(t, http.StatusNotFound, getResp.StatusCode)
 }
 
 func TestAPI_ResponseEnvelope(t *testing.T) {

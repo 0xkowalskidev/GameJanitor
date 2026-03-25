@@ -11,30 +11,16 @@ import (
 	"github.com/warsmite/gamejanitor/testutil"
 )
 
-func createTestGameserver(t *testing.T, svc *testutil.ServiceBundle) *models.Gameserver {
-	t.Helper()
-	gs := &models.Gameserver{
-		Name:   "Lifecycle Test",
-		GameID: testutil.TestGameID,
-		Env:    []byte(`{"REQUIRED_VAR":"hello"}`),
-	}
-	_, err := svc.GameserverSvc.CreateGameserver(testutil.TestContext(), gs)
-	require.NoError(t, err)
-	return gs
-}
 
 func TestLifecycle_Start_HappyPath(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
 	fw := testutil.RegisterFakeWorker(t, svc, "worker-1")
-	_ = fw
-
-	gs := createTestGameserver(t, svc)
+	gs := testutil.CreateTestGameserver(t, svc)
 
 	err := svc.GameserverSvc.Start(testutil.TestContext(), gs.ID)
 	require.NoError(t, err)
 
-	// Verify container was created on the worker
 	assert.Greater(t, fw.ContainerCount(), 0, "should have created a container")
 
 	// Verify gameserver has container ID in DB
@@ -48,7 +34,7 @@ func TestLifecycle_Stop_HappyPath(t *testing.T) {
 	svc := testutil.NewTestServices(t)
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 
-	gs := createTestGameserver(t, svc)
+	gs := testutil.CreateTestGameserver(t, svc)
 
 	// Start it first
 	require.NoError(t, svc.GameserverSvc.Start(testutil.TestContext(), gs.ID))
@@ -63,7 +49,7 @@ func TestLifecycle_Start_AlreadyRunning_Noop(t *testing.T) {
 	svc := testutil.NewTestServices(t)
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 
-	gs := createTestGameserver(t, svc)
+	gs := testutil.CreateTestGameserver(t, svc)
 	require.NoError(t, svc.GameserverSvc.Start(testutil.TestContext(), gs.ID))
 
 	// Manually set status to running to simulate the status subscriber
@@ -81,7 +67,7 @@ func TestLifecycle_Start_PullImageFailure(t *testing.T) {
 	svc := testutil.NewTestServices(t)
 	fw := testutil.RegisterFakeWorker(t, svc, "worker-1")
 
-	gs := createTestGameserver(t, svc)
+	gs := testutil.CreateTestGameserver(t, svc)
 
 	fw.FailNext("PullImage", fmt.Errorf("network timeout"))
 
@@ -105,7 +91,7 @@ func TestLifecycle_Stop_AlreadyStopped_Noop(t *testing.T) {
 	svc := testutil.NewTestServices(t)
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 
-	gs := createTestGameserver(t, svc)
+	gs := testutil.CreateTestGameserver(t, svc)
 	// Gameserver starts as "stopped" — stopping again should be a no-op
 	err := svc.GameserverSvc.Stop(testutil.TestContext(), gs.ID)
 	assert.NoError(t, err)

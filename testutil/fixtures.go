@@ -10,11 +10,34 @@ import (
 	"time"
 
 	"github.com/warsmite/gamejanitor/games"
+	"github.com/warsmite/gamejanitor/models"
 	"github.com/warsmite/gamejanitor/service"
 )
 
 // TestGameID is the game ID used by the test game definition in testdata/.
+// When creating gameservers manually (not via CreateTestGameserver), remember:
+//   - Env must include REQUIRED_VAR: Env: []byte(`{"REQUIRED_VAR":"value"}`)
+//   - Set PortMode: "auto" if testing port allocation (Go zero value "" skips allocation — known bug)
 const TestGameID = "test-game"
+
+func StrPtr(s string) *string { return &s }
+
+// CreateTestGameserver creates a gameserver with sensible defaults for tests that
+// need one but aren't testing creation itself. Requires a registered worker.
+// The test game definition requires REQUIRED_VAR to be set — this helper provides it.
+func CreateTestGameserver(t *testing.T, svc *ServiceBundle) *models.Gameserver {
+	t.Helper()
+	gs := &models.Gameserver{
+		Name:   "Test Gameserver",
+		GameID: TestGameID,
+		Env:    []byte(`{"REQUIRED_VAR":"test-value"}`),
+	}
+	_, err := svc.GameserverSvc.CreateGameserver(TestContext(), gs)
+	if err != nil {
+		t.Fatalf("creating test gameserver: %v", err)
+	}
+	return gs
+}
 
 // testdataDir returns the absolute path to the testdata/ directory.
 func testdataDir() string {

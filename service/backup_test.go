@@ -11,9 +11,6 @@ import (
 	"github.com/warsmite/gamejanitor/testutil"
 )
 
-// waitForBackupGoroutine gives the async backup goroutine time to complete.
-// CreateBackup spawns a goroutine; without this, t.Cleanup closes the DB
-// while the goroutine is still running, causing a panic.
 // waitForBackupCompletion polls the backup record until it leaves in_progress state.
 // CreateBackup spawns a goroutine; we must wait for it to finish before the test
 // returns and t.Cleanup closes the DB, otherwise the goroutine panics.

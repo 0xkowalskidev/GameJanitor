@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"database/sql"
+	"encoding/json"
 	"testing"
 
 	"github.com/warsmite/gamejanitor/games"
@@ -108,9 +109,15 @@ func RegisterFakeWorker(t *testing.T, svc *ServiceBundle, nodeID string, opts ..
 		opt(&cfg)
 	}
 
+	tagsJSON := "[]"
+	if len(cfg.tags) > 0 {
+		b, _ := json.Marshal(cfg.tags)
+		tagsJSON = string(b)
+	}
+
 	// Persist the worker node record in the DB so placement queries find it
-	_, err := svc.DB.Exec(`INSERT INTO worker_nodes (id, port_range_start, port_range_end, max_memory_mb, max_cpu, max_storage_mb) VALUES (?, ?, ?, ?, ?, ?)`,
-		nodeID, cfg.portRangeStart, cfg.portRangeEnd, cfg.maxMemoryMB, cfg.maxCPU, cfg.maxStorageMB)
+	_, err := svc.DB.Exec(`INSERT INTO worker_nodes (id, port_range_start, port_range_end, max_memory_mb, max_cpu, max_storage_mb, tags) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		nodeID, cfg.portRangeStart, cfg.portRangeEnd, cfg.maxMemoryMB, cfg.maxCPU, cfg.maxStorageMB, tagsJSON)
 	if err != nil {
 		t.Fatalf("inserting worker node: %v", err)
 	}

@@ -144,9 +144,10 @@ func TestGameserver_Create_EventPublished(t *testing.T) {
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.NoError(t, err)
 
-	// Drain events and find the create event
+	// CreateGameserver publishes synchronously, so the event is already in the channel.
+	// Drain buffered events — break on first empty read since Publish is non-blocking.
 	found := false
-	for i := 0; i < 10; i++ {
+	for {
 		select {
 		case evt := <-ch:
 			if evt.EventType() == service.EventGameserverCreate {
@@ -157,9 +158,9 @@ func TestGameserver_Create_EventPublished(t *testing.T) {
 				assert.Equal(t, testutil.TestGameID, gsEvt.GameID)
 			}
 		default:
-			// no more events
-			i = 10
+			goto done
 		}
 	}
+done:
 	assert.True(t, found, "expected gameserver.create event to be published")
 }
