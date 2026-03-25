@@ -45,7 +45,7 @@ func (h *WorkerHandlers) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.svc.Update(workerID, &req); err != nil {
+	if err := h.svc.Update(r.Context(), workerID, &req); err != nil {
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}

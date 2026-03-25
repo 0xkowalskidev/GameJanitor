@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"log/slog"
@@ -83,7 +84,7 @@ type WorkerNodeUpdate struct {
 	Tags         *[]string `json:"tags,omitempty"`
 }
 
-func (s *WorkerNodeService) Update(id string, update *WorkerNodeUpdate) error {
+func (s *WorkerNodeService) Update(ctx context.Context, id string, update *WorkerNodeUpdate) error {
 	if update.MaxMemoryMB != nil || update.MaxCPU != nil || update.MaxStorageMB != nil {
 		if err := models.SetWorkerNodeLimits(s.db, id, update.MaxMemoryMB, update.MaxCPU, update.MaxStorageMB); err != nil {
 			return err
@@ -104,6 +105,7 @@ func (s *WorkerNodeService) Update(id string, update *WorkerNodeUpdate) error {
 	s.broadcaster.Publish(WorkerEvent{
 		Type:      EventWorkerUpdated,
 		Timestamp: time.Now(),
+		Actor:     ActorFromContext(ctx),
 		WorkerID:  id,
 	})
 
