@@ -8,14 +8,15 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
-
-	"io/fs"
 
 	"github.com/warsmite/gamejanitor/config"
 	"github.com/warsmite/gamejanitor/db"
@@ -456,6 +457,16 @@ func runServe(cmd *cobra.Command, args []string) error {
 		logger.Warn("running in foreground — closing this terminal will stop scheduled backups, restarts, and status monitoring. Your gameservers will keep running, but gamejanitor won't be managing them. Run as a systemd service to keep it running in the background.")
 	}
 
+	// Auto-open browser for interactive users (not systemd, has a TTY)
+	if os.Getenv("INVOCATION_ID") == "" && isTTY() {
+		go func() {
+			// Small delay to let the server start accepting connections
+			time.Sleep(500 * time.Millisecond)
+			url := fmt.Sprintf("http://localhost:%d", cfg.Port)
+			openBrowser(url)
+		}()
+	}
+
 	srv := &http.Server{
 		Addr:              addr,
 		Handler:           router,
@@ -478,6 +489,29 @@ func listenError(service, addr string, port int, err error) error {
 		return fmt.Errorf("%s server failed to start: port %d is already in use — another instance of gamejanitor or another program is using this port", service, port)
 	}
 	return fmt.Errorf("%s server failed to start on %s: %w", service, addr, err)
+}
+
+func isTTY() bool {
+	fi, err := os.Stdout.Stat()
+	if err != nil {
+		return false
+	}
+	return fi.Mode()&os.ModeCharDevice != 0
+}
+
+func openBrowser(url string) {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "linux":
+		cmd = exec.Command("xdg-open", url)
+	case "darwin":
+		cmd = exec.Command("open", url)
+	case "windows":
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+	default:
+		return
+	}
+	cmd.Start()
 }
 
 func webUIFS(cfg config.Config) fs.FS {
