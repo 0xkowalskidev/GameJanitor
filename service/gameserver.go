@@ -235,10 +235,6 @@ func (s *GameserverService) RegenerateSFTPPassword(ctx context.Context, gameserv
 
 // applyGameDefaults fills in zero/empty gameserver fields from the game definition.
 func applyGameDefaults(gs *models.Gameserver, game *games.Game) error {
-	if gs.MemoryLimitMB == 0 {
-		gs.MemoryLimitMB = game.RecommendedMemoryMB
-	}
-
 	// Apply default ports if none provided
 	if len(gs.Ports) == 0 || string(gs.Ports) == "null" || string(gs.Ports) == "[]" {
 		gsPorts := make([]portMapping, len(game.DefaultPorts))
