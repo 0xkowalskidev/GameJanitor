@@ -166,7 +166,7 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 	// Update node assignment (and reallocate ports if using per-node port scope)
 	gs.NodeID = &targetNodeID
 
-	if s.settingsSvc.GetString(SettingPortScope) == "node" {
+	if s.settingsSvc.GetString(SettingPortUniqueness) == "node" {
 		s.placementMu.Lock()
 		game := s.gameStore.GetGame(gs.GameID)
 		if game == nil {

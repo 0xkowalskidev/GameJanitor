@@ -151,7 +151,7 @@ func TestMigration_PortsPreservedInClusterScope(t *testing.T) {
 func TestMigration_PortsReallocatedInNodeScope(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
-	svc.SettingsSvc.Set(service.SettingPortScope, "node")
+	svc.SettingsSvc.Set(service.SettingPortUniqueness, "node")
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	testutil.RegisterFakeWorker(t, svc, "worker-2")
 	ctx := testutil.TestContext()

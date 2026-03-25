@@ -14,7 +14,7 @@ import (
 // In node scope: checks only the given node.
 func (s *GameserverService) UsedHostPorts(nodeID string, excludeID string) (map[int]bool, error) {
 	var filter models.GameserverFilter
-	if s.settingsSvc.GetString(SettingPortScope) == "node" {
+	if s.settingsSvc.GetString(SettingPortUniqueness) == "node" {
 		filter.NodeID = &nodeID
 	}
 
