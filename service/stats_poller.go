@@ -115,6 +115,10 @@ func (s *StatsPoller) pollOnce(ctx context.Context, gameserverID string) bool {
 	}
 
 	w := s.dispatcher.WorkerFor(gameserverID)
+	if w == nil {
+		s.log.Debug("worker unavailable, stopping stats poll", "id", gameserverID)
+		return false
+	}
 	event := GameserverStatsEvent{
 		GameserverID:   gameserverID,
 		StorageLimitMB: gs.StorageLimitMB,

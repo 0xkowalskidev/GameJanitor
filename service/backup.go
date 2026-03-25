@@ -113,6 +113,10 @@ func (s *BackupService) runBackup(gameserverID, backupID, name string, gs *model
 
 	game := s.gameStore.GetGame(gs.GameID)
 	w := s.dispatcher.WorkerFor(gameserverID)
+	if w == nil {
+		s.failBackup(ctx, gameserverID, backupID, name, actor, "worker unavailable for backup")
+		return
+	}
 
 	// Run save-server if game is running and supports it
 	if isRunningStatus(gs.Status) && gs.ContainerID != nil && game != nil && HasCapability(game, "save") {

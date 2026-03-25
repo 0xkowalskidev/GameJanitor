@@ -28,12 +28,11 @@ Format:
 - **Severity:** should fix
 - **Notes:** `naming/naming.go:34`. The StatusManager uses this to map container events to gameservers. Misidentifying update containers could cause spurious status changes. Fix: use `strings.HasPrefix(id, "update-")` instead of `strings.Contains(id, "-update-")`.
 
-## runBackup panics on nil worker (missing nil check)
+## runBackup panics on nil worker (missing nil check) — FIXED
 - **Test:** Discovered via `TestBackup_Create_ReturnsInProgressRecord` flaky panic in `service/backup_test.go`
-- **Expected:** `runBackup` should handle the case where `dispatcher.WorkerFor()` returns nil (e.g., worker disconnected between CreateBackup and the goroutine starting).
-- **Actual:** `runBackup` at `service/backup.go:129` calls `w.BackupVolume()` on a nil `w`, causing a panic. The goroutine runs on `context.Background()` and can outlive the request that created it.
-- **Severity:** should fix
-- **Notes:** `WorkerFor` returns nil when the DB lookup fails or worker isn't registered. The fix is a nil check on `w` before using it, calling `failBackup` if nil.
+- **Fixed:** Added nil check on `w` in `service/backup.go:115` — calls `failBackup` if worker unavailable.
+- **Also fixed:** Same nil worker panic in `service/stats_poller.go:117` — returns false to stop polling.
+- **Notes:** Many other `WorkerFor` call sites in the codebase also lack nil checks (console.go, file.go, gameserver_inspect.go, etc). These are synchronous paths so less likely to hit in practice, but should be audited.
 
 ---
 
