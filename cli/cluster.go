@@ -119,7 +119,7 @@ var clusterCmd = &cobra.Command{
 }
 
 func init() {
-	clusterCmd.AddCommand(clusterAddCmd, clusterUseCmd, clusterListCmd, clusterRemoveCmd, clusterCurrentCmd)
+	clusterCmd.AddCommand(clusterAddCmd, clusterUseCmd, clusterListCmd, clusterRemoveCmd, clusterCurrentCmd, clusterClearCmd)
 
 	clusterAddCmd.Flags().String("address", "", "Cluster API address (e.g. https://gj.example.com)")
 	clusterAddCmd.Flags().String("token", "", "Auth token for this cluster")
@@ -294,6 +294,25 @@ var clusterCurrentCmd = &cobra.Command{
 		}
 
 		fmt.Printf("%s (%s)\n", cfg.Current, c.Address)
+		return nil
+	},
+}
+
+var clusterClearCmd = &cobra.Command{
+	Use:   "clear",
+	Short: "Clear the current cluster (use default localhost)",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cfg, err := loadClustersConfig()
+		if err != nil {
+			return err
+		}
+
+		cfg.Current = ""
+		if err := saveClustersConfig(cfg); err != nil {
+			return err
+		}
+
+		fmt.Println("Cluster context cleared. Using default (http://localhost:8080).")
 		return nil
 	},
 }
