@@ -72,16 +72,34 @@ func (s *WorkerNodeService) Get(id string) (*WorkerView, error) {
 	return &v, nil
 }
 
-func (s *WorkerNodeService) SetCordoned(id string, cordoned bool) error {
-	return models.SetWorkerNodeCordoned(s.db, id, cordoned)
+// WorkerNodeUpdate represents a partial update to a worker node.
+// Nil pointer fields are not updated. To clear a limit, set it to a pointer to 0.
+type WorkerNodeUpdate struct {
+	MaxMemoryMB  *int      `json:"max_memory_mb,omitempty"`
+	MaxCPU       *float64  `json:"max_cpu,omitempty"`
+	MaxStorageMB *int      `json:"max_storage_mb,omitempty"`
+	Cordoned     *bool     `json:"cordoned,omitempty"`
+	Tags         *[]string `json:"tags,omitempty"`
 }
 
-func (s *WorkerNodeService) SetLimits(id string, maxMemoryMB *int, maxCPU *float64, maxStorageMB *int) error {
-	return models.SetWorkerNodeLimits(s.db, id, maxMemoryMB, maxCPU, maxStorageMB)
-}
-
-func (s *WorkerNodeService) SetTags(id string, tags string) error {
-	return models.SetWorkerNodeTags(s.db, id, tags)
+func (s *WorkerNodeService) Update(id string, update *WorkerNodeUpdate) error {
+	if update.MaxMemoryMB != nil || update.MaxCPU != nil || update.MaxStorageMB != nil {
+		if err := models.SetWorkerNodeLimits(s.db, id, update.MaxMemoryMB, update.MaxCPU, update.MaxStorageMB); err != nil {
+			return err
+		}
+	}
+	if update.Cordoned != nil {
+		if err := models.SetWorkerNodeCordoned(s.db, id, *update.Cordoned); err != nil {
+			return err
+		}
+	}
+	if update.Tags != nil {
+		tagsJSON, _ := json.Marshal(*update.Tags)
+		if err := models.SetWorkerNodeTags(s.db, id, string(tagsJSON)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *WorkerNodeService) buildView(info worker.WorkerInfo, gsCount, allocMem int, allocCPU float64, node *models.WorkerNode) WorkerView {

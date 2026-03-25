@@ -136,31 +136,51 @@ var workersGetCmd = &cobra.Command{
 	},
 }
 
-var workersSetLimitsCmd = &cobra.Command{
-	Use:   "set-limits <worker-id>",
-	Short: "Set resource limits for a worker",
+var workersUpdateCmd = &cobra.Command{
+	Use:   "update <worker-id>",
+	Short: "Update worker settings (limits, cordon, tags)",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		body := make(map[string]any)
 
 		if cmd.Flags().Changed("max-memory") {
 			v, _ := cmd.Flags().GetInt("max-memory")
-			body["max_memory_mb"] = v
+			if v == 0 {
+				body["max_memory_mb"] = nil
+			} else {
+				body["max_memory_mb"] = v
+			}
 		}
 		if cmd.Flags().Changed("max-cpu") {
 			v, _ := cmd.Flags().GetFloat64("max-cpu")
-			body["max_cpu"] = v
+			if v == 0 {
+				body["max_cpu"] = nil
+			} else {
+				body["max_cpu"] = v
+			}
 		}
 		if cmd.Flags().Changed("max-storage") {
 			v, _ := cmd.Flags().GetInt("max-storage")
-			body["max_storage_mb"] = v
+			if v == 0 {
+				body["max_storage_mb"] = nil
+			} else {
+				body["max_storage_mb"] = v
+			}
+		}
+		if cmd.Flags().Changed("cordoned") {
+			v, _ := cmd.Flags().GetBool("cordoned")
+			body["cordoned"] = v
+		}
+		if cmd.Flags().Changed("tags") {
+			v, _ := cmd.Flags().GetStringSlice("tags")
+			body["tags"] = v
 		}
 
 		if len(body) == 0 {
-			return exitError(fmt.Errorf("at least one of --max-memory, --max-cpu, or --max-storage is required"))
+			return exitError(fmt.Errorf("at least one flag is required"))
 		}
 
-		resp, err := apiPatch("/api/workers/"+args[0]+"/limits", body)
+		resp, err := apiPatch("/api/workers/"+args[0], body)
 		if err != nil {
 			return exitError(err)
 		}
@@ -170,69 +190,17 @@ var workersSetLimitsCmd = &cobra.Command{
 			return nil
 		}
 
-		fmt.Printf("Limits updated for worker %s.\n", args[0])
-		return nil
-	},
-}
-
-var workersClearLimitsCmd = &cobra.Command{
-	Use:   "clear-limits <worker-id>",
-	Short: "Remove resource limits from a worker",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		_, err := apiDelete("/api/workers/" + args[0] + "/limits")
-		if err != nil {
-			return exitError(err)
-		}
-		if !jsonOutput {
-			fmt.Printf("Limits cleared for worker %s.\n", args[0])
-		}
-		return nil
-	},
-}
-
-var workersCordonCmd = &cobra.Command{
-	Use:   "cordon <worker-id>",
-	Short: "Cordon a worker (prevent new gameserver placements)",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		resp, err := apiPost("/api/workers/"+args[0]+"/cordon", nil)
-		if err != nil {
-			return exitError(err)
-		}
-		if jsonOutput {
-			printJSONResponse(resp)
-			return nil
-		}
-		fmt.Printf("Worker %s cordoned.\n", args[0])
-		return nil
-	},
-}
-
-var workersUncordonCmd = &cobra.Command{
-	Use:   "uncordon <worker-id>",
-	Short: "Uncordon a worker (allow new gameserver placements)",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		_, err := apiDelete("/api/workers/" + args[0] + "/cordon")
-		if err != nil {
-			return exitError(err)
-		}
-		if !jsonOutput {
-			fmt.Printf("Worker %s uncordoned.\n", args[0])
-		}
+		fmt.Printf("Worker %s updated.\n", args[0])
 		return nil
 	},
 }
 
 func init() {
-	workersSetLimitsCmd.Flags().Int("max-memory", 0, "Max memory in MB (0 to clear)")
-	workersSetLimitsCmd.Flags().Float64("max-cpu", 0, "Max CPU cores (0 to clear)")
-	workersSetLimitsCmd.Flags().Int("max-storage", 0, "Max storage in MB (0 to clear)")
+	workersUpdateCmd.Flags().Int("max-memory", 0, "Max memory in MB (0 to clear)")
+	workersUpdateCmd.Flags().Float64("max-cpu", 0, "Max CPU cores (0 to clear)")
+	workersUpdateCmd.Flags().Int("max-storage", 0, "Max storage in MB (0 to clear)")
+	workersUpdateCmd.Flags().Bool("cordoned", false, "Cordon (true) or uncordon (false) the worker")
+	workersUpdateCmd.Flags().StringSlice("tags", nil, "Set worker tags (comma-separated)")
 
-	workersCmd.AddCommand(
-		workersListCmd, workersGetCmd,
-		workersSetLimitsCmd, workersClearLimitsCmd,
-		workersCordonCmd, workersUncordonCmd,
-	)
+	workersCmd.AddCommand(workersListCmd, workersGetCmd, workersUpdateCmd)
 }

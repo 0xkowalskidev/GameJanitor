@@ -182,12 +182,7 @@ func NewRouter(opts RouterOptions) http.Handler {
 			r.Get("/", workerHandlers.List)
 			r.Route("/{workerID}", func(r chi.Router) {
 				r.Get("/", workerHandlers.Get)
-				r.Patch("/limits", workerHandlers.SetLimits)
-				r.Delete("/limits", workerHandlers.ClearLimits)
-				r.Post("/cordon", workerHandlers.Cordon)
-				r.Delete("/cordon", workerHandlers.Uncordon)
-				r.Patch("/tags", workerHandlers.SetTags)
-				r.Delete("/tags", workerHandlers.ClearTags)
+				r.Patch("/", workerHandlers.Update)
 			})
 		})
 

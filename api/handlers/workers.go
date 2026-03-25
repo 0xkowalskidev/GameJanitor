@@ -36,94 +36,25 @@ func (h *WorkerHandlers) Get(w http.ResponseWriter, r *http.Request) {
 	respondOK(w, view)
 }
 
-func (h *WorkerHandlers) respondWithWorker(w http.ResponseWriter, workerID string) {
+func (h *WorkerHandlers) Update(w http.ResponseWriter, r *http.Request) {
+	workerID := chi.URLParam(r, "workerID")
+
+	var req service.WorkerNodeUpdate
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+
+	if err := h.svc.Update(workerID, &req); err != nil {
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
+		return
+	}
+
+	h.log.Info("worker updated via API", "worker_id", workerID)
 	view, err := h.svc.Get(workerID)
 	if err != nil {
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
 	respondOK(w, view)
-}
-
-func (h *WorkerHandlers) SetLimits(w http.ResponseWriter, r *http.Request) {
-	workerID := chi.URLParam(r, "workerID")
-
-	var req struct {
-		MaxMemoryMB  *int     `json:"max_memory_mb"`
-		MaxCPU       *float64 `json:"max_cpu"`
-		MaxStorageMB *int     `json:"max_storage_mb"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
-		return
-	}
-
-	if err := h.svc.SetLimits(workerID, req.MaxMemoryMB, req.MaxCPU, req.MaxStorageMB); err != nil {
-		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
-		return
-	}
-
-	h.log.Info("worker limits set via API", "worker_id", workerID, "max_memory_mb", req.MaxMemoryMB, "max_cpu", req.MaxCPU, "max_storage_mb", req.MaxStorageMB)
-	h.respondWithWorker(w, workerID)
-}
-
-func (h *WorkerHandlers) ClearLimits(w http.ResponseWriter, r *http.Request) {
-	workerID := chi.URLParam(r, "workerID")
-	if err := h.svc.SetLimits(workerID, nil, nil, nil); err != nil {
-		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
-		return
-	}
-	h.log.Info("worker limits cleared via API", "worker_id", workerID)
-	h.respondWithWorker(w, workerID)
-}
-
-func (h *WorkerHandlers) Cordon(w http.ResponseWriter, r *http.Request) {
-	workerID := chi.URLParam(r, "workerID")
-	if err := h.svc.SetCordoned(workerID, true); err != nil {
-		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
-		return
-	}
-	h.log.Info("worker cordoned via API", "worker_id", workerID)
-	h.respondWithWorker(w, workerID)
-}
-
-func (h *WorkerHandlers) Uncordon(w http.ResponseWriter, r *http.Request) {
-	workerID := chi.URLParam(r, "workerID")
-	if err := h.svc.SetCordoned(workerID, false); err != nil {
-		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
-		return
-	}
-	h.log.Info("worker uncordoned via API", "worker_id", workerID)
-	h.respondWithWorker(w, workerID)
-}
-
-func (h *WorkerHandlers) SetTags(w http.ResponseWriter, r *http.Request) {
-	workerID := chi.URLParam(r, "workerID")
-
-	var req struct {
-		Tags []string `json:"tags"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
-		return
-	}
-
-	tagsJSON, _ := json.Marshal(req.Tags)
-	if err := h.svc.SetTags(workerID, string(tagsJSON)); err != nil {
-		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
-		return
-	}
-
-	h.log.Info("worker tags set via API", "worker_id", workerID, "tags", req.Tags)
-	h.respondWithWorker(w, workerID)
-}
-
-func (h *WorkerHandlers) ClearTags(w http.ResponseWriter, r *http.Request) {
-	workerID := chi.URLParam(r, "workerID")
-	if err := h.svc.SetTags(workerID, "[]"); err != nil {
-		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
-		return
-	}
-	h.log.Info("worker tags cleared via API", "worker_id", workerID)
-	h.respondWithWorker(w, workerID)
 }
