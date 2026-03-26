@@ -1,6 +1,8 @@
-// Hash-based router for plain Svelte SPA.
-// Reads window.location.hash, matches against known route patterns,
-// and exposes reactive state via Svelte 5 $state.
+// History-based router for plain Svelte SPA.
+// Reads window.location.pathname, strips basePath if present,
+// matches against known route patterns, and exposes reactive state.
+
+import { basePath } from './base';
 
 interface Route {
   name: string;
@@ -21,43 +23,48 @@ const patterns: { name: string; pattern: RegExp; paramNames: string[] }[] = [
   { name: 'gameserverOverview', pattern: /^\/gameservers\/([^/]+)$/, paramNames: ['id'] },
 ];
 
-function parseHash(): Route {
-  const hash = window.location.hash.replace(/^#/, '') || '/';
+function parsePath(): Route {
+  // Strip basePath prefix (e.g., /panel/abc123) to get the app-relative path
+  let path = window.location.pathname;
+  if (basePath && path.startsWith(basePath)) {
+    path = path.slice(basePath.length) || '/';
+  }
+
   for (const { name, pattern, paramNames } of patterns) {
-    const match = hash.match(pattern);
+    const match = path.match(pattern);
     if (match) {
       const params: Record<string, string> = {};
       for (let i = 0; i < paramNames.length; i++) {
         params[paramNames[i]] = match[i + 1];
       }
-      return { name, path: hash, params };
+      return { name, path, params };
     }
   }
   return { name: 'dashboard', path: '/', params: {} };
 }
 
-let route = $state<Route>(parseHash());
+let route = $state<Route>(parsePath());
 
-function handleHashChange() {
-  route = parseHash();
+function handlePopState() {
+  route = parsePath();
 }
 
 if (typeof window !== 'undefined') {
-  window.addEventListener('hashchange', handleHashChange);
+  window.addEventListener('popstate', handlePopState);
 }
 
 export function navigate(path: string) {
-  window.location.hash = path;
+  window.history.pushState(null, '', basePath + path);
+  route = parsePath();
 }
 
 export function getRoute(): Route {
   return route;
 }
 
-// Check if a given hash path is active (exact or prefix match)
-export function isActive(hashPath: string): boolean {
+export function isActive(path: string): boolean {
   const current = route.path;
-  if (hashPath === current) return true;
-  if (hashPath !== '/' && current.startsWith(hashPath + '/')) return true;
+  if (path === current) return true;
+  if (path !== '/' && current.startsWith(path + '/')) return true;
   return false;
 }

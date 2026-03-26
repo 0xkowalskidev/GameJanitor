@@ -3,8 +3,8 @@
   import { onMount, onDestroy } from 'svelte';
   import { ToastContainer, ConfirmModal } from '$lib/components';
   import { connect, disconnect, enableAutoToasts, initAuth, gameserverStore } from '$lib/stores';
-  import { getRoute } from '$lib/router';
-  import { embedded } from '$lib/base';
+  import { getRoute, navigate } from '$lib/router';
+  import { embedded, basePath } from '$lib/base';
 
   import Dashboard from './views/Dashboard.svelte';
   import Settings from './views/Settings.svelte';
@@ -31,9 +31,27 @@
     connect();
     enableAutoToasts();
     gameserverStore.init();
+
+    // Intercept internal link clicks for client-side navigation
+    document.addEventListener('click', handleLinkClick);
   });
 
+  function handleLinkClick(e: MouseEvent) {
+    const anchor = (e.target as Element)?.closest('a');
+    if (!anchor) return;
+
+    const href = anchor.getAttribute('href');
+    if (!href || href.startsWith('http') || href.startsWith('//')) return;
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    if (anchor.target === '_blank') return;
+
+    // Internal link — use pushState
+    e.preventDefault();
+    navigate(href);
+  }
+
   onDestroy(() => {
+    document.removeEventListener('click', handleLinkClick);
     gameserverStore.destroy();
     disconnect();
   });
@@ -42,15 +60,15 @@
 {#if !embedded}
   <nav>
     <div class="n-left">
-      <a href="#/" class="brand">
+      <a href="/" class="brand">
         <div class="brand-mark">
           <svg viewBox="0 0 16 16"><path d="M3 2.5A1.5 1.5 0 0 1 4.5 1h7A1.5 1.5 0 0 1 13 2.5v11a1.5 1.5 0 0 1-1.5 1.5h-7A1.5 1.5 0 0 1 3 13.5v-11zM6 4h4v1H6V4zm0 3h4v1H6V7zm0 3h3v1H6v-1z"/></svg>
         </div>
         Gamejanitor
       </a>
       <div class="n-links">
-        <a href="#/">Dashboard</a>
-        <a href="#/settings">Settings</a>
+        <a href="/">Dashboard</a>
+        <a href="/settings">Settings</a>
       </div>
     </div>
     <div class="n-right">

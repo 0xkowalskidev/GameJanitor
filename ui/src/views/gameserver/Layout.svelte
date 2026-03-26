@@ -94,7 +94,7 @@
 </script>
 
 <main>
-  <a href="#/" class="breadcrumb">
+  <a href="/" class="breadcrumb">
     <svg viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/></svg>
     Gameservers
   </a>
@@ -104,7 +104,7 @@
   {:else if notFound}
     <div class="error-text">
       <p>Gameserver not found.</p>
-      <a href="#/" class="btn-accent">Back to Dashboard</a>
+      <a href="/" class="btn-accent">Back to Dashboard</a>
     </div>
   {:else if gameserver}
     <!-- Server Header -->
