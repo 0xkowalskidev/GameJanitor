@@ -1,8 +1,10 @@
 package config
 
 import (
+	"context"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"time"
@@ -212,16 +214,25 @@ func detectPodmanSocket() string {
 	return ""
 }
 
-// isSocketAccessible checks that a unix socket exists and is connectable.
-// A socket file can exist even when the daemon isn't running (stale socket).
+// isSocketAccessible checks that a unix socket has a healthy daemon behind it.
+// Stale sockets and socket-activated endpoints that accept connections but have
+// no running daemon are detected by sending an HTTP ping.
 func isSocketAccessible(path string) bool {
 	if _, err := os.Stat(path); err != nil {
 		return false
 	}
-	conn, err := net.DialTimeout("unix", path, 2*time.Second)
+	client := &http.Client{
+		Timeout: 2 * time.Second,
+		Transport: &http.Transport{
+			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
+				return net.DialTimeout("unix", path, 2*time.Second)
+			},
+		},
+	}
+	resp, err := client.Get("http://localhost/_ping")
 	if err != nil {
 		return false
 	}
-	conn.Close()
-	return true
+	resp.Body.Close()
+	return resp.StatusCode == http.StatusOK
 }
