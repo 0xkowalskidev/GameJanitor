@@ -93,11 +93,14 @@
     }
 
     step = 'configure';
+    // Update URL so the game selection is linkable and survives refresh
+    window.history.replaceState(null, '', `/gameservers/new/${game.id}`);
     window.scrollTo({ top: 0, behavior: 'instant' });
   }
 
   function goBack() {
     step = 'pick';
+    window.history.replaceState(null, '', '/gameservers/new');
     window.scrollTo({ top: 0, behavior: 'instant' });
   }
 
