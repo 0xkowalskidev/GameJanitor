@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/warsmite/gamejanitor/controller/auth"
 )
 
 var tokensCmd = &cobra.Command{
@@ -18,10 +19,10 @@ func init() {
 	tokensCreateCmd.Flags().String("name", "", "Token name (required)")
 	tokensCreateCmd.Flags().String("scope", "custom", "Token scope: admin or custom")
 	tokensCreateCmd.Flags().StringSlice("gameserver", nil, "Scope to gameserver (repeatable, name or ID)")
-	tokensCreateCmd.Flags().StringSlice("permission", nil, "Permission (repeatable: start, stop, restart, logs, commands, files, backups, configure)")
+	tokensCreateCmd.Flags().StringSlice("permission", nil, "Permission to grant (repeatable). Examples: gameserver.start, gameserver.stop, gameserver.configure.name, backup.read, schedule.read. Run 'gamejanitor tokens permissions' to list all.")
 	tokensCreateCmd.Flags().String("expires-in", "", "Expiry duration (e.g. 720h, 30d)")
 
-	tokensCmd.AddCommand(tokensListCmd, tokensCreateCmd, tokensDeleteCmd)
+	tokensCmd.AddCommand(tokensListCmd, tokensCreateCmd, tokensDeleteCmd, tokensPermissionsCmd)
 }
 
 var tokensListCmd = &cobra.Command{
@@ -135,6 +136,16 @@ var tokensCreateCmd = &cobra.Command{
 		// Raw token to stdout for piping
 		fmt.Println(result.Token)
 		return nil
+	},
+}
+
+var tokensPermissionsCmd = &cobra.Command{
+	Use:   "permissions",
+	Short: "List all valid permission names",
+	Run: func(cmd *cobra.Command, args []string) {
+		for _, p := range auth.AllPermissions {
+			fmt.Println(p)
+		}
 	},
 }
 
