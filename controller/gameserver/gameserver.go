@@ -130,6 +130,10 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *model.Game
 	if gs.PortMode == "" {
 		gs.PortMode = "auto"
 	}
+	if gs.AutoRestart == nil {
+		f := false
+		gs.AutoRestart = &f
+	}
 	gs.SFTPUsername = generateSFTPUsername(gs.Name)
 
 	rawPassword := generateRandomPassword(16)
@@ -376,11 +380,26 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *model.Game
 	oldCPU := existing.CPULimit
 	oldStorage := ptrIntOr0(existing.StorageLimitMB)
 
-	// Field-level permission guard: non-admin tokens can only change name and env
+	// Per-field permission checks — each configure.* permission guards specific fields
 	token := auth.TokenFromContext(ctx)
 	if token != nil && !auth.IsAdmin(token) {
-		if gs.MemoryLimitMB != 0 || gs.CPULimit != 0 || gs.StorageLimitMB != nil || gs.BackupLimit != nil || gs.Ports != nil || !gs.NodeTags.IsEmpty() {
-			return false, controller.ErrBadRequestf("insufficient permissions to modify resource/placement fields")
+		type fieldCheck struct {
+			changed bool
+			perm    string
+			field   string
+		}
+		checks := []fieldCheck{
+			{gs.Name != "", auth.PermGameserverConfigureName, "name"},
+			{gs.Env != nil, auth.PermGameserverConfigureEnv, "env"},
+			{gs.MemoryLimitMB != 0 || gs.CPULimit != 0 || gs.StorageLimitMB != nil || gs.BackupLimit != nil || !gs.NodeTags.IsEmpty(), auth.PermGameserverConfigureResources, "resources"},
+			{gs.Ports != nil || gs.PortMode != "", auth.PermGameserverConfigurePorts, "ports"},
+			{gs.ConnectionAddress != nil, auth.PermGameserverConfigureConnection, "connection_address"},
+			{gs.AutoRestart != nil, auth.PermGameserverConfigureAutoRestart, "auto_restart"},
+		}
+		for _, c := range checks {
+			if c.changed && !auth.HasPermission(token, gs.ID, c.perm) {
+				return false, controller.ErrBadRequestf("missing permission %s to modify %s", c.perm, c.field)
+			}
 		}
 	}
 
@@ -426,6 +445,12 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *model.Game
 	}
 	if gs.ConnectionAddress != nil {
 		existing.ConnectionAddress = gs.ConnectionAddress
+	}
+	if gs.PortMode != "" {
+		existing.PortMode = gs.PortMode
+	}
+	if gs.AutoRestart != nil {
+		existing.AutoRestart = gs.AutoRestart
 	}
 
 	// Enforce require_* settings

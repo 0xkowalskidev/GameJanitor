@@ -379,7 +379,7 @@ const maxAutoRestartAttempts = 3
 // handleUnexpectedDeath handles an unexpected container death. If auto-restart
 // is enabled and the crash limit hasn't been reached, restarts the gameserver.
 func (m *StatusManager) handleUnexpectedDeath(gs *model.Gameserver) {
-	if !gs.AutoRestart || m.restartFunc == nil {
+	if gs.AutoRestart == nil || !*gs.AutoRestart || m.restartFunc == nil {
 		m.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gs.ID, Reason: "Gameserver stopped unexpectedly.", Timestamp: time.Now()})
 		return
 	}

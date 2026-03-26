@@ -23,8 +23,12 @@ func newGameserver(id, name, gameID string, nodeID *string) *model.Gameserver {
 		Status:     "stopped",
 		PortMode:   "auto",
 		NodeID:     nodeID,
-		NodeTags:   model.Labels{},
+		NodeTags:    model.Labels{},
+		AutoRestart: boolPtr(false),
 	}
+}
+
+func boolPtr(b bool) *bool { return &b
 }
 
 func TestGameserver_CreateAndGet(t *testing.T) {

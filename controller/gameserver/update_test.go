@@ -54,7 +54,7 @@ func TestUpdate_NonAdminBlockedFromResources(t *testing.T) {
 	gs := testutil.CreateTestGameserver(t, svc)
 
 	// Create a non-admin token and put it in context
-	rawToken, _, err := svc.AuthSvc.CreateCustomToken("limited", nil, []string{auth.PermGameserverEditEnv}, nil)
+	rawToken, _, err := svc.AuthSvc.CreateCustomToken("limited", nil, []string{auth.PermGameserverConfigureEnv}, nil)
 	require.NoError(t, err)
 	token := svc.AuthSvc.ValidateToken(rawToken)
 	require.NotNil(t, token)
@@ -64,7 +64,7 @@ func TestUpdate_NonAdminBlockedFromResources(t *testing.T) {
 	update := &model.Gameserver{ID: gs.ID, MemoryLimitMB: 4096}
 	_, err = svc.GameserverSvc.UpdateGameserver(ctx, update)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "insufficient permissions")
+	assert.Contains(t, err.Error(), "missing permission")
 }
 
 func TestUpdate_AdminCanChangeResources(t *testing.T) {

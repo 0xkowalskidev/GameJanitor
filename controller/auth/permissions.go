@@ -2,22 +2,28 @@ package auth
 
 const (
 	// Gameserver lifecycle
-	PermGameserverCreate  = "gameserver.create"
-	PermGameserverUpdate  = "gameserver.update"
-	PermGameserverDelete  = "gameserver.delete"
-	PermGameserverStart   = "gameserver.start"
-	PermGameserverStop    = "gameserver.stop"
-	PermGameserverRestart = "gameserver.restart"
+	PermGameserverCreate     = "gameserver.create"
+	PermGameserverDelete     = "gameserver.delete"
+	PermGameserverStart      = "gameserver.start"
+	PermGameserverStop       = "gameserver.stop"
+	PermGameserverRestart    = "gameserver.restart"
+	PermGameserverUpdateGame = "gameserver.update-game"
+	PermGameserverReinstall  = "gameserver.reinstall"
+
+	// Gameserver configuration (per-field)
+	PermGameserverConfigureName        = "gameserver.configure.name"
+	PermGameserverConfigureEnv         = "gameserver.configure.env"
+	PermGameserverConfigureResources   = "gameserver.configure.resources"
+	PermGameserverConfigurePorts       = "gameserver.configure.ports"
+	PermGameserverConfigureConnection  = "gameserver.configure.connection"
+	PermGameserverConfigureAutoRestart = "gameserver.configure.auto-restart"
+	PermGameserverRegenerateSFTP       = "gameserver.regenerate-sftp"
 
 	// Gameserver access
 	PermGameserverFilesRead  = "gameserver.files.read"
 	PermGameserverFilesWrite = "gameserver.files.write"
 	PermGameserverLogs       = "gameserver.logs"
 	PermGameserverCommand    = "gameserver.command"
-
-	// Gameserver config
-	PermGameserverEditName = "gameserver.edit.name"
-	PermGameserverEditEnv  = "gameserver.edit.env"
 
 	// Mods
 	PermGameserverModsRead  = "gameserver.mods.read"
@@ -50,11 +56,15 @@ const (
 // AllPermissions is every permission that can be assigned to a token.
 // Admin tokens are created with all of these.
 var AllPermissions = []string{
-	PermGameserverCreate, PermGameserverUpdate, PermGameserverDelete,
+	PermGameserverCreate, PermGameserverDelete,
 	PermGameserverStart, PermGameserverStop, PermGameserverRestart,
+	PermGameserverUpdateGame, PermGameserverReinstall,
+	PermGameserverConfigureName, PermGameserverConfigureEnv,
+	PermGameserverConfigureResources, PermGameserverConfigurePorts,
+	PermGameserverConfigureConnection, PermGameserverConfigureAutoRestart,
+	PermGameserverRegenerateSFTP,
 	PermGameserverFilesRead, PermGameserverFilesWrite,
 	PermGameserverLogs, PermGameserverCommand,
-	PermGameserverEditName, PermGameserverEditEnv,
 	PermGameserverModsRead, PermGameserverModsWrite,
 	PermBackupRead, PermBackupCreate, PermBackupDelete, PermBackupRestore, PermBackupDownload,
 	PermScheduleRead, PermScheduleCreate, PermScheduleUpdate, PermScheduleDelete,
@@ -68,6 +78,5 @@ func isValidPermission(p string) bool {
 			return true
 		}
 	}
-	// Worker connect is valid but not in AllPermissions (not granted to admin tokens)
 	return p == PermWorkerConnect
 }
