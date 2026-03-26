@@ -37,6 +37,7 @@ class GameserverStore {
   permissions = $state<string[]>([]);
   loading = $state(true);
   initialized = $state(false);
+  authRequired = $state(false);
 
   private unsubs: (() => void)[] = [];
 
@@ -142,7 +143,11 @@ class GameserverStore {
 
       this.subscribeToSSE();
     } catch (e: any) {
-      console.error('Failed to initialize gameserver store:', e);
+      if (e?.status === 401) {
+        this.authRequired = true;
+      } else {
+        console.error('Failed to initialize gameserver store:', e);
+      }
     } finally {
       this.loading = false;
       this.initialized = true;

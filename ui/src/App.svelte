@@ -11,6 +11,7 @@
   import Cluster from './views/Cluster.svelte';
   import Settings from './views/Settings.svelte';
   import NewGameserver from './views/NewGameserver.svelte';
+  import Login from './views/Login.svelte';
   import GameserverLayout from './views/gameserver/Layout.svelte';
   import Overview from './views/gameserver/Overview.svelte';
   import Console from './views/gameserver/Console.svelte';
@@ -71,7 +72,7 @@
   });
 </script>
 
-{#if !embedded}
+{#if !embedded && !gameserverStore.authRequired}
   <nav>
     <div class="n-left">
       <a href="/" class="brand">
@@ -96,7 +97,9 @@
   </nav>
 {/if}
 
-{#if isGameserverRoute}
+{#if gameserverStore.authRequired}
+  <Login />
+{:else if isGameserverRoute}
   <GameserverLayout id={gameserverId}>
     {#snippet children()}
       {#if route.name === 'gameserverOverview'}
