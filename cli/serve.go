@@ -180,7 +180,11 @@ func initServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 	}{store.NewScheduleStore(database), gsStore}
 	scheduler := schedule.NewScheduler(scheduleStore, backupSvc, gameserverSvc, consoleSvc, broadcaster, logger)
 	scheduleSvc := schedule.NewScheduleService(scheduleStore, scheduler, broadcaster, logger)
-	authSvc := auth.NewAuthService(database, logger)
+	authStore := struct {
+		*store.TokenStore
+		*store.GameserverStore
+	}{store.NewTokenStore(database), gsStore}
+	authSvc := auth.NewAuthService(authStore, logger)
 	statusMgr := status.NewStatusManager(statusStore, broadcaster, querySvc, statsPoller, readyWatcher, dispatcher, registry, gameserverSvc.Start, logger)
 	statusSub := status.NewStatusSubscriber(statusStore, broadcaster, logger)
 	eventStoreDB := store.NewEventStore(database)

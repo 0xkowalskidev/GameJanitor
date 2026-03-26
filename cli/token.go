@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/warsmite/gamejanitor/db"
+	"github.com/warsmite/gamejanitor/store"
 	"github.com/spf13/cobra"
 )
 
@@ -62,7 +63,11 @@ func openAuthService(cmd *cobra.Command) (*auth.AuthService, func(), error) {
 	}
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	authSvc := auth.NewAuthService(database, logger)
+	authStore := struct {
+		*store.TokenStore
+		*store.GameserverStore
+	}{store.NewTokenStore(database), store.NewGameserverStore(database)}
+	authSvc := auth.NewAuthService(authStore, logger)
 	return authSvc, func() { database.Close() }, nil
 }
 

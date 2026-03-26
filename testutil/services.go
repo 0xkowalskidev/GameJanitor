@@ -90,7 +90,11 @@ func NewTestServices(t *testing.T) *ServiceBundle {
 	}{store.NewScheduleStore(db), gsStore}
 	scheduler := schedule.NewScheduler(scheduleStore, backupSvc, gameserverSvc, consoleSvc, broadcaster, log)
 	scheduleSvc := schedule.NewScheduleService(scheduleStore, scheduler, broadcaster, log)
-	authSvc := auth.NewAuthService(db, log)
+	authStore := struct {
+		*store.TokenStore
+		*store.GameserverStore
+	}{store.NewTokenStore(db), gsStore}
+	authSvc := auth.NewAuthService(authStore, log)
 
 	optionsRegistry := games.NewOptionsRegistry(log)
 	modStore := struct {

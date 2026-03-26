@@ -3,7 +3,6 @@ package auth
 import (
 	"context"
 	"crypto/rand"
-	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -14,6 +13,21 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
+
+// Store defines the token persistence methods auth needs.
+type Store interface {
+	GetTokenByPrefix(prefix string) (*model.Token, error)
+	ListTokens() ([]model.Token, error)
+	UpdateTokenLastUsed(id string) error
+	CreateToken(t *model.Token) error
+	DeleteToken(id string) error
+	GetToken(id string) (*model.Token, error)
+	ListTokensByScope(scope string) ([]model.Token, error)
+	GetTokenByNameAndScope(name, scope string) (*model.Token, error)
+	DeleteTokenByNameAndScope(name, scope string) (bool, error)
+	TokenExistsByScope(id, scope string) bool
+	GetGameserver(id string) (*model.Gameserver, error)
+}
 
 type authContextKey string
 
@@ -36,12 +50,12 @@ const (
 
 
 type AuthService struct {
-	db  *sql.DB
-	log *slog.Logger
+	store Store
+	log   *slog.Logger
 }
 
-func NewAuthService(db *sql.DB, log *slog.Logger) *AuthService {
-	return &AuthService{db: db, log: log}
+func NewAuthService(store Store, log *slog.Logger) *AuthService {
+	return &AuthService{store: store, log: log}
 }
 
 func (s *AuthService) ValidateToken(rawToken string) *model.Token {
@@ -49,7 +63,7 @@ func (s *AuthService) ValidateToken(rawToken string) *model.Token {
 
 	// Fast path: lookup by prefix (single DB query + one bcrypt verify)
 	if prefix != "" {
-		t, err := model.GetTokenByPrefix(s.db, prefix)
+		t, err := s.store.GetTokenByPrefix(prefix)
 		if err != nil {
 			s.log.Error("failed to lookup token by prefix", "error", err)
 			return nil
@@ -60,7 +74,7 @@ func (s *AuthService) ValidateToken(rawToken string) *model.Token {
 					s.log.Debug("token expired", "id", t.ID, "expired_at", t.ExpiresAt)
 					return nil
 				}
-				if err := model.UpdateTokenLastUsed(s.db, t.ID); err != nil {
+				if err := s.store.UpdateTokenLastUsed(t.ID); err != nil {
 					s.log.Warn("failed to update token last_used_at", "id", t.ID, "error", err)
 				}
 				return t
@@ -69,7 +83,7 @@ func (s *AuthService) ValidateToken(rawToken string) *model.Token {
 	}
 
 	// Fallback: scan all tokens (handles tokens created before prefix was stored)
-	tokens, err := model.ListTokens(s.db)
+	tokens, err := s.store.ListTokens()
 	if err != nil {
 		s.log.Error("failed to list tokens for validation", "error", err)
 		return nil
@@ -85,7 +99,7 @@ func (s *AuthService) ValidateToken(rawToken string) *model.Token {
 			return nil
 		}
 
-		if err := model.UpdateTokenLastUsed(s.db, t.ID); err != nil {
+		if err := s.store.UpdateTokenLastUsed(t.ID); err != nil {
 			s.log.Warn("failed to update token last_used_at", "id", t.ID, "error", err)
 		}
 
@@ -122,7 +136,7 @@ func (s *AuthService) CreateAdminToken(name string) (string, *model.Token, error
 		return "", nil, err
 	}
 
-	existing, err := model.GetTokenByNameAndScope(s.db, name, ScopeAdmin)
+	existing, err := s.store.GetTokenByNameAndScope(name, ScopeAdmin)
 	if err != nil {
 		return "", nil, fmt.Errorf("checking existing admin token: %w", err)
 	}
@@ -154,7 +168,7 @@ func (s *AuthService) CreateAdminToken(name string) (string, *model.Token, error
 		Permissions:   permsJSON,
 	}
 
-	if err := model.CreateToken(s.db, token); err != nil {
+	if err := s.store.CreateToken(token); err != nil {
 		return "", nil, fmt.Errorf("saving admin token: %w", err)
 	}
 
@@ -169,7 +183,7 @@ func (s *AuthService) CreateCustomToken(name string, gameserverIDs []string, per
 	}
 
 	for _, gsID := range gameserverIDs {
-		gs, err := model.GetGameserver(s.db, gsID)
+		gs, err := s.store.GetGameserver(gsID)
 		if err != nil {
 			return "", nil, fmt.Errorf("validating gameserver ID %s: %w", gsID, err)
 		}
@@ -212,7 +226,7 @@ func (s *AuthService) CreateCustomToken(name string, gameserverIDs []string, per
 		ExpiresAt:     expiresAt,
 	}
 
-	if err := model.CreateToken(s.db, token); err != nil {
+	if err := s.store.CreateToken(token); err != nil {
 		return "", nil, fmt.Errorf("saving custom token: %w", err)
 	}
 
@@ -225,7 +239,7 @@ func (s *AuthService) CreateWorkerToken(name string) (string, *model.Token, erro
 		return "", nil, fmt.Errorf("token name is required")
 	}
 
-	existing, err := model.GetTokenByNameAndScope(s.db, name, ScopeWorker)
+	existing, err := s.store.GetTokenByNameAndScope(name, ScopeWorker)
 	if err != nil {
 		return "", nil, fmt.Errorf("checking existing worker token: %w", err)
 	}
@@ -254,7 +268,7 @@ func (s *AuthService) CreateWorkerToken(name string) (string, *model.Token, erro
 		Permissions:   json.RawMessage("[]"),
 	}
 
-	if err := model.CreateToken(s.db, token); err != nil {
+	if err := s.store.CreateToken(token); err != nil {
 		return "", nil, fmt.Errorf("saving worker token: %w", err)
 	}
 
@@ -270,7 +284,7 @@ func (s *AuthService) RotateAdminToken(name string) (string, *model.Token, error
 		return "", nil, err
 	}
 
-	if deleted, err := model.DeleteTokenByNameAndScope(s.db, name, ScopeAdmin); err != nil {
+	if deleted, err := s.store.DeleteTokenByNameAndScope(name, ScopeAdmin); err != nil {
 		return "", nil, fmt.Errorf("deleting old admin token: %w", err)
 	} else if deleted {
 		s.log.Info("rotated out old admin token", "name", name)
@@ -298,7 +312,7 @@ func (s *AuthService) RotateAdminToken(name string) (string, *model.Token, error
 		Permissions:   permsJSON,
 	}
 
-	if err := model.CreateToken(s.db, token); err != nil {
+	if err := s.store.CreateToken(token); err != nil {
 		return "", nil, fmt.Errorf("saving admin token: %w", err)
 	}
 
@@ -313,7 +327,7 @@ func (s *AuthService) RotateWorkerToken(name string) (string, *model.Token, erro
 		return "", nil, fmt.Errorf("token name is required")
 	}
 
-	if deleted, err := model.DeleteTokenByNameAndScope(s.db, name, ScopeWorker); err != nil {
+	if deleted, err := s.store.DeleteTokenByNameAndScope(name, ScopeWorker); err != nil {
 		return "", nil, fmt.Errorf("deleting old worker token: %w", err)
 	} else if deleted {
 		s.log.Info("rotated out old worker token", "name", name)
@@ -339,7 +353,7 @@ func (s *AuthService) RotateWorkerToken(name string) (string, *model.Token, erro
 		Permissions:   json.RawMessage("[]"),
 	}
 
-	if err := model.CreateToken(s.db, token); err != nil {
+	if err := s.store.CreateToken(token); err != nil {
 		return "", nil, fmt.Errorf("saving worker token: %w", err)
 	}
 
@@ -350,24 +364,24 @@ func (s *AuthService) RotateWorkerToken(name string) (string, *model.Token, erro
 // IsWorkerTokenValid checks if a token ID still exists with worker scope.
 // Used for heartbeat fast-path validation (no bcrypt needed).
 func (s *AuthService) IsWorkerTokenValid(tokenID string) bool {
-	return model.TokenExistsByScope(s.db, tokenID, ScopeWorker)
+	return s.store.TokenExistsByScope(tokenID, ScopeWorker)
 }
 
 func (s *AuthService) ListTokens() ([]model.Token, error) {
-	return model.ListTokens(s.db)
+	return s.store.ListTokens()
 }
 
 func (s *AuthService) ListTokensByScope(scope string) ([]model.Token, error) {
-	return model.ListTokensByScope(s.db, scope)
+	return s.store.ListTokensByScope(scope)
 }
 
 func (s *AuthService) GetToken(id string) (*model.Token, error) {
-	return model.GetToken(s.db, id)
+	return s.store.GetToken(id)
 }
 
 func (s *AuthService) DeleteToken(id string) error {
 	s.log.Info("deleting token", "id", id)
-	return model.DeleteToken(s.db, id)
+	return s.store.DeleteToken(id)
 }
 
 // IsAdmin checks if the token was created as an admin token.
