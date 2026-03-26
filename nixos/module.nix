@@ -25,7 +25,7 @@ let
     // lib.optionalAttrs (cfg.sftpPort != null) { sftp_port = cfg.sftpPort; }
     // lib.optionalAttrs (cfg.controllerAddress != null) { controller_address = cfg.controllerAddress; }
     // lib.optionalAttrs (cfg.workerId != null) { worker_id = cfg.workerId; }
-    // lib.optionalAttrs (cfg.workerLimits != {}) {
+    // lib.optionalAttrs (cfg.workerLimits.maxMemoryMB != null || cfg.workerLimits.maxCPU != null || cfg.workerLimits.maxStorageMB != null) {
       worker_limits = lib.filterAttrs (_: v: v != null) {
         max_memory_mb = cfg.workerLimits.maxMemoryMB;
         max_cpu = cfg.workerLimits.maxCPU;
