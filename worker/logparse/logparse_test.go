@@ -1,4 +1,4 @@
-package worker
+package logparse
 
 import (
 	"bytes"

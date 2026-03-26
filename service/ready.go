@@ -11,6 +11,7 @@ import (
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/worker"
+	"github.com/warsmite/gamejanitor/worker/logparse"
 )
 
 // ReadyWatcher monitors container logs for a game's ready pattern
@@ -143,7 +144,7 @@ func (w *ReadyWatcher) watchLogs(ctx context.Context, gameserverID string, wkr w
 	defer reader.Close()
 
 	lines := make(chan string, 64)
-	go worker.ParseLogStream(reader, lines)
+	go logparse.ParseLogStream(reader, lines)
 
 	installDetected := false
 	for {

@@ -11,7 +11,7 @@ import (
 
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/service"
-	"github.com/warsmite/gamejanitor/worker"
+	"github.com/warsmite/gamejanitor/worker/logparse"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -430,7 +430,7 @@ func (h *GameserverHandlers) Logs(w http.ResponseWriter, r *http.Request) {
 	}
 	defer reader.Close()
 
-	lines := worker.ParseLogLines(reader)
+	lines := logparse.ParseLogLines(reader)
 	respondOK(w, map[string]any{"lines": lines})
 }
 
