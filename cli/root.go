@@ -55,7 +55,6 @@ func init() {
 
 	// Administration
 	rootCmd.AddCommand(tokensCmd)
-	rootCmd.AddCommand(tokenCmd)
 	rootCmd.AddCommand(workersCmd)
 	rootCmd.AddCommand(settingsCmd)
 	rootCmd.AddCommand(webhooksCmd)

@@ -13,35 +13,36 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var tokenCmd = &cobra.Command{
-	Use:   "token",
-	Short: "Manage auth tokens offline (direct DB access, no running server needed)",
+var tokensOfflineCmd = &cobra.Command{
+	Use:   "offline",
+	Short: "Manage tokens directly via database (no running server needed)",
 }
 
 func init() {
-	tokenCreateCmd.Flags().StringP("data-dir", "d", "/var/lib/gamejanitor", "Data directory containing the database")
-	tokenCreateCmd.Flags().String("name", "", "Token name (required)")
-	tokenCreateCmd.Flags().String("type", "worker", "Token type: worker, admin")
-	tokenCreateCmd.MarkFlagRequired("name")
+	tokensOfflineCreateCmd.Flags().StringP("data-dir", "d", "/var/lib/gamejanitor", "Data directory containing the database")
+	tokensOfflineCreateCmd.Flags().String("name", "", "Token name (required)")
+	tokensOfflineCreateCmd.Flags().String("type", "worker", "Token type: worker, admin")
+	tokensOfflineCreateCmd.MarkFlagRequired("name")
 
-	tokenRotateCmd.Flags().StringP("data-dir", "d", "/var/lib/gamejanitor", "Data directory containing the database")
-	tokenRotateCmd.Flags().String("name", "", "Token name (required)")
-	tokenRotateCmd.Flags().String("type", "worker", "Token type: worker, admin")
-	tokenRotateCmd.MarkFlagRequired("name")
+	tokensOfflineRotateCmd.Flags().StringP("data-dir", "d", "/var/lib/gamejanitor", "Data directory containing the database")
+	tokensOfflineRotateCmd.Flags().String("name", "", "Token name (required)")
+	tokensOfflineRotateCmd.Flags().String("type", "worker", "Token type: worker, admin")
+	tokensOfflineRotateCmd.MarkFlagRequired("name")
 
-	tokenCmd.AddCommand(tokenCreateCmd, tokenRotateCmd)
+	tokensOfflineCmd.AddCommand(tokensOfflineCreateCmd, tokensOfflineRotateCmd)
+	tokensCmd.AddCommand(tokensOfflineCmd)
 }
 
-var tokenCreateCmd = &cobra.Command{
+var tokensOfflineCreateCmd = &cobra.Command{
 	Use:   "create",
-	Short: "Create a new auth token (idempotent)",
-	RunE:  runTokenCreate,
+	Short: "Create a token via direct DB access",
+	RunE:  runTokenOfflineCreate,
 }
 
-var tokenRotateCmd = &cobra.Command{
+var tokensOfflineRotateCmd = &cobra.Command{
 	Use:   "rotate",
-	Short: "Rotate an existing token (deletes old, creates new)",
-	RunE:  runTokenRotate,
+	Short: "Rotate a token via direct DB access",
+	RunE:  runTokenOfflineRotate,
 }
 
 func openAuthService(cmd *cobra.Command) (*auth.AuthService, func(), error) {
@@ -71,7 +72,7 @@ func openAuthService(cmd *cobra.Command) (*auth.AuthService, func(), error) {
 	return authSvc, func() { database.Close() }, nil
 }
 
-func runTokenCreate(cmd *cobra.Command, args []string) error {
+func runTokenOfflineCreate(cmd *cobra.Command, args []string) error {
 	name, _ := cmd.Flags().GetString("name")
 	tokenType, _ := cmd.Flags().GetString("type")
 
@@ -97,7 +98,7 @@ func runTokenCreate(cmd *cobra.Command, args []string) error {
 	}
 
 	if rawToken == "" {
-		fmt.Fprintf(os.Stderr, "Token %q already exists. Use 'gamejanitor token rotate' to generate a new secret.\n", name)
+		fmt.Fprintf(os.Stderr, "Token %q already exists. Use 'gamejanitor tokens offline rotate' to generate a new secret.\n", name)
 		return nil
 	}
 
@@ -106,7 +107,7 @@ func runTokenCreate(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runTokenRotate(cmd *cobra.Command, args []string) error {
+func runTokenOfflineRotate(cmd *cobra.Command, args []string) error {
 	name, _ := cmd.Flags().GetString("name")
 	tokenType, _ := cmd.Flags().GetString("type")
 
