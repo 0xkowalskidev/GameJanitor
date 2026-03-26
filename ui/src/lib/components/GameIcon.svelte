@@ -1,14 +1,17 @@
 <script lang="ts">
+  import { basePath } from '$lib/base';
+
   let { src = '', name = '', size = 48 }: { src?: string; name?: string; size?: number } = $props();
   let failed = $state(false);
 
   const letter = $derived(name ? name.charAt(0).toUpperCase() : '?');
+  const fullSrc = $derived(src ? basePath + src : '');
   const hasImage = $derived(!!src && !failed);
 </script>
 
 <div class="icon" class:has-image={hasImage} style="width:{size}px; height:{size}px; font-size:{size * 0.4}px;">
   {#if hasImage}
-    <img {src} alt="" onerror={() => failed = true} />
+    <img src={fullSrc} alt="" onerror={() => failed = true} />
   {:else}
     <span class="fallback">{letter}</span>
   {/if}
