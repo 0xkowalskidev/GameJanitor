@@ -1,7 +1,6 @@
 package settings
 
 import (
-	"database/sql"
 	"fmt"
 	"log/slog"
 	"strconv"
@@ -10,6 +9,14 @@ import (
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/pkg/validate"
 )
+
+// Store defines the persistence methods settings needs.
+type Store interface {
+	AllSettings() (map[string]string, error)
+	SetSetting(key, value string) error
+	DeleteSetting(key string) error
+	GetWorkerNode(id string) (*model.WorkerNode, error)
+}
 
 // Setting key constants
 const (
@@ -134,22 +141,22 @@ type SettingsService struct {
 	values   map[string]any // live typed values, served from memory
 	defaults map[string]any // the active defaults for this mode
 	mode     string
-	db       *sql.DB
+	store    Store
 	log      *slog.Logger
 }
 
-func NewSettingsService(db *sql.DB, log *slog.Logger) *SettingsService {
-	return NewSettingsServiceWithMode(db, log, ModeDefault)
+func NewSettingsService(store Store, log *slog.Logger) *SettingsService {
+	return NewSettingsServiceWithMode(store, log, ModeDefault)
 }
 
-func NewSettingsServiceWithMode(db *sql.DB, log *slog.Logger, mode string) *SettingsService {
+func NewSettingsServiceWithMode(store Store, log *slog.Logger, mode string) *SettingsService {
 	defaults := DefaultsForMode(mode)
 
 	s := &SettingsService{
 		values:   make(map[string]any, len(defaults)),
 		defaults: defaults,
 		mode:     mode,
-		db:       db,
+		store:    store,
 		log:      log,
 	}
 
@@ -159,7 +166,7 @@ func NewSettingsServiceWithMode(db *sql.DB, log *slog.Logger, mode string) *Sett
 	}
 
 	// Load persisted values from DB, overwriting defaults
-	stored, err := model.AllSettings(db)
+	stored, err := store.AllSettings()
 	if err != nil {
 		log.Error("failed to load settings from DB, using defaults", "error", err)
 		return s
@@ -216,7 +223,7 @@ func (s *SettingsService) ApplyConfig(settings map[string]any) {
 		s.values[key] = typed
 
 		// Persist to DB
-		if err := model.SetSetting(s.db, key, fmt.Sprintf("%v", typed)); err != nil {
+		if err := s.store.SetSetting(key, fmt.Sprintf("%v", typed)); err != nil {
 			s.log.Error("failed to persist config setting", "key", key, "error", err)
 			continue
 		}
@@ -295,7 +302,7 @@ func (s *SettingsService) Set(key string, value any) error {
 		return err
 	}
 
-	if err := model.SetSetting(s.db, key, fmt.Sprintf("%v", typed)); err != nil {
+	if err := s.store.SetSetting(key, fmt.Sprintf("%v", typed)); err != nil {
 		return err
 	}
 
@@ -340,7 +347,7 @@ func (s *SettingsService) validateSetting(key string, typed any) error {
 
 // Clear removes a setting from DB and reverts to default in memory.
 func (s *SettingsService) Clear(key string) error {
-	if err := model.DeleteSetting(s.db, key); err != nil {
+	if err := s.store.DeleteSetting(key); err != nil {
 		return err
 	}
 
@@ -385,7 +392,7 @@ func (s *SettingsService) ResolveConnectionIP(nodeID *string) (ip string, config
 		return globalIP, true
 	}
 	if nodeID != nil && *nodeID != "" {
-		node, err := model.GetWorkerNode(s.db, *nodeID)
+		node, err := s.store.GetWorkerNode(*nodeID)
 		if err == nil && node != nil {
 			if node.ExternalIP != "" {
 				return node.ExternalIP, true

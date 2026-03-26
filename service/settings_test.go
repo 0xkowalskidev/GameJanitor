@@ -67,12 +67,12 @@ func TestSettings_Persistence(t *testing.T) {
 	log := testutil.TestLogger()
 
 	// Set a value with one service instance
-	svc1 := settings.NewSettingsService(db, log)
+	svc1 := settings.NewSettingsService(testutil.NewSettingsStore(db), log)
 	err := svc1.Set(settings.SettingAuthEnabled, true)
 	require.NoError(t, err)
 
 	// Create a new service instance on the same DB — value should persist
-	svc2 := settings.NewSettingsService(db, log)
+	svc2 := settings.NewSettingsService(testutil.NewSettingsStore(db), log)
 	assert.True(t, svc2.GetBool(settings.SettingAuthEnabled))
 }
 
@@ -146,7 +146,7 @@ func TestSettings_BusinessMode_Defaults(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	log := testutil.TestLogger()
 
-	svc := settings.NewSettingsServiceWithMode(db, log, settings.ModeBusiness)
+	svc := settings.NewSettingsServiceWithMode(testutil.NewSettingsStore(db), log,settings.ModeBusiness)
 
 	assert.True(t, svc.GetBool(settings.SettingAuthEnabled))
 	assert.False(t, svc.GetBool(settings.SettingLocalhostBypass))
@@ -165,7 +165,7 @@ func TestSettings_BusinessMode_OverridesStillWork(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	log := testutil.TestLogger()
 
-	svc := settings.NewSettingsServiceWithMode(db, log, settings.ModeBusiness)
+	svc := settings.NewSettingsServiceWithMode(testutil.NewSettingsStore(db), log,settings.ModeBusiness)
 
 	// Business defaults auth to true, but operator can override to false
 	err := svc.Set(settings.SettingAuthEnabled, false)
@@ -178,7 +178,7 @@ func TestSettings_BusinessMode_ClearRevertsToBusinessDefault(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	log := testutil.TestLogger()
 
-	svc := settings.NewSettingsServiceWithMode(db, log, settings.ModeBusiness)
+	svc := settings.NewSettingsServiceWithMode(testutil.NewSettingsStore(db), log,settings.ModeBusiness)
 
 	// Override auth to false
 	err := svc.Set(settings.SettingAuthEnabled, false)
@@ -195,7 +195,7 @@ func TestSettings_DefaultMode_Unchanged(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	log := testutil.TestLogger()
 
-	svc := settings.NewSettingsServiceWithMode(db, log, settings.ModeDefault)
+	svc := settings.NewSettingsServiceWithMode(testutil.NewSettingsStore(db), log,settings.ModeDefault)
 
 	// Default mode should have newbie-friendly defaults
 	assert.False(t, svc.GetBool(settings.SettingAuthEnabled))

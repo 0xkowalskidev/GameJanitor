@@ -140,13 +140,17 @@ type services struct {
 
 func initServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registry *orchestrator.Registry, gameStore *games.GameStore, cfg config.Config, logger *slog.Logger) (*services, error) {
 	broadcaster := controller.NewEventBus()
-	settingsSvc := settings.NewSettingsServiceWithMode(database, logger, cfg.Mode)
+	gsStore := store.NewGameserverStore(database)
+	wnStore := store.NewWorkerNodeStore(database)
+
+	settingsStore := struct {
+		*store.SettingStore
+		*store.WorkerNodeStore
+	}{store.NewSettingStore(database), wnStore}
+	settingsSvc := settings.NewSettingsServiceWithMode(settingsStore, logger, cfg.Mode)
 
 	// Apply config file runtime settings to DB on every startup
 	settingsSvc.ApplyConfig(cfg.Settings)
-
-	gsStore := store.NewGameserverStore(database)
-	wnStore := store.NewWorkerNodeStore(database)
 	backupDBStore := store.NewBackupStore(database)
 	gameserverStore := struct {
 		*store.GameserverStore

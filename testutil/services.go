@@ -55,13 +55,19 @@ func NewTestServices(t *testing.T) *ServiceBundle {
 	registry := orchestrator.NewRegistry(db, log)
 	dispatcher := orchestrator.NewDispatcher(registry, db, log)
 	broadcaster := controller.NewEventBus()
-	settingsSvc := settings.NewSettingsService(db, log)
+
+	gsStore := store.NewGameserverStore(db)
+	wnStore := store.NewWorkerNodeStore(db)
+
+	settingsStore := struct {
+		*store.SettingStore
+		*store.WorkerNodeStore
+	}{store.NewSettingStore(db), wnStore}
+	settingsSvc := settings.NewSettingsService(settingsStore, log)
 
 	dataDir := t.TempDir()
 	backupStorage := backup.NewLocalStorage(dataDir)
 
-	gsStore := store.NewGameserverStore(db)
-	wnStore := store.NewWorkerNodeStore(db)
 	backupDBStore := store.NewBackupStore(db)
 	gsCompositeStore := struct {
 		*store.GameserverStore
@@ -247,4 +253,13 @@ func MustCreateCustomToken(t *testing.T, svc *ServiceBundle, perms []string, gam
 		t.Fatalf("creating custom token: %v", err)
 	}
 	return raw
+}
+
+// NewSettingsStore builds a settings.Store from a *sql.DB for tests that create
+// SettingsService directly instead of using the full ServiceBundle.
+func NewSettingsStore(db *sql.DB) settings.Store {
+	return struct {
+		*store.SettingStore
+		*store.WorkerNodeStore
+	}{store.NewSettingStore(db), store.NewWorkerNodeStore(db)}
 }

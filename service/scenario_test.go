@@ -265,7 +265,7 @@ func TestScenario_Business_ModeEnforcesSecureDefaults(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	log := testutil.TestLogger()
 
-	svc := settings.NewSettingsServiceWithMode(db, log, settings.ModeBusiness)
+	svc := settings.NewSettingsServiceWithMode(testutil.NewSettingsStore(db), log,settings.ModeBusiness)
 
 	// Business mode should enforce secure-by-default
 	assert.True(t, svc.GetBool(settings.SettingAuthEnabled), "business mode must enable auth")
