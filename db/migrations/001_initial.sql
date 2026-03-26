@@ -20,6 +20,7 @@ CREATE TABLE gameservers (
     storage_limit_mb INTEGER,
     node_tags TEXT NOT NULL DEFAULT '{}',
     auto_restart BOOLEAN NOT NULL DEFAULT 0,
+    connection_address TEXT,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

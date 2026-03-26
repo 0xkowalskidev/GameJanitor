@@ -424,6 +424,9 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *model.Game
 	if !gs.NodeTags.IsEmpty() {
 		existing.NodeTags = gs.NodeTags
 	}
+	if gs.ConnectionAddress != nil {
+		existing.ConnectionAddress = gs.ConnectionAddress
+	}
 
 	// Enforce require_* settings
 	if s.settingsSvc.GetBool(settings.SettingRequireMemoryLimit) && existing.MemoryLimitMB <= 0 {
