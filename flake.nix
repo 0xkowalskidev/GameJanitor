@@ -30,7 +30,7 @@
           pname = "gamejanitor";
           version = "0.1.0";
           src = ./.;
-          vendorHash = "sha256-ZeHdnW0lypFe7kao7Uy/t4twdDS0Mq3bDRjN4GYOK4o=";
+          vendorHash = "sha256-c/VVrjSyFV9HbdtdmCQPR/x5vk/Xdc/rCJOAFX50qqs=";
           env.CGO_ENABLED = "0";
 
           preBuild = ''
