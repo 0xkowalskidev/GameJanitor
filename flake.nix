@@ -162,6 +162,15 @@
             echo "HTML report: go tool cover -html=/tmp/gamejanitor-coverage.out"
           '';
 
+          loc = pkgs.writeShellScriptBin "loc" ''
+            echo "=== Go ==="
+            find . -name '*.go' -not -path './vendor/*' -not -path './node_modules/*' | xargs wc -l | tail -1
+            echo "=== TypeScript/JSX ==="
+            find ./ui/src -name '*.ts' -o -name '*.tsx' 2>/dev/null | xargs wc -l 2>/dev/null | tail -1
+            echo "=== Total ==="
+            find . \( -name '*.go' -o -name '*.ts' -o -name '*.tsx' \) -not -path './vendor/*' -not -path './node_modules/*' | xargs wc -l | tail -1
+          '';
+
           cleanup = pkgs.writeShellScriptBin "cleanup" ''
             for runtime in docker podman; do
               if ! command -v "$runtime" &>/dev/null; then
@@ -205,6 +214,7 @@
             dev-controller
             dev-worker
             gen-proto
+            loc
             cleanup
             test
             test-all
