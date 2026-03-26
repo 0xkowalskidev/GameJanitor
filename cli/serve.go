@@ -248,9 +248,11 @@ func runServe(cmd *cobra.Command, args []string) error {
 	// Log file always gets JSON (for log aggregation)
 	fileHandler := slog.NewJSONHandler(logFile, &slog.HandlerOptions{Level: level})
 
-	// Terminal gets human-readable text; pipes/systemd get JSON
+	// Terminal gets colored human-readable output; pipes/systemd get JSON
 	var stderrHandler slog.Handler
-	if isTTY() {
+	if isTTY() && os.Getenv("NO_COLOR") == "" {
+		stderrHandler = &colorLogHandler{level: level, w: os.Stderr}
+	} else if isTTY() {
 		stderrHandler = slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level})
 	} else {
 		stderrHandler = slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: level})
@@ -540,6 +542,64 @@ func isTTY() bool {
 		return false
 	}
 	return fi.Mode()&os.ModeCharDevice != 0
+}
+
+// colorLogHandler writes colored, human-readable log lines to a terminal.
+// Format: HH:MM:SS LEVEL msg key=value key=value
+type colorLogHandler struct {
+	level slog.Level
+	w     *os.File
+	attrs []slog.Attr
+	group string
+}
+
+func (h *colorLogHandler) Enabled(_ context.Context, l slog.Level) bool {
+	return l >= h.level
+}
+
+func (h *colorLogHandler) Handle(_ context.Context, r slog.Record) error {
+	// Time — dimmed
+	ts := r.Time.Format("15:04:05")
+
+	// Level — colored
+	var lvl string
+	switch {
+	case r.Level >= slog.LevelError:
+		lvl = "\033[31mERR\033[0m" // red
+	case r.Level >= slog.LevelWarn:
+		lvl = "\033[33mWRN\033[0m" // yellow
+	case r.Level >= slog.LevelInfo:
+		lvl = "\033[36mINF\033[0m" // cyan
+	default:
+		lvl = "\033[90mDBG\033[0m" // gray
+	}
+
+	// Message — bright
+	msg := r.Message
+
+	// Attrs — dimmed
+	var attrs string
+	collect := func(a slog.Attr) bool {
+		if a.Key != "" {
+			attrs += fmt.Sprintf(" \033[90m%s=\033[0m%s", a.Key, a.Value.String())
+		}
+		return true
+	}
+	for _, a := range h.attrs {
+		collect(a)
+	}
+	r.Attrs(collect)
+
+	fmt.Fprintf(h.w, "\033[90m%s\033[0m %s %s%s\n", ts, lvl, msg, attrs)
+	return nil
+}
+
+func (h *colorLogHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return &colorLogHandler{level: h.level, w: h.w, attrs: append(h.attrs, attrs...), group: h.group}
+}
+
+func (h *colorLogHandler) WithGroup(name string) slog.Handler {
+	return &colorLogHandler{level: h.level, w: h.w, attrs: h.attrs, group: name}
 }
 
 // multiHandler fans out log records to multiple handlers.
