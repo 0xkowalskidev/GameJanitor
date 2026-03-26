@@ -25,10 +25,13 @@
   function connectionAddress(gsId: string): string {
     const gs = gameserverStore.get(gsId);
     if (!gs) return '';
+    if (gs.connection_address) return gs.connection_address;
     try {
       const ports = typeof gs.ports === 'string' ? JSON.parse(gs.ports) : gs.ports;
       if (ports && ports.length > 0) {
-        return `${ports[0].host_port || ports[0].container_port}`;
+        const port = ports[0].host_port || ports[0].container_port;
+        const ip = gs.node?.lan_ip || gs.node?.external_ip || '';
+        return ip ? `${ip}:${port}` : `${port}`;
       }
     } catch (e) { console.warn('Dashboard: failed to parse ports', e); }
     return '';

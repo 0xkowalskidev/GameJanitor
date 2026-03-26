@@ -27,10 +27,13 @@
 
   function connectionAddress(): string {
     if (!gameserver) return '';
+    if (gameserver.connection_address) return gameserver.connection_address;
     try {
       const ports = typeof gameserver.ports === 'string' ? JSON.parse(gameserver.ports) : gameserver.ports;
       if (ports && ports.length > 0) {
-        return `${ports[0].host_port || ports[0].container_port}`;
+        const port = ports[0].host_port || ports[0].container_port;
+        const ip = gameserver.node?.lan_ip || gameserver.node?.external_ip || '';
+        return ip ? `${ip}:${port}` : `${port}`;
       }
     } catch (e) { console.warn('Overview: failed to parse ports', e); }
     return '';

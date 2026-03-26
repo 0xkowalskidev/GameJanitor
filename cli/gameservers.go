@@ -98,18 +98,23 @@ var getCmd = &cobra.Command{
 		}
 
 		var gs struct {
-			ID            string          `json:"id"`
-			Name          string          `json:"name"`
-			GameID        string          `json:"game_id"`
-			Status        string          `json:"status"`
-			MemoryLimitMB int             `json:"memory_limit_mb"`
-			CPULimit      float64         `json:"cpu_limit"`
-			VolumeName    string          `json:"volume_name"`
-			Ports         json.RawMessage `json:"ports"`
-			Env           json.RawMessage `json:"env"`
-			AutoRestart   bool            `json:"auto_restart"`
-			SFTPUsername  string          `json:"sftp_username"`
-			SFTPPassword  string          `json:"sftp_password"`
+			ID                string          `json:"id"`
+			Name              string          `json:"name"`
+			GameID            string          `json:"game_id"`
+			Status            string          `json:"status"`
+			MemoryLimitMB     int             `json:"memory_limit_mb"`
+			CPULimit          float64         `json:"cpu_limit"`
+			VolumeName        string          `json:"volume_name"`
+			Ports             json.RawMessage `json:"ports"`
+			Env               json.RawMessage `json:"env"`
+			AutoRestart       bool            `json:"auto_restart"`
+			ConnectionAddress *string         `json:"connection_address"`
+			Node              *struct {
+				LanIP      string `json:"lan_ip"`
+				ExternalIP string `json:"external_ip"`
+			} `json:"node"`
+			SFTPUsername string `json:"sftp_username"`
+			SFTPPassword string `json:"sftp_password"`
 		}
 		if err := json.Unmarshal(resp.Data, &gs); err != nil {
 			return fmt.Errorf("parsing response: %w", err)
@@ -126,6 +131,7 @@ var getCmd = &cobra.Command{
 			fmt.Printf("CPU:        unlimited\n")
 		}
 		fmt.Printf("Restart:    %v\n", gs.AutoRestart)
+		fmt.Printf("Connect:    %s\n", cliConnectionAddress(gs.ConnectionAddress, gs.Node, gs.Ports))
 		fmt.Printf("Volume:     %s\n", gs.VolumeName)
 		fmt.Printf("Ports:      %s\n", string(gs.Ports))
 		fmt.Printf("Env:        %s\n", string(gs.Env))
@@ -393,6 +399,33 @@ func parsePorts(flags []string) ([]map[string]any, error) {
 		})
 	}
 	return ports, nil
+}
+
+func cliConnectionAddress(connAddr *string, node *struct {
+	LanIP      string `json:"lan_ip"`
+	ExternalIP string `json:"external_ip"`
+}, portsJSON json.RawMessage) string {
+	if connAddr != nil && *connAddr != "" {
+		return *connAddr
+	}
+	var ports []struct {
+		HostPort int `json:"host_port"`
+	}
+	if err := json.Unmarshal(portsJSON, &ports); err == nil && len(ports) > 0 {
+		ip := ""
+		if node != nil {
+			if node.LanIP != "" {
+				ip = node.LanIP
+			} else if node.ExternalIP != "" {
+				ip = node.ExternalIP
+			}
+		}
+		if ip != "" {
+			return fmt.Sprintf("%s:%d", ip, ports[0].HostPort)
+		}
+		return fmt.Sprintf("%d", ports[0].HostPort)
+	}
+	return ""
 }
 
 func parseEnvFlags(flags []string) map[string]string {
