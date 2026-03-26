@@ -1,48 +1,216 @@
 # Refactor Tracking
 
-Organized by refactor task, not by file.
+---
+
+## Active: Architecture Refactor — Nested Package Structure
+
+Replace the flat package layout with a nested, domain-driven structure.
+Main drivers: `service/` god package (33 files, ~8k lines, 12 service types),
+misplaced orchestration code in `worker/`, utility package sprawl at root.
+
+### Target Structure
+
+```
+gamejanitor/
+├── main.go
+├── controller/                        # Shared: EventBus, errors, status constants
+│   ├── eventbus.go                    #   (from service/broadcast.go + service/events.go)
+│   ├── errors.go                      #   (from service/errors.go)
+│   ├── status.go                      #   (from service/common.go)
+│   ├── gameserver/                    #   GameserverService + lifecycle + ports + migration + inspect + console + file
+│   ├── backup/                        #   BackupService + BackupStore interface + LocalStore + S3Store
+│   ├── auth/                          #   AuthService + permissions + token context
+│   ├── schedule/                      #   ScheduleService + Scheduler
+│   ├── webhook/                       #   WebhookWorker + WebhookEndpointService
+│   ├── event/                         #   EventStore + EventHistoryService
+│   ├── mod/                           #   ModService + ModSource + modrinth/umod/workshop
+│   ├── settings/                      #   SettingsService
+│   ├── status/                        #   StatusManager, QueryService, ReadyWatcher, StatsPoller, StatusSubscriber
+│   └── orchestrator/                  #   Dispatcher + Registry + WorkerNodeService (moved from worker/)
+├── worker/                            #   Worker interface + local/remote impls
+│   ├── runtime/                       #   docker (absorbs docker/), process, oci, box64
+│   ├── agent/                         #   gRPC server: agent.go, grpc.go, auth.go
+│   ├── logparse/                      #   Log parsing
+│   ├── fileops/                       #   direct.go, sidecar.go
+│   ├── backup/                        #   Worker-side backup ops
+│   └── pb/                            #   Generated protobuf
+├── model/                             #   Rename models/ → model/. Absorbs validate/.
+├── api/                               #   HTTP transport
+│   └── handler/                       #   Rename handlers/ → handler/
+├── cli/                               #   CLI commands
+├── pkg/                               #   Shared utilities: naming/, netinfo/, tlsutil/
+├── config/                            #   Stays
+├── db/                                #   Stays
+├── games/                             #   Stays
+├── sftp/                              #   Stays
+├── ui/                                #   Stays
+├── testutil/                          #   Stays
+└── e2e/                               #   Stays
+```
+
+### Deleted Packages
+
+- `constants/` (24 lines) — inline where used
+- `validate/` — absorbed into `model/`
+- `docker/` — absorbed into `worker/runtime/`
+- `naming/`, `netinfo/`, `tlsutil/` — moved under `pkg/`
+
+### Cross-Service Interface Pattern
+
+Each controller sub-package defines narrow interfaces for sibling deps.
+No concrete cross-imports between siblings. Wiring in `cli/serve.go`.
+
+**Exception: `auth/` and `settings/` are true leaves** — they have zero
+dependencies on other controller sub-packages. Siblings can import them
+concretely (no interface needed). This is safe because the dependency
+is one-directional: many packages → auth/settings, never the reverse.
+
+```go
+// controller/backup/backup.go — interface for non-leaf sibling dep
+type GameserverLookup interface {
+    GetGameserver(id string) (*model.Gameserver, error)
+}
+
+// controller/schedule/scheduler.go — interfaces for non-leaf sibling deps
+type GameserverLifecycle interface {
+    Start(ctx context.Context, id string) error
+    Stop(ctx context.Context, id string) error
+    Restart(ctx context.Context, id string) error
+}
+type BackupCreator interface {
+    CreateBackup(ctx context.Context, gsID string) (*model.Backup, error)
+}
+
+// controller/gameserver/gameserver.go — concrete import of leaf
+import "github.com/warsmite/gamejanitor/controller/settings"
+```
+
+Eliminates current `Set*()` cycle-breaking hacks.
 
 ---
 
-## In Progress
+### Phase 1: Leaf renames (no internal dependency changes)
 
-### Architecture Findings
+- [ ] `models/` → `model/` (absorb `validate/validate.go` → `model/validate.go`)
+- [ ] `naming/` → `pkg/naming/`
+- [ ] `netinfo/` → `pkg/netinfo/`
+- [ ] `tlsutil/` → `pkg/tlsutil/`
+- [ ] Delete `constants/` — inline values into consumers
+- [ ] `api/handlers/` → `api/handler/`
+- [ ] Update all import paths project-wide
+- [ ] Run tests, `go vet ./...`
 
-- **F4** `[TODO]` — **Resource cap enforcement** [MEDIUM]: Caps (MaxMemoryMB, MaxCPU, MaxBackups, MaxStorageMB) not validated on create before game defaults applied; MaxBackups/MaxStorageMB never enforced for scoped tokens on update; no bounds checking on cap values (negative/zero). Files: `gameserver.go:80,100,295-320`, `backup.go:301`
+### Phase 2: Worker sub-packages
 
-- **F5** `[DONE]` — **API inconsistencies** [MEDIUM]: Inconsistent HTTP status codes (Delete returns 204 vs 200), response envelope varies (Backup Restore returns `{status:"restored"}`), Create returns full object in some handlers but not others. Files: `response.go`, `gameservers.go`, `backups.go`, `schedules.go`, `settings_api.go`
+- [ ] `docker/` → `worker/runtime/` (absorb as package runtime)
+- [ ] `worker/process.go`, `worker/oci.go`, `worker/box64.go` → `worker/runtime/`
+- [ ] `worker/agent.go`, `worker/controller_grpc.go`, `worker/grpc_auth.go` → `worker/agent/`
+- [ ] `worker/logparse.go` → `worker/logparse/`
+- [ ] `worker/local_fileops_direct.go`, `worker/local_fileops_sidecar.go` → `worker/fileops/`
+- [ ] `worker/local_backup.go` → `worker/backup/`
+- [ ] Update all import paths
+- [ ] Run tests
 
-- **F7** `[DONE]` — **Error messages leak internals** [HIGH]: Untyped `fmt.Errorf` errors propagate directly to API responses, exposing Docker errors, port range config, storage backend details, and JSON parse errors. Non-ServiceError types map to 500 with raw message. Files: `gameserver.go`, `gameserver_ports.go:143`, `backup.go:100,124`
+### Phase 3: Controller parent package
 
-- **F8** `[DONE]` — **Multi-node races** [MEDIUM]: Port allocation and worker placement read-then-write without locking. Concurrent creates on same node can allocate same ports or overcommit resources. Docker rejects at runtime but UX is broken. Files: `gameserver.go:84-117`, `gameserver_ports.go:120-160`, `dispatcher.go:101-115`
+- [ ] Create `controller/eventbus.go` — EventBus + event types (from `service/broadcast.go` + `service/events.go`)
+- [ ] Create `controller/errors.go` — ServiceError (from `service/errors.go`)
+- [ ] Create `controller/status.go` — status constants + helpers (from `service/common.go`)
+- [ ] Update all `service.EventBus` / `service.ServiceError` / `service.Status*` refs
+  - Includes remaining `service/` files + external consumers (api/, cli/, testutil/)
+- [ ] Run tests
 
-- **F9** `[DEFERRED]` — **Settings architecture** [LOW]: Flat key-value settings with env override pattern is all-or-nothing global; no per-node settings support (except port range which has a special case). No caching, no schema versioning. Manageable now but design debt for multi-node. Files: `settings.go`, `settings_api.go:143-156`
+### Phase 4: Controller domain packages
 
----
+One at a time, in dependency order. For each step:
+1. Move files, change `package` declaration
+2. Extract narrow interfaces for cross-service deps (or import leaves concretely)
+3. Update remaining `service/` files that referenced moved types
+4. Update external consumers (api/, cli/, testutil/, sftp/)
+5. Run tests
 
-## Completed
+Leaves first, then core services, then consumers of multiple siblings.
 
-### Architecture Findings
+**4a — `controller/auth/`** (leaf — no deps on other controller sub-packages)
+- [ ] `service/auth.go` → `controller/auth/auth.go`
+- [ ] `service/permissions.go` → `controller/auth/permissions.go`
+- [ ] Update remaining service/ files: `gameserver.go`, `events.go` (use `auth.TokenFromContext` etc.)
+- [ ] Update api/middleware.go, api/handler/, cli/
 
-- **F3** `[DONE]` — **Webhooks insufficient for business automation**: Replaced single global webhook config with multi-endpoint system. 12 event types, per-endpoint event filtering (glob patterns), HMAC signing, persistent delivery with 24h retry window, enriched payloads with actor token ID, versioned payloads, delivery history API, full CRUD API at `/api/webhooks`, UI management. Commits: `3012d49`, `bc03201`, `d94f97e`, `bad3ed0`, `1951255`, `4148772`, `7cfba56`
+**4b — `controller/settings/`** (leaf — no deps on other controller sub-packages)
+- [ ] `service/settings.go` → `controller/settings/settings.go`
+- [ ] Update remaining service/ files: `gameserver*.go`, `backup.go`, `mod*.go`
+- [ ] Update api/handler/, cli/
 
-### Pass 2 (structural refactors)
-- **Task 1** `[DONE]` — Settings getter/setter helpers (`ab79a27`): 481→380 lines, extracted `getInt`/`getBool`/`getString`/`setInt`/`setBool`
-- **Task 2** `[DONE]` — Settings API table-driven update (`c6a44e9`): 371→230 lines, 14 case blocks → `settingDefs` map
-- **Task 3** `[DONE]` — Page settings handler dedup (`2221a5a`): 774→648 lines, extracted `saveIntHandler`/`boolToggleHandler`
-- **Task 4** `[DONE]` — SQL column constants (`fbd86e6`): `gameserverColumns` and `workerNodeColumns` eliminate duplication
-- **Task 5** `[DONE]` — Extract WorkerNodeService (`51a160b`): 5 worker-node pass-throughs moved from SettingsService to dedicated service
-- **Task 6** `[DONE]` — Split gameserver.go (`ecd7787`): 1224→452 lines, split into 5 files (CRUD, lifecycle, ports, migration, inspect)
-- **Task 7** `[DONE]` — Split local.go (`9ed2b31`): 825→301 lines, split into 4 files (core, direct fileops, sidecar fileops, backup)
-- **Task 8** `[DONE]` — Split serve.go: 625→378 lines, worker agent/gRPC/heartbeat extracted to `serve_worker.go`, service init extracted to `initServices()`
+**4c — `controller/event/`** (leaf — depends only on parent EventBus)
+- [ ] `service/event_store.go` → `controller/event/store.go`
+- [ ] `service/event_history.go` → `controller/event/history.go`
+- [ ] Update api/router.go, api/handler/
 
-### Pass 1 (lint-style fixes)
-- `auth.go`: Removed 10 redundant comments
-- `status.go`: Removed dead code
-- `agent.go`: Removed dead code + unused import
-- `grpc_auth.go`: Trimmed 1 redundant comment
-- `remote.go`: Removed 2 redundant comments
-- `settings_api.go`: Fixed struct alignment
-- `page_settings.go`: Removed 12 redundant comments
-- `serve.go`: Fixed import ordering
-- `client.go`: Removed dead function
+**4d — `controller/webhook/`** (leaf — depends only on parent EventBus)
+- [ ] `service/webhook.go` → `controller/webhook/webhook.go`
+- [ ] `service/webhook_endpoint.go` → `controller/webhook/endpoint.go`
+- [ ] Update api/router.go, api/handler/, cli/
+
+**4e — `controller/orchestrator/`** (move from worker/ + service/)
+- [ ] `worker/dispatcher.go` → `controller/orchestrator/dispatcher.go`
+- [ ] `worker/registry.go` → `controller/orchestrator/registry.go`
+- [ ] `service/worker_node.go` → `controller/orchestrator/worker_node.go`
+- [ ] Imports `worker.Worker` interface (no cycle)
+- [ ] Update remaining service/ files: all refs to `worker.Dispatcher` / `worker.Registry`
+- [ ] Update api/router.go, api/handler/, cli/
+
+**4f — `controller/gameserver/`** (deps: settings concrete, orchestrator concrete)
+- [ ] `service/gameserver.go` → `controller/gameserver/gameserver.go`
+- [ ] `service/gameserver_lifecycle.go` → `controller/gameserver/lifecycle.go`
+- [ ] `service/gameserver_ports.go` → `controller/gameserver/ports.go`
+- [ ] `service/gameserver_migration.go` → `controller/gameserver/migration.go`
+- [ ] `service/gameserver_inspect.go` → `controller/gameserver/inspect.go`
+- [ ] `service/console.go` → `controller/gameserver/console.go`
+- [ ] `service/file.go` → `controller/gameserver/file.go`
+- [ ] Define interface for BackupStore dep (from backup — not yet moved, use interface)
+- [ ] Update remaining service/ files: `backup.go`, `scheduler.go`
+- [ ] Update api/router.go, api/handler/, cli/
+
+**4g — `controller/backup/`** (deps: gameserver via interface, settings concrete)
+- [ ] `service/backup.go` → `controller/backup/backup.go`
+- [ ] `service/backup_store.go` → `controller/backup/store.go`
+- [ ] Define `GameserverLookup` interface (satisfied by gameserver.GameserverService)
+- [ ] Update remaining service/ files: `scheduler.go`
+- [ ] Update api/router.go, api/handler/, cli/
+
+**4h — `controller/status/`** (deps: orchestrator concrete, gameserver via func value)
+- [ ] `service/status.go` → `controller/status/manager.go`
+- [ ] `service/query.go` → `controller/status/query.go`
+- [ ] `service/ready.go` → `controller/status/ready.go`
+- [ ] `service/stats_poller.go` → `controller/status/poller.go`
+- [ ] `service/status_subscriber.go` → `controller/status/subscriber.go`
+- [ ] `restartFunc` is already a `func` value — no interface needed for gameserver dep
+- [ ] Update api/router.go, api/handler/, cli/
+
+**4i — `controller/schedule/`** (deps: gameserver + backup + console via interfaces)
+- [ ] `service/schedule.go` → `controller/schedule/schedule.go`
+- [ ] `service/scheduler.go` → `controller/schedule/scheduler.go`
+- [ ] Define `GameserverLifecycle`, `BackupCreator`, `CommandSender` interfaces
+- [ ] Update api/router.go, api/handler/, cli/
+
+**4j — `controller/mod/`** (deps: gameserver/file via interface, settings concrete)
+- [ ] `service/mod.go` → `controller/mod/mod.go`
+- [ ] `service/mod_source.go` → `controller/mod/source.go`
+- [ ] `service/mod_source_modrinth.go` → `controller/mod/modrinth.go`
+- [ ] `service/mod_source_umod.go` → `controller/mod/umod.go`
+- [ ] `service/mod_source_workshop.go` → `controller/mod/workshop.go`
+- [ ] Define `FileOperator` interface (satisfied by gameserver.FileService)
+- [ ] Update api/router.go, api/handler/, cli/
+
+### Phase 5: Cleanup
+
+- [ ] Delete empty `service/` directory
+- [ ] Delete empty `constants/` directory
+- [ ] Delete empty `validate/` directory
+- [ ] Delete empty `docker/` directory
+- [ ] Delete empty `naming/`, `netinfo/`, `tlsutil/` directories
+- [ ] Run full test suite
+- [ ] Run `go vet ./...`
+- [ ] Verify `go build ./cli/` works
+- [ ] Verify dev server starts (`nix develop` + reflex)
