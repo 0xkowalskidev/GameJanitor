@@ -1,4 +1,4 @@
-package model_test
+package store_test
 
 import (
 	"testing"
@@ -7,12 +7,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/warsmite/gamejanitor/model"
+	"github.com/warsmite/gamejanitor/store"
 	"github.com/warsmite/gamejanitor/testutil"
 )
 
 func TestWebhookEndpoint_CreateAndGet(t *testing.T) {
 	t.Parallel()
-	db := testutil.NewTestDB(t)
+	db := store.New(testutil.NewTestDB(t))
 
 	ep := &model.WebhookEndpoint{
 		Description: "Test Endpoint",
@@ -21,11 +22,11 @@ func TestWebhookEndpoint_CreateAndGet(t *testing.T) {
 		Events:      `["*"]`,
 		Enabled:     true,
 	}
-	require.NoError(t, model.CreateWebhookEndpoint(db, ep))
+	require.NoError(t, db.CreateWebhookEndpoint(ep))
 	assert.NotEmpty(t, ep.ID, "ID should be auto-generated")
 	assert.False(t, ep.CreatedAt.IsZero())
 
-	got, err := model.GetWebhookEndpoint(db, ep.ID)
+	got, err := db.GetWebhookEndpoint(ep.ID)
 	require.NoError(t, err)
 	require.NotNil(t, got)
 
@@ -39,16 +40,16 @@ func TestWebhookEndpoint_CreateAndGet(t *testing.T) {
 
 func TestWebhookEndpoint_GetNotFound(t *testing.T) {
 	t.Parallel()
-	db := testutil.NewTestDB(t)
+	db := store.New(testutil.NewTestDB(t))
 
-	got, err := model.GetWebhookEndpoint(db, "nonexistent")
+	got, err := db.GetWebhookEndpoint("nonexistent")
 	require.NoError(t, err)
 	assert.Nil(t, got)
 }
 
 func TestWebhookEndpoint_Update(t *testing.T) {
 	t.Parallel()
-	db := testutil.NewTestDB(t)
+	db := store.New(testutil.NewTestDB(t))
 
 	ep := &model.WebhookEndpoint{
 		Description: "Original",
@@ -56,14 +57,14 @@ func TestWebhookEndpoint_Update(t *testing.T) {
 		Events:      `["*"]`,
 		Enabled:     true,
 	}
-	require.NoError(t, model.CreateWebhookEndpoint(db, ep))
+	require.NoError(t, db.CreateWebhookEndpoint(ep))
 
 	ep.Description = "Updated"
 	ep.URL = "https://example.com/updated"
 	ep.Enabled = false
-	require.NoError(t, model.UpdateWebhookEndpoint(db, ep))
+	require.NoError(t, db.UpdateWebhookEndpoint(ep))
 
-	got, err := model.GetWebhookEndpoint(db, ep.ID)
+	got, err := db.GetWebhookEndpoint(ep.ID)
 	require.NoError(t, err)
 	require.NotNil(t, got)
 	assert.Equal(t, "Updated", got.Description)
@@ -73,65 +74,65 @@ func TestWebhookEndpoint_Update(t *testing.T) {
 
 func TestWebhookEndpoint_UpdateNotFound(t *testing.T) {
 	t.Parallel()
-	db := testutil.NewTestDB(t)
+	db := store.New(testutil.NewTestDB(t))
 
 	ep := &model.WebhookEndpoint{ID: "nonexistent", URL: "https://example.com"}
-	err := model.UpdateWebhookEndpoint(db, ep)
+	err := db.UpdateWebhookEndpoint(ep)
 	require.Error(t, err)
 }
 
 func TestWebhookEndpoint_Delete(t *testing.T) {
 	t.Parallel()
-	db := testutil.NewTestDB(t)
+	db := store.New(testutil.NewTestDB(t))
 
 	ep := &model.WebhookEndpoint{
 		URL:     "https://example.com/delete",
 		Events:  `["*"]`,
 		Enabled: true,
 	}
-	require.NoError(t, model.CreateWebhookEndpoint(db, ep))
+	require.NoError(t, db.CreateWebhookEndpoint(ep))
 
-	require.NoError(t, model.DeleteWebhookEndpoint(db, ep.ID))
+	require.NoError(t, db.DeleteWebhookEndpoint(ep.ID))
 
-	got, err := model.GetWebhookEndpoint(db, ep.ID)
+	got, err := db.GetWebhookEndpoint(ep.ID)
 	require.NoError(t, err)
 	assert.Nil(t, got)
 }
 
 func TestWebhookEndpoint_DeleteNotFound(t *testing.T) {
 	t.Parallel()
-	db := testutil.NewTestDB(t)
+	db := store.New(testutil.NewTestDB(t))
 
-	err := model.DeleteWebhookEndpoint(db, "nonexistent")
+	err := db.DeleteWebhookEndpoint("nonexistent")
 	require.Error(t, err)
 }
 
 func TestWebhookEndpoint_List(t *testing.T) {
 	t.Parallel()
-	db := testutil.NewTestDB(t)
+	db := store.New(testutil.NewTestDB(t))
 
 	ep1 := &model.WebhookEndpoint{URL: "https://a.com", Events: `["*"]`, Enabled: true}
 	ep2 := &model.WebhookEndpoint{URL: "https://b.com", Events: `["*"]`, Enabled: false}
-	require.NoError(t, model.CreateWebhookEndpoint(db, ep1))
-	require.NoError(t, model.CreateWebhookEndpoint(db, ep2))
+	require.NoError(t, db.CreateWebhookEndpoint(ep1))
+	require.NoError(t, db.CreateWebhookEndpoint(ep2))
 
-	list, err := model.ListWebhookEndpoints(db)
+	list, err := db.ListWebhookEndpoints()
 	require.NoError(t, err)
 	assert.Len(t, list, 2)
 }
 
 func TestWebhookEndpoint_ListEnabled(t *testing.T) {
 	t.Parallel()
-	db := testutil.NewTestDB(t)
+	db := store.New(testutil.NewTestDB(t))
 
 	ep1 := &model.WebhookEndpoint{URL: "https://a.com", Events: `["*"]`, Enabled: true}
 	ep2 := &model.WebhookEndpoint{URL: "https://b.com", Events: `["*"]`, Enabled: false}
 	ep3 := &model.WebhookEndpoint{URL: "https://c.com", Events: `["*"]`, Enabled: true}
-	require.NoError(t, model.CreateWebhookEndpoint(db, ep1))
-	require.NoError(t, model.CreateWebhookEndpoint(db, ep2))
-	require.NoError(t, model.CreateWebhookEndpoint(db, ep3))
+	require.NoError(t, db.CreateWebhookEndpoint(ep1))
+	require.NoError(t, db.CreateWebhookEndpoint(ep2))
+	require.NoError(t, db.CreateWebhookEndpoint(ep3))
 
-	list, err := model.ListEnabledWebhookEndpoints(db)
+	list, err := db.ListEnabledWebhookEndpoints()
 	require.NoError(t, err)
 	assert.Len(t, list, 2)
 	for _, ep := range list {
@@ -143,10 +144,10 @@ func TestWebhookEndpoint_ListEnabled(t *testing.T) {
 
 func TestWebhookDelivery_CreateAndListByEndpoint(t *testing.T) {
 	t.Parallel()
-	db := testutil.NewTestDB(t)
+	db := store.New(testutil.NewTestDB(t))
 
 	ep := &model.WebhookEndpoint{URL: "https://example.com/hook", Events: `["*"]`, Enabled: true}
-	require.NoError(t, model.CreateWebhookEndpoint(db, ep))
+	require.NoError(t, db.CreateWebhookEndpoint(ep))
 
 	now := time.Now()
 	d := &model.WebhookDelivery{
@@ -157,9 +158,9 @@ func TestWebhookDelivery_CreateAndListByEndpoint(t *testing.T) {
 		NextAttemptAt:     now,
 		CreatedAt:         now,
 	}
-	require.NoError(t, model.CreateWebhookDelivery(db, d))
+	require.NoError(t, db.CreateWebhookDelivery(d))
 
-	list, err := model.ListDeliveriesByEndpoint(db, ep.ID, "", 100)
+	list, err := db.ListDeliveriesByEndpoint(ep.ID, "", 100)
 	require.NoError(t, err)
 	assert.Len(t, list, 1)
 	assert.Equal(t, "del-1", list[0].ID)
@@ -169,25 +170,25 @@ func TestWebhookDelivery_CreateAndListByEndpoint(t *testing.T) {
 
 func TestWebhookDelivery_ListByEndpoint_FilterByState(t *testing.T) {
 	t.Parallel()
-	db := testutil.NewTestDB(t)
+	db := store.New(testutil.NewTestDB(t))
 
 	ep := &model.WebhookEndpoint{URL: "https://example.com/hook", Events: `["*"]`, Enabled: true}
-	require.NoError(t, model.CreateWebhookEndpoint(db, ep))
+	require.NoError(t, db.CreateWebhookEndpoint(ep))
 
 	now := time.Now()
 	d1 := &model.WebhookDelivery{ID: "del-p", WebhookEndpointID: ep.ID, EventType: "a", Payload: `{}`, NextAttemptAt: now, CreatedAt: now}
-	require.NoError(t, model.CreateWebhookDelivery(db, d1))
+	require.NoError(t, db.CreateWebhookDelivery(d1))
 
 	d2 := &model.WebhookDelivery{ID: "del-d", WebhookEndpointID: ep.ID, EventType: "b", Payload: `{}`, NextAttemptAt: now, CreatedAt: now}
-	require.NoError(t, model.CreateWebhookDelivery(db, d2))
-	require.NoError(t, model.MarkDeliverySuccess(db, "del-d"))
+	require.NoError(t, db.CreateWebhookDelivery(d2))
+	require.NoError(t, db.MarkDeliverySuccess("del-d"))
 
-	pending, err := model.ListDeliveriesByEndpoint(db, ep.ID, model.WebhookStatePending, 100)
+	pending, err := db.ListDeliveriesByEndpoint(ep.ID, model.WebhookStatePending, 100)
 	require.NoError(t, err)
 	assert.Len(t, pending, 1)
 	assert.Equal(t, "del-p", pending[0].ID)
 
-	delivered, err := model.ListDeliveriesByEndpoint(db, ep.ID, model.WebhookStateDelivered, 100)
+	delivered, err := db.ListDeliveriesByEndpoint(ep.ID, model.WebhookStateDelivered, 100)
 	require.NoError(t, err)
 	assert.Len(t, delivered, 1)
 	assert.Equal(t, "del-d", delivered[0].ID)
@@ -195,18 +196,18 @@ func TestWebhookDelivery_ListByEndpoint_FilterByState(t *testing.T) {
 
 func TestWebhookDelivery_MarkSuccess(t *testing.T) {
 	t.Parallel()
-	db := testutil.NewTestDB(t)
+	db := store.New(testutil.NewTestDB(t))
 
 	ep := &model.WebhookEndpoint{URL: "https://example.com/hook", Events: `["*"]`, Enabled: true}
-	require.NoError(t, model.CreateWebhookEndpoint(db, ep))
+	require.NoError(t, db.CreateWebhookEndpoint(ep))
 
 	now := time.Now()
 	d := &model.WebhookDelivery{ID: "del-suc", WebhookEndpointID: ep.ID, EventType: "test", Payload: `{}`, NextAttemptAt: now, CreatedAt: now}
-	require.NoError(t, model.CreateWebhookDelivery(db, d))
+	require.NoError(t, db.CreateWebhookDelivery(d))
 
-	require.NoError(t, model.MarkDeliverySuccess(db, "del-suc"))
+	require.NoError(t, db.MarkDeliverySuccess("del-suc"))
 
-	list, err := model.ListDeliveriesByEndpoint(db, ep.ID, model.WebhookStateDelivered, 100)
+	list, err := db.ListDeliveriesByEndpoint(ep.ID, model.WebhookStateDelivered, 100)
 	require.NoError(t, err)
 	require.Len(t, list, 1)
 	assert.Equal(t, model.WebhookStateDelivered, list[0].State)
@@ -215,19 +216,19 @@ func TestWebhookDelivery_MarkSuccess(t *testing.T) {
 
 func TestWebhookDelivery_MarkRetry(t *testing.T) {
 	t.Parallel()
-	db := testutil.NewTestDB(t)
+	db := store.New(testutil.NewTestDB(t))
 
 	ep := &model.WebhookEndpoint{URL: "https://example.com/hook", Events: `["*"]`, Enabled: true}
-	require.NoError(t, model.CreateWebhookEndpoint(db, ep))
+	require.NoError(t, db.CreateWebhookEndpoint(ep))
 
 	now := time.Now()
 	d := &model.WebhookDelivery{ID: "del-retry", WebhookEndpointID: ep.ID, EventType: "test", Payload: `{}`, NextAttemptAt: now, CreatedAt: now}
-	require.NoError(t, model.CreateWebhookDelivery(db, d))
+	require.NoError(t, db.CreateWebhookDelivery(d))
 
 	nextAttempt := now.Add(5 * time.Minute)
-	require.NoError(t, model.MarkDeliveryRetry(db, "del-retry", nextAttempt, "connection refused"))
+	require.NoError(t, db.MarkDeliveryRetry("del-retry", nextAttempt, "connection refused"))
 
-	list, err := model.ListDeliveriesByEndpoint(db, ep.ID, model.WebhookStatePending, 100)
+	list, err := db.ListDeliveriesByEndpoint(ep.ID, model.WebhookStatePending, 100)
 	require.NoError(t, err)
 	require.Len(t, list, 1)
 	assert.Equal(t, 1, list[0].Attempts)
@@ -236,18 +237,18 @@ func TestWebhookDelivery_MarkRetry(t *testing.T) {
 
 func TestWebhookDelivery_MarkFailed(t *testing.T) {
 	t.Parallel()
-	db := testutil.NewTestDB(t)
+	db := store.New(testutil.NewTestDB(t))
 
 	ep := &model.WebhookEndpoint{URL: "https://example.com/hook", Events: `["*"]`, Enabled: true}
-	require.NoError(t, model.CreateWebhookEndpoint(db, ep))
+	require.NoError(t, db.CreateWebhookEndpoint(ep))
 
 	now := time.Now()
 	d := &model.WebhookDelivery{ID: "del-fail", WebhookEndpointID: ep.ID, EventType: "test", Payload: `{}`, NextAttemptAt: now, CreatedAt: now}
-	require.NoError(t, model.CreateWebhookDelivery(db, d))
+	require.NoError(t, db.CreateWebhookDelivery(d))
 
-	require.NoError(t, model.MarkDeliveryFailed(db, "del-fail", "max retries exceeded"))
+	require.NoError(t, db.MarkDeliveryFailed("del-fail", "max retries exceeded"))
 
-	list, err := model.ListDeliveriesByEndpoint(db, ep.ID, model.WebhookStateFailed, 100)
+	list, err := db.ListDeliveriesByEndpoint(ep.ID, model.WebhookStateFailed, 100)
 	require.NoError(t, err)
 	require.Len(t, list, 1)
 	assert.Equal(t, model.WebhookStateFailed, list[0].State)
@@ -256,40 +257,40 @@ func TestWebhookDelivery_MarkFailed(t *testing.T) {
 
 func TestWebhookDelivery_CascadeOnEndpointDelete(t *testing.T) {
 	t.Parallel()
-	db := testutil.NewTestDB(t)
+	db := store.New(testutil.NewTestDB(t))
 
 	ep := &model.WebhookEndpoint{URL: "https://example.com/hook", Events: `["*"]`, Enabled: true}
-	require.NoError(t, model.CreateWebhookEndpoint(db, ep))
+	require.NoError(t, db.CreateWebhookEndpoint(ep))
 
 	now := time.Now()
 	d := &model.WebhookDelivery{ID: "del-cas", WebhookEndpointID: ep.ID, EventType: "test", Payload: `{}`, NextAttemptAt: now, CreatedAt: now}
-	require.NoError(t, model.CreateWebhookDelivery(db, d))
+	require.NoError(t, db.CreateWebhookDelivery(d))
 
 	// webhook_deliveries has ON DELETE CASCADE — deleting endpoint should remove deliveries.
-	require.NoError(t, model.DeleteWebhookEndpoint(db, ep.ID))
+	require.NoError(t, db.DeleteWebhookEndpoint(ep.ID))
 
-	list, err := model.ListDeliveriesByEndpoint(db, ep.ID, "", 100)
+	list, err := db.ListDeliveriesByEndpoint(ep.ID, "", 100)
 	require.NoError(t, err)
 	assert.Empty(t, list)
 }
 
 func TestWebhookDelivery_GetPending(t *testing.T) {
 	t.Parallel()
-	db := testutil.NewTestDB(t)
+	db := store.New(testutil.NewTestDB(t))
 
 	ep := &model.WebhookEndpoint{URL: "https://example.com/hook", Events: `["*"]`, Enabled: true}
-	require.NoError(t, model.CreateWebhookEndpoint(db, ep))
+	require.NoError(t, db.CreateWebhookEndpoint(ep))
 
 	now := time.Now()
 	// Pending delivery with next_attempt_at in the past (should be returned).
 	d1 := &model.WebhookDelivery{ID: "del-ready", WebhookEndpointID: ep.ID, EventType: "test", Payload: `{}`, NextAttemptAt: now.Add(-time.Minute), CreatedAt: now}
-	require.NoError(t, model.CreateWebhookDelivery(db, d1))
+	require.NoError(t, db.CreateWebhookDelivery(d1))
 
 	// Pending delivery with next_attempt_at in the future (should not be returned).
 	d2 := &model.WebhookDelivery{ID: "del-future", WebhookEndpointID: ep.ID, EventType: "test", Payload: `{}`, NextAttemptAt: now.Add(time.Hour), CreatedAt: now}
-	require.NoError(t, model.CreateWebhookDelivery(db, d2))
+	require.NoError(t, db.CreateWebhookDelivery(d2))
 
-	pending, err := model.GetPendingDeliveries(db, 100)
+	pending, err := db.GetPendingDeliveries(100)
 	require.NoError(t, err)
 	assert.Len(t, pending, 1)
 	assert.Equal(t, "del-ready", pending[0].ID)

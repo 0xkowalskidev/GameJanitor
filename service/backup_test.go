@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/warsmite/gamejanitor/model"
+	"github.com/warsmite/gamejanitor/store"
 	"github.com/warsmite/gamejanitor/testutil"
 )
 
@@ -18,7 +19,7 @@ func waitForBackupCompletion(t *testing.T, svc *testutil.ServiceBundle, backupID
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
-		b, err := model.GetBackup(svc.DB, backupID)
+		b, err := store.New(svc.DB).GetBackup(backupID)
 		if err == nil && b != nil && b.Status != "in_progress" {
 			return
 		}

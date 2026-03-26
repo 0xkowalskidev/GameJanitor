@@ -26,7 +26,6 @@ import (
 	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/db"
 	"github.com/warsmite/gamejanitor/games"
-	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/pkg/netinfo"
 	"github.com/warsmite/gamejanitor/controller/backup"
 	"github.com/warsmite/gamejanitor/controller/gameserver"
@@ -297,7 +296,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	go func() {
 		retDays := svcs.settingsSvc.GetInt(settings.SettingEventRetention)
 		if retDays > 0 {
-			if pruned, err := model.PruneEvents(database, retDays); err != nil {
+			if pruned, err := db.PruneEvents(retDays); err != nil {
 				logger.Error("failed to prune events on startup", "error", err)
 			} else if pruned > 0 {
 				logger.Info("pruned old events", "count", pruned, "retention_days", retDays)
@@ -308,7 +307,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		for range ticker.C {
 			days := svcs.settingsSvc.GetInt(settings.SettingEventRetention)
 			if days > 0 {
-				if pruned, err := model.PruneEvents(database, days); err != nil {
+				if pruned, err := db.PruneEvents(days); err != nil {
 					logger.Error("failed to prune events", "error", err)
 				} else if pruned > 0 {
 					logger.Info("pruned old events", "count", pruned, "retention_days", days)
@@ -427,7 +426,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	// Start SFTP server if enabled
 	if cfg.SFTPPort > 0 {
 		hostKeyPath := filepath.Join(cfg.DataDir, "sftp_host_key")
-		sftpAuth := gjsftp.NewLocalAuth(database)
+		sftpAuth := gjsftp.NewLocalAuth(db)
 		fileOpFactory := func(gameserverID string) gjsftp.FileOperator {
 			return gjsftp.NewDispatcherFileOperator(dispatcher, gameserverID)
 		}

@@ -34,21 +34,22 @@ func (l *testWebhookLookup) GetWorkerNode(id string) (*model.WorkerNode, error) 
 
 func TestWebhookDelivery_CreateAndListPending(t *testing.T) {
 	t.Parallel()
-	db := testutil.NewTestDB(t)
+	rawDB := testutil.NewTestDB(t)
+	db := store.New(rawDB)
 
 	ep := &model.WebhookEndpoint{
 		ID: "ep-1", URL: "http://example.com/hook",
 		Secret: "test-secret", Events: `["*"]`, Enabled: true,
 	}
-	require.NoError(t, model.CreateWebhookEndpoint(db, ep))
+	require.NoError(t, db.CreateWebhookEndpoint(ep))
 
 	delivery := &model.WebhookDelivery{
 		ID: "d-1", WebhookEndpointID: ep.ID,
 		EventType: "gameserver.create", Payload: `{"test": true}`, NextAttemptAt: time.Now(),
 	}
-	require.NoError(t, model.CreateWebhookDelivery(db, delivery))
+	require.NoError(t, db.CreateWebhookDelivery(delivery))
 
-	all, err := model.ListDeliveriesByEndpoint(db, ep.ID, "pending", 10)
+	all, err := db.ListDeliveriesByEndpoint(ep.ID, "pending", 10)
 	require.NoError(t, err)
 	assert.Len(t, all, 1)
 	assert.Equal(t, "gameserver.create", all[0].EventType)
@@ -79,6 +80,7 @@ func TestWebhookDelivery_HMACSignature(t *testing.T) {
 
 	// Use the deliver function indirectly — create a full webhook worker setup
 	svc := testutil.NewTestServices(t)
+	db := store.New(svc.DB)
 	ep := &model.WebhookEndpoint{
 		ID:      "ep-hmac",
 		URL:     srv.URL,
@@ -86,7 +88,7 @@ func TestWebhookDelivery_HMACSignature(t *testing.T) {
 		Events:  `["*"]`,
 		Enabled: true,
 	}
-	require.NoError(t, model.CreateWebhookEndpoint(svc.DB, ep))
+	require.NoError(t, db.CreateWebhookEndpoint(ep))
 
 	delivery := &model.WebhookDelivery{
 		ID:                "d-hmac",
@@ -95,7 +97,7 @@ func TestWebhookDelivery_HMACSignature(t *testing.T) {
 		Payload:           string(body),
 		NextAttemptAt:     time.Now(),
 	}
-	require.NoError(t, model.CreateWebhookDelivery(svc.DB, delivery))
+	require.NoError(t, db.CreateWebhookDelivery(delivery))
 
 	// Start webhook worker, let it process
 	whStore := store.NewWebhookStore(svc.DB)
@@ -135,6 +137,7 @@ func TestWebhookDelivery_RetryBackoff(t *testing.T) {
 func TestWebhookDelivery_EventFilterNamespace(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
+	db := store.New(svc.DB)
 
 	ep := &model.WebhookEndpoint{
 		ID:      "ep-ns",
@@ -142,7 +145,7 @@ func TestWebhookDelivery_EventFilterNamespace(t *testing.T) {
 		Events:  `["gameserver.*"]`,
 		Enabled: true,
 	}
-	require.NoError(t, model.CreateWebhookEndpoint(svc.DB, ep))
+	require.NoError(t, db.CreateWebhookEndpoint(ep))
 
 	// "gameserver.create" should match "gameserver.*"
 	// "backup.create" should NOT match
@@ -154,9 +157,9 @@ func TestWebhookDelivery_EventFilterNamespace(t *testing.T) {
 		ID: "d-match", WebhookEndpointID: ep.ID,
 		EventType: "gameserver.create", Payload: `{}`, NextAttemptAt: time.Now(),
 	}
-	require.NoError(t, model.CreateWebhookDelivery(svc.DB, d1))
+	require.NoError(t, db.CreateWebhookDelivery(d1))
 
-	all, err := model.ListDeliveriesByEndpoint(svc.DB, ep.ID, "pending", 10)
+	all, err := db.ListDeliveriesByEndpoint(ep.ID, "pending", 10)
 	require.NoError(t, err)
 	assert.Len(t, all, 1)
 	assert.Equal(t, "gameserver.create", all[0].EventType)
@@ -164,34 +167,35 @@ func TestWebhookDelivery_EventFilterNamespace(t *testing.T) {
 
 func TestWebhookDelivery_DeliveryStateTransitions(t *testing.T) {
 	t.Parallel()
-	db := testutil.NewTestDB(t)
+	rawDB := testutil.NewTestDB(t)
+	db := store.New(rawDB)
 
 	ep := &model.WebhookEndpoint{ID: "ep-state", URL: "http://example.com", Events: `["*"]`, Enabled: true}
-	require.NoError(t, model.CreateWebhookEndpoint(db, ep))
+	require.NoError(t, db.CreateWebhookEndpoint(ep))
 
 	d := &model.WebhookDelivery{
 		ID: "d-state", WebhookEndpointID: ep.ID,
 		EventType: "gameserver.start", Payload: `{}`, NextAttemptAt: time.Now(),
 	}
-	require.NoError(t, model.CreateWebhookDelivery(db, d))
+	require.NoError(t, db.CreateWebhookDelivery(d))
 
 	// Initial state is pending
-	all, err := model.ListDeliveriesByEndpoint(db, ep.ID, "pending", 10)
+	all, err := db.ListDeliveriesByEndpoint(ep.ID, "pending", 10)
 	require.NoError(t, err)
 	require.Len(t, all, 1)
 	assert.Equal(t, "pending", all[0].State)
 
 	// Mark retry — still pending but with increased attempts
-	require.NoError(t, model.MarkDeliveryRetry(db, "d-state", time.Now().Add(time.Minute), "timeout"))
-	all, err = model.ListDeliveriesByEndpoint(db, ep.ID, "", 10)
+	require.NoError(t, db.MarkDeliveryRetry("d-state", time.Now().Add(time.Minute), "timeout"))
+	all, err = db.ListDeliveriesByEndpoint(ep.ID, "", 10)
 	require.NoError(t, err)
 	require.Len(t, all, 1)
 	assert.Equal(t, "pending", all[0].State)
 	assert.Equal(t, 1, all[0].Attempts)
 
 	// Mark success
-	require.NoError(t, model.MarkDeliverySuccess(db, "d-state"))
-	all, err = model.ListDeliveriesByEndpoint(db, ep.ID, "delivered", 10)
+	require.NoError(t, db.MarkDeliverySuccess("d-state"))
+	all, err = db.ListDeliveriesByEndpoint(ep.ID, "delivered", 10)
 	require.NoError(t, err)
 	require.Len(t, all, 1)
 	assert.Equal(t, "delivered", all[0].State)
@@ -199,19 +203,20 @@ func TestWebhookDelivery_DeliveryStateTransitions(t *testing.T) {
 
 func TestWebhookDelivery_FailedAfterMaxAttempts(t *testing.T) {
 	t.Parallel()
-	db := testutil.NewTestDB(t)
+	rawDB := testutil.NewTestDB(t)
+	db := store.New(rawDB)
 
 	ep := &model.WebhookEndpoint{ID: "ep-fail", URL: "http://example.com", Events: `["*"]`, Enabled: true}
-	require.NoError(t, model.CreateWebhookEndpoint(db, ep))
+	require.NoError(t, db.CreateWebhookEndpoint(ep))
 
 	d := &model.WebhookDelivery{
 		ID: "d-fail", WebhookEndpointID: ep.ID,
 		EventType: "gameserver.start", Payload: `{}`, NextAttemptAt: time.Now(),
 	}
-	require.NoError(t, model.CreateWebhookDelivery(db, d))
+	require.NoError(t, db.CreateWebhookDelivery(d))
 
-	require.NoError(t, model.MarkDeliveryFailed(db, "d-fail", "permanently failed"))
-	all, err := model.ListDeliveriesByEndpoint(db, ep.ID, "failed", 10)
+	require.NoError(t, db.MarkDeliveryFailed("d-fail", "permanently failed"))
+	all, err := db.ListDeliveriesByEndpoint(ep.ID, "failed", 10)
 	require.NoError(t, err)
 	require.Len(t, all, 1)
 	assert.Equal(t, "failed", all[0].State)

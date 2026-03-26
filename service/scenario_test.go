@@ -92,7 +92,8 @@ func TestScenario_Newbie_SFTPLogin(t *testing.T) {
 
 	// Verify SFTP credentials work against the DB directly
 	// (testing the same path the SFTP server uses)
-	fetched, err := model.GetGameserverBySFTPUsername(svc.DB, gs.SFTPUsername)
+	db := store.New(svc.DB)
+	fetched, err := db.GetGameserverBySFTPUsername(gs.SFTPUsername)
 	require.NoError(t, err)
 	require.NotNil(t, fetched)
 	assert.Equal(t, gs.ID, fetched.ID)
@@ -198,7 +199,7 @@ func TestScenario_PowerUser_BackupAndSchedule(t *testing.T) {
 	// Wait for completion
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
-		b, _ := model.GetBackup(svc.DB, backup.ID)
+		b, _ := store.New(svc.DB).GetBackup(backup.ID)
 		if b != nil && b.Status != "in_progress" {
 			break
 		}
@@ -381,7 +382,7 @@ func TestScenario_ConsoleCommandCapabilityGating(t *testing.T) {
 	fetched, _ := svc.GameserverSvc.GetGameserver(gs.ID)
 	fetched.ContainerID = &containerID
 	fetched.Status = "running"
-	model.UpdateGameserver(svc.DB, fetched)
+	store.New(svc.DB).UpdateGameserver(fetched)
 
 	// test-game doesn't disable "command" capability, so SendCommand should work
 	_, err = svc.ConsoleSvc.SendCommand(ctx, gs.ID, "say hello")

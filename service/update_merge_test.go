@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/warsmite/gamejanitor/model"
+	"github.com/warsmite/gamejanitor/store"
 	"github.com/warsmite/gamejanitor/testutil"
 )
 
@@ -60,7 +61,7 @@ func TestUpdateMerge_EnvTriggersReinstall(t *testing.T) {
 	// Mark as installed
 	fetched, _ := svc.GameserverSvc.GetGameserver(gs.ID)
 	fetched.Installed = true
-	model.UpdateGameserver(svc.DB, fetched)
+	store.New(svc.DB).UpdateGameserver(fetched)
 
 	// Change the INSTALL_TRIGGER env var — should clear installed flag
 	update := &model.Gameserver{
@@ -90,7 +91,7 @@ func TestUpdateMerge_EnvNoChangeDoesNotClearInstalled(t *testing.T) {
 
 	fetched, _ := svc.GameserverSvc.GetGameserver(gs.ID)
 	fetched.Installed = true
-	model.UpdateGameserver(svc.DB, fetched)
+	store.New(svc.DB).UpdateGameserver(fetched)
 
 	// Update env with SAME value for INSTALL_TRIGGER — should NOT clear installed
 	update := &model.Gameserver{

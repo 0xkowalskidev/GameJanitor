@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/warsmite/gamejanitor/model"
+	"github.com/warsmite/gamejanitor/store"
 	"github.com/warsmite/gamejanitor/testutil"
 )
 
@@ -60,14 +61,14 @@ func TestPipeline_EventPersistedToDatabase(t *testing.T) {
 
 	// EventStoreSubscriber should persist the create event
 	pollUntil(t, func() bool {
-		events, _ := model.ListEvents(svc.DB, model.EventFilter{
+		events, _ := store.New(svc.DB).ListEvents(model.EventFilter{
 			GameserverID: gs.ID,
 			Pagination: model.Pagination{Limit: 10},
 		})
 		return len(events) > 0
 	}, "create event should be persisted to events table")
 
-	events, err := model.ListEvents(svc.DB, model.EventFilter{
+	events, err := store.New(svc.DB).ListEvents(model.EventFilter{
 		GameserverID: gs.ID,
 		Pagination: model.Pagination{Limit: 10},
 	})
@@ -157,14 +158,14 @@ func TestPipeline_MultipleEventsPersistedInOrder(t *testing.T) {
 
 	// Wait for events to be persisted
 	pollUntil(t, func() bool {
-		events, _ := model.ListEvents(svc.DB, model.EventFilter{
+		events, _ := store.New(svc.DB).ListEvents(model.EventFilter{
 			GameserverID: gs.ID,
 			Pagination: model.Pagination{Limit: 50},
 		})
 		return len(events) >= 3 // at least create + start + stop
 	}, "multiple events should be persisted")
 
-	events, err := model.ListEvents(svc.DB, model.EventFilter{
+	events, err := store.New(svc.DB).ListEvents(model.EventFilter{
 		GameserverID: gs.ID,
 		Pagination: model.Pagination{Limit: 50},
 	})

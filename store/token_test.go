@@ -1,4 +1,4 @@
-package model_test
+package store_test
 
 import (
 	"encoding/json"
@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/warsmite/gamejanitor/model"
+	"github.com/warsmite/gamejanitor/store"
 	"github.com/warsmite/gamejanitor/testutil"
 )
 
@@ -25,13 +26,13 @@ func newTestToken(id, name, scope string) *model.Token {
 
 func TestToken_CreateAndGet(t *testing.T) {
 	t.Parallel()
-	db := testutil.NewTestDB(t)
+	db := store.New(testutil.NewTestDB(t))
 
 	tok := newTestToken("tok-1", "Admin Token", "admin")
-	require.NoError(t, model.CreateToken(db, tok))
+	require.NoError(t, db.CreateToken(tok))
 	assert.False(t, tok.CreatedAt.IsZero())
 
-	got, err := model.GetToken(db, "tok-1")
+	got, err := db.GetToken("tok-1")
 	require.NoError(t, err)
 	require.NotNil(t, got)
 
@@ -46,42 +47,42 @@ func TestToken_CreateAndGet(t *testing.T) {
 
 func TestToken_GetNotFound(t *testing.T) {
 	t.Parallel()
-	db := testutil.NewTestDB(t)
+	db := store.New(testutil.NewTestDB(t))
 
-	got, err := model.GetToken(db, "nonexistent")
+	got, err := db.GetToken("nonexistent")
 	require.NoError(t, err)
 	assert.Nil(t, got)
 }
 
 func TestToken_GetByPrefix(t *testing.T) {
 	t.Parallel()
-	db := testutil.NewTestDB(t)
+	db := store.New(testutil.NewTestDB(t))
 
 	tok := newTestToken("tok-pfx", "Prefix Token", "gameserver")
-	require.NoError(t, model.CreateToken(db, tok))
+	require.NoError(t, db.CreateToken(tok))
 
-	got, err := model.GetTokenByPrefix(db, "pfx-tok-pfx")
+	got, err := db.GetTokenByPrefix("pfx-tok-pfx")
 	require.NoError(t, err)
 	require.NotNil(t, got)
 	assert.Equal(t, "tok-pfx", got.ID)
 
-	notFound, err := model.GetTokenByPrefix(db, "nonexistent-prefix")
+	notFound, err := db.GetTokenByPrefix("nonexistent-prefix")
 	require.NoError(t, err)
 	assert.Nil(t, notFound)
 }
 
 func TestToken_ListTokens(t *testing.T) {
 	t.Parallel()
-	db := testutil.NewTestDB(t)
+	db := store.New(testutil.NewTestDB(t))
 
 	tok1 := newTestToken("tok-1", "First", "admin")
 	tok2 := newTestToken("tok-2", "Second", "gameserver")
-	require.NoError(t, model.CreateToken(db, tok1))
+	require.NoError(t, db.CreateToken(tok1))
 	// Small sleep so created_at ordering is deterministic.
 	time.Sleep(10 * time.Millisecond)
-	require.NoError(t, model.CreateToken(db, tok2))
+	require.NoError(t, db.CreateToken(tok2))
 
-	list, err := model.ListTokens(db)
+	list, err := db.ListTokens()
 	require.NoError(t, err)
 	assert.Len(t, list, 2)
 	// ORDER BY created_at DESC — most recent first.
@@ -91,37 +92,37 @@ func TestToken_ListTokens(t *testing.T) {
 
 func TestToken_Delete(t *testing.T) {
 	t.Parallel()
-	db := testutil.NewTestDB(t)
+	db := store.New(testutil.NewTestDB(t))
 
 	tok := newTestToken("tok-del", "Delete Me", "admin")
-	require.NoError(t, model.CreateToken(db, tok))
+	require.NoError(t, db.CreateToken(tok))
 
-	require.NoError(t, model.DeleteToken(db, "tok-del"))
+	require.NoError(t, db.DeleteToken("tok-del"))
 
-	got, err := model.GetToken(db, "tok-del")
+	got, err := db.GetToken("tok-del")
 	require.NoError(t, err)
 	assert.Nil(t, got)
 }
 
 func TestToken_DeleteNotFound(t *testing.T) {
 	t.Parallel()
-	db := testutil.NewTestDB(t)
+	db := store.New(testutil.NewTestDB(t))
 
-	err := model.DeleteToken(db, "nonexistent")
+	err := db.DeleteToken("nonexistent")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 }
 
 func TestToken_UpdateLastUsed(t *testing.T) {
 	t.Parallel()
-	db := testutil.NewTestDB(t)
+	db := store.New(testutil.NewTestDB(t))
 
 	tok := newTestToken("tok-used", "Used Token", "admin")
-	require.NoError(t, model.CreateToken(db, tok))
+	require.NoError(t, db.CreateToken(tok))
 
-	require.NoError(t, model.UpdateTokenLastUsed(db, "tok-used"))
+	require.NoError(t, db.UpdateTokenLastUsed("tok-used"))
 
-	got, err := model.GetToken(db, "tok-used")
+	got, err := db.GetToken("tok-used")
 	require.NoError(t, err)
 	require.NotNil(t, got)
 	require.NotNil(t, got.LastUsedAt)
@@ -130,14 +131,14 @@ func TestToken_UpdateLastUsed(t *testing.T) {
 
 func TestToken_WithExpiry(t *testing.T) {
 	t.Parallel()
-	db := testutil.NewTestDB(t)
+	db := store.New(testutil.NewTestDB(t))
 
 	expiry := time.Now().Add(24 * time.Hour)
 	tok := newTestToken("tok-exp", "Expiring Token", "gameserver")
 	tok.ExpiresAt = &expiry
-	require.NoError(t, model.CreateToken(db, tok))
+	require.NoError(t, db.CreateToken(tok))
 
-	got, err := model.GetToken(db, "tok-exp")
+	got, err := db.GetToken("tok-exp")
 	require.NoError(t, err)
 	require.NotNil(t, got)
 	require.NotNil(t, got.ExpiresAt)
@@ -146,14 +147,14 @@ func TestToken_WithExpiry(t *testing.T) {
 
 func TestToken_GameserverIDsJSON(t *testing.T) {
 	t.Parallel()
-	db := testutil.NewTestDB(t)
+	db := store.New(testutil.NewTestDB(t))
 
 	tok := newTestToken("tok-gs", "Scoped Token", "gameserver")
 	tok.GameserverIDs = json.RawMessage(`["gs-1","gs-2"]`)
 	tok.Permissions = json.RawMessage(`["console","backup.create"]`)
-	require.NoError(t, model.CreateToken(db, tok))
+	require.NoError(t, db.CreateToken(tok))
 
-	got, err := model.GetToken(db, "tok-gs")
+	got, err := db.GetToken("tok-gs")
 	require.NoError(t, err)
 	require.NotNil(t, got)
 
@@ -168,24 +169,24 @@ func TestToken_GameserverIDsJSON(t *testing.T) {
 
 func TestToken_ExistsByScope_ValidToken(t *testing.T) {
 	t.Parallel()
-	db := testutil.NewTestDB(t)
+	db := store.New(testutil.NewTestDB(t))
 
 	tok := newTestToken("tok-exists", "Exists Token", "admin")
-	require.NoError(t, model.CreateToken(db, tok))
+	require.NoError(t, db.CreateToken(tok))
 
-	assert.True(t, model.TokenExistsByScope(db, "tok-exists", "admin"))
-	assert.False(t, model.TokenExistsByScope(db, "tok-exists", "worker"))
-	assert.False(t, model.TokenExistsByScope(db, "nonexistent", "admin"))
+	assert.True(t, db.TokenExistsByScope("tok-exists", "admin"))
+	assert.False(t, db.TokenExistsByScope("tok-exists", "worker"))
+	assert.False(t, db.TokenExistsByScope("nonexistent", "admin"))
 }
 
 func TestToken_ExistsByScope_ExpiredToken(t *testing.T) {
 	t.Parallel()
-	db := testutil.NewTestDB(t)
+	db := store.New(testutil.NewTestDB(t))
 
 	expired := time.Now().Add(-1 * time.Hour)
 	tok := newTestToken("tok-expired", "Expired Token", "admin")
 	tok.ExpiresAt = &expired
-	require.NoError(t, model.CreateToken(db, tok))
+	require.NoError(t, db.CreateToken(tok))
 
-	assert.False(t, model.TokenExistsByScope(db, "tok-expired", "admin"))
+	assert.False(t, db.TokenExistsByScope("tok-expired", "admin"))
 }

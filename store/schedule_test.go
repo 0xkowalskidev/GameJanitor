@@ -1,4 +1,4 @@
-package model_test
+package store_test
 
 import (
 	"encoding/json"
@@ -8,15 +8,16 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/warsmite/gamejanitor/model"
+	"github.com/warsmite/gamejanitor/store"
 	"github.com/warsmite/gamejanitor/testutil"
 )
 
 func TestSchedule_CreateAndGet(t *testing.T) {
 	t.Parallel()
-	db := testutil.NewTestDB(t)
+	db := store.New(testutil.NewTestDB(t))
 
 	gs := newGameserver("gs-sched", "Sched Host", "minecraft-java", nil)
-	require.NoError(t, model.CreateGameserver(db, gs))
+	require.NoError(t, db.CreateGameserver(gs))
 
 	nextRun := time.Now().Add(time.Hour).Truncate(time.Second)
 	s := &model.Schedule{
@@ -30,10 +31,10 @@ func TestSchedule_CreateAndGet(t *testing.T) {
 		OneShot:      false,
 		NextRun:      &nextRun,
 	}
-	require.NoError(t, model.CreateSchedule(db, s))
+	require.NoError(t, db.CreateSchedule(s))
 	assert.False(t, s.CreatedAt.IsZero())
 
-	got, err := model.GetSchedule(db, "sched-1")
+	got, err := db.GetSchedule("sched-1")
 	require.NoError(t, err)
 	require.NotNil(t, got)
 
@@ -54,19 +55,19 @@ func TestSchedule_CreateAndGet(t *testing.T) {
 
 func TestSchedule_GetNotFound(t *testing.T) {
 	t.Parallel()
-	db := testutil.NewTestDB(t)
+	db := store.New(testutil.NewTestDB(t))
 
-	got, err := model.GetSchedule(db, "nonexistent")
+	got, err := db.GetSchedule("nonexistent")
 	require.NoError(t, err)
 	assert.Nil(t, got)
 }
 
 func TestSchedule_Update(t *testing.T) {
 	t.Parallel()
-	db := testutil.NewTestDB(t)
+	db := store.New(testutil.NewTestDB(t))
 
 	gs := newGameserver("gs-su", "Update Host", "minecraft-java", nil)
-	require.NoError(t, model.CreateGameserver(db, gs))
+	require.NoError(t, db.CreateGameserver(gs))
 
 	s := &model.Schedule{
 		ID:           "sched-upd",
@@ -77,15 +78,15 @@ func TestSchedule_Update(t *testing.T) {
 		Payload:      json.RawMessage(`{}`),
 		Enabled:      true,
 	}
-	require.NoError(t, model.CreateSchedule(db, s))
+	require.NoError(t, db.CreateSchedule(s))
 
 	now := time.Now().Truncate(time.Second)
 	s.Name = "Updated Schedule"
 	s.Enabled = false
 	s.LastRun = &now
-	require.NoError(t, model.UpdateSchedule(db, s))
+	require.NoError(t, db.UpdateSchedule(s))
 
-	got, err := model.GetSchedule(db, "sched-upd")
+	got, err := db.GetSchedule("sched-upd")
 	require.NoError(t, err)
 	require.NotNil(t, got)
 	assert.Equal(t, "Updated Schedule", got.Name)
@@ -95,7 +96,7 @@ func TestSchedule_Update(t *testing.T) {
 
 func TestSchedule_UpdateNotFound(t *testing.T) {
 	t.Parallel()
-	db := testutil.NewTestDB(t)
+	db := store.New(testutil.NewTestDB(t))
 
 	s := &model.Schedule{
 		ID:       "nonexistent",
@@ -104,24 +105,24 @@ func TestSchedule_UpdateNotFound(t *testing.T) {
 		CronExpr: "0 0 * * *",
 		Payload:  json.RawMessage(`{}`),
 	}
-	err := model.UpdateSchedule(db, s)
+	err := db.UpdateSchedule(s)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 }
 
 func TestSchedule_ListByGameserver(t *testing.T) {
 	t.Parallel()
-	db := testutil.NewTestDB(t)
+	db := store.New(testutil.NewTestDB(t))
 
 	gs := newGameserver("gs-sl", "List Host", "minecraft-java", nil)
-	require.NoError(t, model.CreateGameserver(db, gs))
+	require.NoError(t, db.CreateGameserver(gs))
 
 	s1 := &model.Schedule{ID: "sched-a", GameserverID: "gs-sl", Name: "Alpha", Type: "backup", CronExpr: "0 0 * * *", Payload: json.RawMessage(`{}`), Enabled: true}
 	s2 := &model.Schedule{ID: "sched-b", GameserverID: "gs-sl", Name: "Bravo", Type: "restart", CronExpr: "0 6 * * *", Payload: json.RawMessage(`{}`), Enabled: true}
-	require.NoError(t, model.CreateSchedule(db, s1))
-	require.NoError(t, model.CreateSchedule(db, s2))
+	require.NoError(t, db.CreateSchedule(s1))
+	require.NoError(t, db.CreateSchedule(s2))
 
-	list, err := model.ListSchedules(db, "gs-sl")
+	list, err := db.ListSchedules("gs-sl")
 	require.NoError(t, err)
 	assert.Len(t, list, 2)
 	// Ordered by name
@@ -131,73 +132,73 @@ func TestSchedule_ListByGameserver(t *testing.T) {
 
 func TestSchedule_ListByGameserver_Empty(t *testing.T) {
 	t.Parallel()
-	db := testutil.NewTestDB(t)
+	db := store.New(testutil.NewTestDB(t))
 
-	list, err := model.ListSchedules(db, "gs-nonexistent")
+	list, err := db.ListSchedules("gs-nonexistent")
 	require.NoError(t, err)
 	assert.Empty(t, list)
 }
 
 func TestSchedule_Delete(t *testing.T) {
 	t.Parallel()
-	db := testutil.NewTestDB(t)
+	db := store.New(testutil.NewTestDB(t))
 
 	gs := newGameserver("gs-sd", "Del Host", "minecraft-java", nil)
-	require.NoError(t, model.CreateGameserver(db, gs))
+	require.NoError(t, db.CreateGameserver(gs))
 
 	s := &model.Schedule{ID: "sched-del", GameserverID: "gs-sd", Name: "Delete Me", Type: "backup", CronExpr: "0 0 * * *", Payload: json.RawMessage(`{}`), Enabled: true}
-	require.NoError(t, model.CreateSchedule(db, s))
+	require.NoError(t, db.CreateSchedule(s))
 
-	require.NoError(t, model.DeleteSchedule(db, "sched-del"))
+	require.NoError(t, db.DeleteSchedule("sched-del"))
 
-	got, err := model.GetSchedule(db, "sched-del")
+	got, err := db.GetSchedule("sched-del")
 	require.NoError(t, err)
 	assert.Nil(t, got)
 }
 
 func TestSchedule_DeleteNotFound(t *testing.T) {
 	t.Parallel()
-	db := testutil.NewTestDB(t)
+	db := store.New(testutil.NewTestDB(t))
 
-	err := model.DeleteSchedule(db, "nonexistent")
+	err := db.DeleteSchedule("nonexistent")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 }
 
 func TestSchedule_DeleteByGameserver(t *testing.T) {
 	t.Parallel()
-	db := testutil.NewTestDB(t)
+	db := store.New(testutil.NewTestDB(t))
 
 	gs := newGameserver("gs-sbd", "Bulk Del Host", "minecraft-java", nil)
-	require.NoError(t, model.CreateGameserver(db, gs))
+	require.NoError(t, db.CreateGameserver(gs))
 
 	for _, id := range []string{"sched-1", "sched-2"} {
 		s := &model.Schedule{ID: id, GameserverID: "gs-sbd", Name: id, Type: "backup", CronExpr: "0 0 * * *", Payload: json.RawMessage(`{}`), Enabled: true}
-		require.NoError(t, model.CreateSchedule(db, s))
+		require.NoError(t, db.CreateSchedule(s))
 	}
 
-	require.NoError(t, model.DeleteSchedulesByGameserver(db, "gs-sbd"))
+	require.NoError(t, db.DeleteSchedulesByGameserver("gs-sbd"))
 
-	list, err := model.ListSchedules(db, "gs-sbd")
+	list, err := db.ListSchedules("gs-sbd")
 	require.NoError(t, err)
 	assert.Empty(t, list)
 }
 
 func TestSchedule_CascadeOnGameserverDelete(t *testing.T) {
 	t.Parallel()
-	db := testutil.NewTestDB(t)
+	db := store.New(testutil.NewTestDB(t))
 
 	gs := newGameserver("gs-scas", "Cascade Host", "minecraft-java", nil)
-	require.NoError(t, model.CreateGameserver(db, gs))
+	require.NoError(t, db.CreateGameserver(gs))
 
 	s := &model.Schedule{ID: "sched-cas", GameserverID: "gs-scas", Name: "Cascade Schedule", Type: "backup", CronExpr: "0 0 * * *", Payload: json.RawMessage(`{}`), Enabled: true}
-	require.NoError(t, model.CreateSchedule(db, s))
+	require.NoError(t, db.CreateSchedule(s))
 
 	// Must delete schedules before gameserver (no ON DELETE CASCADE).
-	require.NoError(t, model.DeleteSchedulesByGameserver(db, "gs-scas"))
-	require.NoError(t, model.DeleteGameserver(db, "gs-scas"))
+	require.NoError(t, db.DeleteSchedulesByGameserver("gs-scas"))
+	require.NoError(t, db.DeleteGameserver("gs-scas"))
 
-	got, err := model.GetSchedule(db, "sched-cas")
+	got, err := db.GetSchedule("sched-cas")
 	require.NoError(t, err)
 	assert.Nil(t, got)
 }

@@ -222,7 +222,8 @@ func (s *GameserverStore) PopulateNode(gs *model.Gameserver) {
 	if gs.NodeID == nil || *gs.NodeID == "" {
 		return
 	}
-	node, err := model.GetWorkerNode(s.db, *gs.NodeID)
+	wns := NewWorkerNodeStore(s.db)
+	node, err := wns.GetWorkerNode(*gs.NodeID)
 	if err != nil || node == nil {
 		return
 	}
@@ -235,6 +236,7 @@ func (s *GameserverStore) PopulateNode(gs *model.Gameserver) {
 // PopulateNodes resolves node data for a slice of gameservers.
 func (s *GameserverStore) PopulateNodes(gameservers []model.Gameserver) {
 	// Batch: collect unique node IDs, query once each
+	wns := NewWorkerNodeStore(s.db)
 	seen := make(map[string]*model.GameserverNode)
 	for i := range gameservers {
 		gs := &gameservers[i]
@@ -246,7 +248,7 @@ func (s *GameserverStore) PopulateNodes(gameservers []model.Gameserver) {
 			gs.Node = n
 			continue
 		}
-		node, err := model.GetWorkerNode(s.db, nid)
+		node, err := wns.GetWorkerNode(nid)
 		if err != nil || node == nil {
 			seen[nid] = nil
 			continue
