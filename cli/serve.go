@@ -1,43 +1,28 @@
 package cli
 
 import (
-	"github.com/warsmite/gamejanitor/controller/orchestrator"
-	"github.com/warsmite/gamejanitor/controller/settings"
-	"github.com/warsmite/gamejanitor/controller/auth"
-	"github.com/warsmite/gamejanitor/controller"
 	"context"
 	"crypto/ecdsa"
 	"crypto/tls"
 	"crypto/x509"
-	"database/sql"
 	"fmt"
-	"io/fs"
 	"log/slog"
 	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
-	"strings"
 	"time"
 
 	"github.com/warsmite/gamejanitor/config"
-	"github.com/warsmite/gamejanitor/controller/event"
+	"github.com/warsmite/gamejanitor/controller/orchestrator"
+	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/db"
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/pkg/netinfo"
-	"github.com/warsmite/gamejanitor/controller/backup"
-	"github.com/warsmite/gamejanitor/controller/gameserver"
-	"github.com/warsmite/gamejanitor/controller/schedule"
-	"github.com/warsmite/gamejanitor/controller/status"
-	"github.com/warsmite/gamejanitor/controller/mod"
-	"github.com/warsmite/gamejanitor/store"
-	"github.com/warsmite/gamejanitor/controller/webhook"
-	gjsftp "github.com/warsmite/gamejanitor/sftp"
 	"github.com/warsmite/gamejanitor/pkg/tlsutil"
+	gjsftp "github.com/warsmite/gamejanitor/sftp"
+	"github.com/warsmite/gamejanitor/store"
 	"github.com/warsmite/gamejanitor/api"
-	"github.com/warsmite/gamejanitor/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -115,110 +100,6 @@ func loadConfig(cmd *cobra.Command) (config.Config, error) {
 	}
 
 	return cfg, nil
-}
-
-type services struct {
-	broadcaster   *controller.EventBus
-	settingsSvc   *settings.SettingsService
-	gameserverSvc *gameserver.GameserverService
-	querySvc      *status.QueryService
-	statsPoller   *status.StatsPoller
-	readyWatcher  *status.ReadyWatcher
-	consoleSvc    *gameserver.ConsoleService
-	fileSvc       *gameserver.FileService
-	backupSvc     *backup.BackupService
-	scheduler     *schedule.Scheduler
-	scheduleSvc   *schedule.ScheduleService
-	authSvc       *auth.AuthService
-	statusMgr     *status.StatusManager
-	statusSub       *status.StatusSubscriber
-	eventHistorySvc *event.EventHistoryService
-	webhookWorker   *webhook.WebhookWorker
-	webhookSvc      *webhook.WebhookEndpointService
-	workerNodeSvc   *orchestrator.WorkerNodeService
-	modSvc          *mod.ModService
-}
-
-func initServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registry *orchestrator.Registry, gameStore *games.GameStore, cfg config.Config, logger *slog.Logger) (*services, error) {
-	broadcaster := controller.NewEventBus()
-	db := store.New(database)
-
-	settingsSvc := settings.NewSettingsServiceWithMode(db, logger, cfg.Mode)
-
-	// Apply config file runtime settings to DB on every startup
-	settingsSvc.ApplyConfig(cfg.Settings)
-
-	gameserverSvc := gameserver.NewGameserverService(db, dispatcher, broadcaster, settingsSvc, gameStore, cfg.DataDir, logger)
-	querySvc := status.NewQueryService(db, broadcaster, gameStore, logger)
-	statsPoller := status.NewStatsPoller(db, dispatcher, broadcaster, logger)
-	readyWatcher := status.NewReadyWatcher(db, broadcaster, gameStore, logger)
-	gameserverSvc.SetReadyWatcher(readyWatcher)
-	consoleSvc := gameserver.NewConsoleService(db, dispatcher, gameStore, logger)
-	fileSvc := gameserver.NewFileService(db, dispatcher, logger)
-
-	backupStorage, err := initBackupStorage(cfg, logger)
-	if err != nil {
-		return nil, err
-	}
-
-	// Activity tracking for long-running worker dispatches and CRUD events
-	activityTracker := gameserver.NewActivityTracker(db, logger)
-	gameserverSvc.SetActivityTracker(activityTracker)
-
-	gameserverSvc.SetBackupStore(backupStorage)
-	backupSvc := backup.NewBackupService(db, dispatcher, gameserverSvc, gameStore, backupStorage, settingsSvc, broadcaster, logger)
-	backupSvc.SetActivityTracker(activityTracker)
-	scheduler := schedule.NewScheduler(db, backupSvc, gameserverSvc, consoleSvc, broadcaster, logger)
-	scheduleSvc := schedule.NewScheduleService(db, scheduler, broadcaster, logger)
-	authSvc := auth.NewAuthService(db, logger)
-	statusMgr := status.NewStatusManager(db, broadcaster, querySvc, statsPoller, readyWatcher, dispatcher, registry, gameserverSvc.Start, logger)
-	statusSub := status.NewStatusSubscriber(db, broadcaster, querySvc, statsPoller, logger)
-	eventHistorySvc := event.NewEventHistoryService(db)
-	webhookWorker := webhook.NewWebhookWorker(db, db, broadcaster, logger)
-	webhookSvc := webhook.NewWebhookEndpointService(db, logger)
-	workerNodeSvc := orchestrator.NewWorkerNodeService(db, registry, broadcaster, logger)
-	optionsRegistry := games.NewOptionsRegistry(logger)
-	modSvc := mod.NewModService(db, fileSvc, gameStore, settingsSvc, optionsRegistry, broadcaster, logger)
-
-	return &services{
-		broadcaster:     broadcaster,
-		settingsSvc:     settingsSvc,
-		gameserverSvc:   gameserverSvc,
-		querySvc:        querySvc,
-		statsPoller:     statsPoller,
-		readyWatcher:    readyWatcher,
-		consoleSvc:      consoleSvc,
-		fileSvc:         fileSvc,
-		backupSvc:       backupSvc,
-		scheduler:       scheduler,
-		scheduleSvc:     scheduleSvc,
-		authSvc:         authSvc,
-		statusMgr:       statusMgr,
-		statusSub:       statusSub,
-		eventHistorySvc: eventHistorySvc,
-		webhookWorker:   webhookWorker,
-		webhookSvc:      webhookSvc,
-		workerNodeSvc:   workerNodeSvc,
-		modSvc:          modSvc,
-	}, nil
-}
-
-func initBackupStorage(cfg config.Config, logger *slog.Logger) (backup.Storage, error) {
-	bs := cfg.BackupStore
-	if bs == nil || bs.Type == "" || bs.Type == "local" {
-		logger.Info("backup store: local", "path", cfg.DataDir)
-		return backup.NewLocalStorage(cfg.DataDir), nil
-	}
-
-	if bs.Type == "s3" {
-		s3Storage, err := backup.NewS3Storage(bs, logger)
-		if err != nil {
-			return nil, fmt.Errorf("failed to initialize backup store: %w", err)
-		}
-		return s3Storage, nil
-	}
-
-	return nil, fmt.Errorf("unknown backup_store type: %q (must be \"local\" or \"s3\")", bs.Type)
 }
 
 func runServe(cmd *cobra.Command, args []string) error {
@@ -529,175 +410,4 @@ func runServe(cmd *cobra.Command, args []string) error {
 		return listenError("http", addr, cfg.Port, err)
 	}
 	return nil
-}
-
-func isLoopback(addr string) bool {
-	return addr == "127.0.0.1" || addr == "::1" || addr == "localhost"
-}
-
-// listenError wraps a listen error with a user-friendly message when the port is already in use.
-func listenError(service, addr string, port int, err error) error {
-	if strings.Contains(err.Error(), "address already in use") {
-		return fmt.Errorf("%s server failed to start: port %d is already in use — another instance of gamejanitor or another program is using this port", service, port)
-	}
-	return fmt.Errorf("%s server failed to start on %s: %w", service, addr, err)
-}
-
-func isTTY() bool {
-	fi, err := os.Stdout.Stat()
-	if err != nil {
-		return false
-	}
-	return fi.Mode()&os.ModeCharDevice != 0
-}
-
-// colorLogHandler writes colored, human-readable log lines to a terminal.
-// Format: HH:MM:SS LEVEL msg key=value key=value
-type colorLogHandler struct {
-	level slog.Level
-	w     *os.File
-	attrs []slog.Attr
-	group string
-}
-
-func (h *colorLogHandler) Enabled(_ context.Context, l slog.Level) bool {
-	return l >= h.level
-}
-
-func (h *colorLogHandler) Handle(_ context.Context, r slog.Record) error {
-	// Time — dimmed
-	ts := r.Time.Format("15:04:05")
-
-	// Level — colored
-	var lvl string
-	switch {
-	case r.Level >= slog.LevelError:
-		lvl = "\033[31mERR\033[0m" // red
-	case r.Level >= slog.LevelWarn:
-		lvl = "\033[33mWRN\033[0m" // yellow
-	case r.Level >= slog.LevelInfo:
-		lvl = "\033[36mINF\033[0m" // cyan
-	default:
-		lvl = "\033[90mDBG\033[0m" // gray
-	}
-
-	// Message — bright
-	msg := r.Message
-
-	// Attrs — dimmed
-	var attrs string
-	collect := func(a slog.Attr) bool {
-		if a.Key != "" {
-			attrs += fmt.Sprintf(" \033[90m%s=\033[0m%s", a.Key, a.Value.String())
-		}
-		return true
-	}
-	for _, a := range h.attrs {
-		collect(a)
-	}
-	r.Attrs(collect)
-
-	fmt.Fprintf(h.w, "\033[90m%s\033[0m %s %s%s\n", ts, lvl, msg, attrs)
-	return nil
-}
-
-func (h *colorLogHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	return &colorLogHandler{level: h.level, w: h.w, attrs: append(h.attrs, attrs...), group: h.group}
-}
-
-func (h *colorLogHandler) WithGroup(name string) slog.Handler {
-	return &colorLogHandler{level: h.level, w: h.w, attrs: h.attrs, group: name}
-}
-
-// multiHandler fans out log records to multiple handlers.
-type multiHandler []slog.Handler
-
-func (m multiHandler) Enabled(_ context.Context, level slog.Level) bool {
-	for _, h := range m {
-		if h.Enabled(context.Background(), level) {
-			return true
-		}
-	}
-	return false
-}
-
-func (m multiHandler) Handle(ctx context.Context, r slog.Record) error {
-	for _, h := range m {
-		if h.Enabled(ctx, r.Level) {
-			if err := h.Handle(ctx, r); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func (m multiHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	handlers := make(multiHandler, len(m))
-	for i, h := range m {
-		handlers[i] = h.WithAttrs(attrs)
-	}
-	return handlers
-}
-
-func (m multiHandler) WithGroup(name string) slog.Handler {
-	handlers := make(multiHandler, len(m))
-	for i, h := range m {
-		handlers[i] = h.WithGroup(name)
-	}
-	return handlers
-}
-
-func openBrowser(url string) {
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "linux":
-		cmd = exec.Command("xdg-open", url)
-	case "darwin":
-		cmd = exec.Command("open", url)
-	case "windows":
-		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
-	default:
-		return
-	}
-	cmd.Start()
-}
-
-// generateLocalWorkerCert generates a TLS cert for the local worker from the
-// controller's in-memory CA and writes it to {dataDir}/certs/. This is picked
-// up by loadWorkerTLS via auto-discovery, so the local worker skips enrollment.
-// Regenerated every startup to guarantee the cert matches the current CA.
-func generateLocalWorkerCert(dataDir string, caCert *x509.Certificate, caKey *ecdsa.PrivateKey, workerIPs []net.IP, logger *slog.Logger) error {
-	caPEM, certPEM, keyPEM, err := tlsutil.GenerateWorkerCertPEM("_local", caCert, caKey, workerIPs)
-	if err != nil {
-		return fmt.Errorf("generating cert: %w", err)
-	}
-
-	certsDir := filepath.Join(dataDir, "certs")
-	if err := os.MkdirAll(certsDir, 0700); err != nil {
-		return fmt.Errorf("creating certs directory: %w", err)
-	}
-	if err := os.WriteFile(filepath.Join(certsDir, "ca.pem"), caPEM, 0644); err != nil {
-		return fmt.Errorf("writing CA cert: %w", err)
-	}
-	if err := os.WriteFile(filepath.Join(certsDir, "cert.pem"), certPEM, 0644); err != nil {
-		return fmt.Errorf("writing cert: %w", err)
-	}
-	if err := os.WriteFile(filepath.Join(certsDir, "key.pem"), keyPEM, 0600); err != nil {
-		return fmt.Errorf("writing key: %w", err)
-	}
-
-	logger.Info("generated local worker TLS cert from controller CA")
-	return nil
-}
-
-func webUIFS(cfg config.Config) fs.FS {
-	if !cfg.WebUI {
-		return nil
-	}
-	sub, err := fs.Sub(ui.Dist, "dist")
-	if err != nil {
-		return nil
-	}
-	return sub
 }
