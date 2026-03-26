@@ -1,8 +1,6 @@
-package service
+package mod
 
 import (
-	"github.com/warsmite/gamejanitor/controller/settings"
-	"github.com/warsmite/gamejanitor/controller"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -11,6 +9,9 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/warsmite/gamejanitor/controller"
+	"github.com/warsmite/gamejanitor/controller/settings"
 )
 
 type WorkshopSource struct {
@@ -44,13 +45,13 @@ func (s *WorkshopSource) Search(ctx context.Context, query string, gameVersion s
 	appID := loader // ModService passes appID as the "loader" for workshop
 
 	params := url.Values{
-		"key":                 {key},
-		"search_text":         {query},
-		"return_short_description": {"true"},
-		"return_previews":     {"true"},
-		"numperpage":          {fmt.Sprintf("%d", limit)},
-		"cursor":              {"*"}, // First page
-		"query_type":          {"1"}, // RankedByTrend
+		"key":                       {key},
+		"search_text":               {query},
+		"return_short_description":  {"true"},
+		"return_previews":           {"true"},
+		"numperpage":                {fmt.Sprintf("%d", limit)},
+		"cursor":                    {"*"}, // First page
+		"query_type":                {"1"}, // RankedByTrend
 	}
 	if appID != "" {
 		params.Set("appid", appID)
@@ -138,8 +139,8 @@ type workshopItemDetail struct {
 func (s *WorkshopSource) getItemDetails(ctx context.Context, fileID string) (*workshopItemDetail, error) {
 	// Use GetPublishedFileDetails which doesn't require an API key
 	form := url.Values{
-		"itemcount":             {"1"},
-		"publishedfileids[0]":   {fileID},
+		"itemcount":           {"1"},
+		"publishedfileids[0]": {fileID},
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
@@ -162,14 +163,14 @@ func (s *WorkshopSource) getItemDetails(ctx context.Context, fileID string) (*wo
 
 	var steamResp struct {
 		Response struct {
-			Result             int `json:"result"`
-			ResultCount        int `json:"resultcount"`
+			Result              int `json:"result"`
+			ResultCount         int `json:"resultcount"`
 			PublishedFileDetails []struct {
-				Result         int    `json:"result"`
+				Result          int    `json:"result"`
 				PublishedFileID string `json:"publishedfileid"`
-				Title          string `json:"title"`
-				Description    string `json:"description"`
-				PreviewURL     string `json:"preview_url"`
+				Title           string `json:"title"`
+				Description     string `json:"description"`
+				PreviewURL      string `json:"preview_url"`
 			} `json:"publishedfiledetails"`
 		} `json:"response"`
 	}

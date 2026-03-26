@@ -7,15 +7,15 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/warsmite/gamejanitor/service"
+	"github.com/warsmite/gamejanitor/controller/mod"
 )
 
 type ModHandlers struct {
-	svc *service.ModService
+	svc *mod.ModService
 	log *slog.Logger
 }
 
-func NewModHandlers(svc *service.ModService, log *slog.Logger) *ModHandlers {
+func NewModHandlers(svc *mod.ModService, log *slog.Logger) *ModHandlers {
 	return &ModHandlers{svc: svc, log: log}
 }
 

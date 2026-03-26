@@ -1,12 +1,12 @@
-package service
+package mod
 
 import "context"
 
-// Mod download limits — inlined from deleted constants/ package.
+// Mod download limits
 const (
-	modDefaultLimit     = 20
-	maxModDownloadBytes = 100 * 1024 * 1024 // 100 MB
-	maxUmodDownloadBytes = 50 * 1024 * 1024 // 50 MB
+	ModDefaultLimit      = 20
+	MaxModDownloadBytes  = 100 * 1024 * 1024 // 100 MB
+	MaxUmodDownloadBytes = 50 * 1024 * 1024  // 50 MB
 )
 
 // ModSearchResult is the common shape returned by all mod sources.

@@ -1,7 +1,6 @@
-package service
+package mod
 
 import (
-	"github.com/warsmite/gamejanitor/controller"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -12,6 +11,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/warsmite/gamejanitor/controller"
 )
 
 type UmodSource struct {
@@ -34,15 +34,15 @@ type umodSearchResponse struct {
 }
 
 type umodPlugin struct {
-	Name              string `json:"name"`
-	Title             string `json:"title"`
-	Description       string `json:"description_short"`
-	Author            string `json:"author"`
-	IconURL           string `json:"icon_url"`
-	LatestReleaseAt   string `json:"latest_release_at"`
-	DownloadsTotal    int    `json:"downloads_total"`
-	LatestReleaseVer  string `json:"latest_release_version"`
-	JSONUrl           string `json:"json_url"`
+	Name             string `json:"name"`
+	Title            string `json:"title"`
+	Description      string `json:"description_short"`
+	Author           string `json:"author"`
+	IconURL          string `json:"icon_url"`
+	LatestReleaseAt  string `json:"latest_release_at"`
+	DownloadsTotal   int    `json:"downloads_total"`
+	LatestReleaseVer string `json:"latest_release_version"`
+	JSONUrl          string `json:"json_url"`
 }
 
 // uMod plugin detail response (for download URL)
@@ -61,7 +61,7 @@ type umodPluginDetail struct {
 
 func (s *UmodSource) Search(ctx context.Context, query string, gameVersion string, loader string, offset int, limit int) ([]ModSearchResult, int, error) {
 	if limit <= 0 {
-		limit = modDefaultLimit
+		limit = ModDefaultLimit
 	}
 	page := (offset / limit) + 1
 
@@ -157,7 +157,7 @@ func (s *UmodSource) DownloadFromURL(ctx context.Context, downloadURL string) ([
 		return nil, fmt.Errorf("download returned status %d", resp.StatusCode)
 	}
 
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxUmodDownloadBytes))
+	data, err := io.ReadAll(io.LimitReader(resp.Body, MaxUmodDownloadBytes))
 	if err != nil {
 		return nil, fmt.Errorf("reading download body: %w", err)
 	}

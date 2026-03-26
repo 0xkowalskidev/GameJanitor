@@ -30,8 +30,9 @@ import (
 	"github.com/warsmite/gamejanitor/pkg/netinfo"
 	"github.com/warsmite/gamejanitor/controller/backup"
 	"github.com/warsmite/gamejanitor/controller/gameserver"
+	"github.com/warsmite/gamejanitor/controller/schedule"
 	"github.com/warsmite/gamejanitor/controller/status"
-	"github.com/warsmite/gamejanitor/service"
+	"github.com/warsmite/gamejanitor/controller/mod"
 	"github.com/warsmite/gamejanitor/store"
 	"github.com/warsmite/gamejanitor/controller/webhook"
 	gjsftp "github.com/warsmite/gamejanitor/sftp"
@@ -127,14 +128,14 @@ type services struct {
 	consoleSvc    *gameserver.ConsoleService
 	fileSvc       *gameserver.FileService
 	backupSvc     *backup.BackupService
-	scheduler     *service.Scheduler
-	scheduleSvc   *service.ScheduleService
+	scheduler     *schedule.Scheduler
+	scheduleSvc   *schedule.ScheduleService
 	authSvc       *auth.AuthService
 	statusMgr     *status.StatusManager
 	statusSub     *status.StatusSubscriber
 	eventStore    *event.EventStoreSubscriber
 	webhookWorker *webhook.WebhookWorker
-	modSvc        *service.ModService
+	modSvc        *mod.ModService
 }
 
 func initServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registry *orchestrator.Registry, gameStore *games.GameStore, cfg config.Config, logger *slog.Logger) (*services, error) {
@@ -173,8 +174,12 @@ func initServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 		*store.GameserverStore
 	}{backupDBStore, gsStore}
 	backupSvc := backup.NewBackupService(backupCompositeStore, dispatcher, gameserverSvc, gameStore, backupStorage, settingsSvc, broadcaster, logger)
-	scheduler := service.NewScheduler(database, backupSvc, gameserverSvc, consoleSvc, broadcaster, logger)
-	scheduleSvc := service.NewScheduleService(database, scheduler, broadcaster, logger)
+	scheduleStore := struct {
+		*store.ScheduleStore
+		*store.GameserverStore
+	}{store.NewScheduleStore(database), gsStore}
+	scheduler := schedule.NewScheduler(scheduleStore, backupSvc, gameserverSvc, consoleSvc, broadcaster, logger)
+	scheduleSvc := schedule.NewScheduleService(scheduleStore, scheduler, broadcaster, logger)
 	authSvc := auth.NewAuthService(database, logger)
 	statusMgr := status.NewStatusManager(statusStore, broadcaster, querySvc, statsPoller, readyWatcher, dispatcher, registry, gameserverSvc.Start, logger)
 	statusSub := status.NewStatusSubscriber(statusStore, broadcaster, logger)
@@ -187,7 +192,11 @@ func initServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 	}
 	webhookWorker := webhook.NewWebhookWorker(webhookStore, gsLookup, broadcaster, logger)
 	optionsRegistry := games.NewOptionsRegistry(logger)
-	modSvc := service.NewModService(database, fileSvc, gameStore, settingsSvc, optionsRegistry, broadcaster, logger)
+	modStore := struct {
+		*store.ModStore
+		*store.GameserverStore
+	}{store.NewModStore(database), gsStore}
+	modSvc := mod.NewModService(modStore, fileSvc, gameStore, settingsSvc, optionsRegistry, broadcaster, logger)
 
 	return &services{
 		broadcaster:   broadcaster,

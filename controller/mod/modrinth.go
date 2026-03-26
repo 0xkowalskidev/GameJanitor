@@ -1,7 +1,6 @@
-package service
+package mod
 
 import (
-	"github.com/warsmite/gamejanitor/controller"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -12,6 +11,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/warsmite/gamejanitor/controller"
 )
 
 const modrinthBaseURL = "https://api.modrinth.com/v2"
@@ -37,28 +37,28 @@ type modrinthSearchResponse struct {
 }
 
 type modrinthHit struct {
-	ProjectID   string `json:"project_id"`
-	Slug        string `json:"slug"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Author      string `json:"author"`
-	IconURL     string `json:"icon_url"`
-	Downloads   int    `json:"downloads"`
+	ProjectID    string `json:"project_id"`
+	Slug         string `json:"slug"`
+	Title        string `json:"title"`
+	Description  string `json:"description"`
+	Author       string `json:"author"`
+	IconURL      string `json:"icon_url"`
+	Downloads    int    `json:"downloads"`
 	DateModified string `json:"date_modified"`
-	ProjectType string `json:"project_type"`
-	ServerSide  string `json:"server_side"`
-	ClientSide  string `json:"client_side"`
+	ProjectType  string `json:"project_type"`
+	ServerSide   string `json:"server_side"`
+	ClientSide   string `json:"client_side"`
 }
 
 // Modrinth version response
 type modrinthVersion struct {
-	ID            string           `json:"id"`
-	VersionNumber string           `json:"version_number"`
-	Name          string           `json:"name"`
-	GameVersions  []string         `json:"game_versions"`
-	Loaders       []string         `json:"loaders"`
-	Files         []modrinthFile   `json:"files"`
-	DatePublished string           `json:"date_published"`
+	ID            string         `json:"id"`
+	VersionNumber string         `json:"version_number"`
+	Name          string         `json:"name"`
+	GameVersions  []string       `json:"game_versions"`
+	Loaders       []string       `json:"loaders"`
+	Files         []modrinthFile `json:"files"`
+	DatePublished string         `json:"date_published"`
 }
 
 type modrinthFile struct {
@@ -70,7 +70,7 @@ type modrinthFile struct {
 
 func (s *ModrinthSource) Search(ctx context.Context, query string, gameVersion string, loader string, offset int, limit int) ([]ModSearchResult, int, error) {
 	if limit <= 0 {
-		limit = modDefaultLimit
+		limit = ModDefaultLimit
 	}
 
 	// Build facets: array of OR-groups, AND'd together
@@ -217,7 +217,7 @@ func (s *ModrinthSource) Download(ctx context.Context, versionID string) ([]byte
 		return nil, "", fmt.Errorf("modrinth download returned status %d", resp.StatusCode)
 	}
 
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxModDownloadBytes))
+	data, err := io.ReadAll(io.LimitReader(resp.Body, MaxModDownloadBytes))
 	if err != nil {
 		return nil, "", fmt.Errorf("reading modrinth download: %w", err)
 	}

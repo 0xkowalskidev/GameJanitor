@@ -1,10 +1,7 @@
-package service
+package mod
 
 import (
-	"github.com/warsmite/gamejanitor/controller/settings"
-	"github.com/warsmite/gamejanitor/controller"
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,20 +13,32 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/warsmite/gamejanitor/controller"
+	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/model"
 )
 
-// fileOperator is a narrow interface for file operations the mod service needs.
-type fileOperator interface {
+// Store abstracts DB operations needed by the mod service.
+type Store interface {
+	ListInstalledMods(gameserverID string) ([]model.InstalledMod, error)
+	GetInstalledMod(id string) (*model.InstalledMod, error)
+	GetInstalledModBySource(gameserverID, source, sourceID string) (*model.InstalledMod, error)
+	CreateInstalledMod(m *model.InstalledMod) error
+	DeleteInstalledMod(id string) error
+	GetGameserver(id string) (*model.Gameserver, error)
+}
+
+// FileOperator is a narrow interface for file operations the mod service needs.
+type FileOperator interface {
 	WriteFile(ctx context.Context, gameserverID string, filePath string, content []byte) error
 	DeletePath(ctx context.Context, gameserverID string, targetPath string) error
 	CreateDirectory(ctx context.Context, gameserverID string, dirPath string) error
 }
 
 type ModService struct {
-	db              *sql.DB
-	fileSvc         fileOperator
+	store           Store
+	fileSvc         FileOperator
 	gameStore       *games.GameStore
 	settingsSvc     *settings.SettingsService
 	optionsRegistry *games.OptionsRegistry
@@ -39,7 +48,7 @@ type ModService struct {
 	broadcaster     *controller.EventBus
 }
 
-func NewModService(db *sql.DB, fileSvc fileOperator, gameStore *games.GameStore, settingsSvc *settings.SettingsService, optionsRegistry *games.OptionsRegistry, broadcaster *controller.EventBus, log *slog.Logger) *ModService {
+func NewModService(store Store, fileSvc FileOperator, gameStore *games.GameStore, settingsSvc *settings.SettingsService, optionsRegistry *games.OptionsRegistry, broadcaster *controller.EventBus, log *slog.Logger) *ModService {
 	sources := map[string]ModSource{
 		"umod":     NewUmodSource(log.With("source", "umod")),
 		"modrinth": NewModrinthSource(log.With("source", "modrinth")),
@@ -47,7 +56,7 @@ func NewModService(db *sql.DB, fileSvc fileOperator, gameStore *games.GameStore,
 	}
 
 	return &ModService{
-		db:              db,
+		store:           store,
 		fileSvc:         fileSvc,
 		gameStore:       gameStore,
 		settingsSvc:     settingsSvc,
@@ -55,7 +64,7 @@ func NewModService(db *sql.DB, fileSvc fileOperator, gameStore *games.GameStore,
 		sources:         sources,
 		httpClient:      &http.Client{Timeout: 30 * time.Second},
 		log:             log,
-		broadcaster: broadcaster,
+		broadcaster:     broadcaster,
 	}
 }
 
@@ -170,7 +179,7 @@ func (s *ModService) Install(ctx context.Context, gameserverID string, sourceTyp
 	}
 
 	// Check if already installed
-	existing, err := model.GetInstalledModBySource(s.db, gameserverID, sourceType, sourceID)
+	existing, err := s.store.GetInstalledModBySource(gameserverID, sourceType, sourceID)
 	if err != nil {
 		return nil, fmt.Errorf("checking existing mod: %w", err)
 	}
@@ -263,7 +272,7 @@ func (s *ModService) Install(ctx context.Context, gameserverID string, sourceTyp
 		InstalledAt:  time.Now(),
 	}
 
-	if err := model.CreateInstalledMod(s.db, mod); err != nil {
+	if err := s.store.CreateInstalledMod(mod); err != nil {
 		return nil, fmt.Errorf("saving installed mod: %w", err)
 	}
 
@@ -279,7 +288,7 @@ func (s *ModService) Install(ctx context.Context, gameserverID string, sourceTyp
 }
 
 func (s *ModService) Uninstall(ctx context.Context, gameserverID string, modID string) error {
-	mod, err := model.GetInstalledMod(s.db, modID)
+	mod, err := s.store.GetInstalledMod(modID)
 	if err != nil {
 		return fmt.Errorf("getting installed mod: %w", err)
 	}
@@ -301,7 +310,7 @@ func (s *ModService) Uninstall(ctx context.Context, gameserverID string, modID s
 		}
 	}
 
-	if err := model.DeleteInstalledMod(s.db, modID); err != nil {
+	if err := s.store.DeleteInstalledMod(modID); err != nil {
 		return fmt.Errorf("deleting installed mod: %w", err)
 	}
 
@@ -319,7 +328,7 @@ func (s *ModService) Uninstall(ctx context.Context, gameserverID string, modID s
 }
 
 func (s *ModService) ListInstalled(ctx context.Context, gameserverID string) ([]model.InstalledMod, error) {
-	return model.ListInstalledMods(s.db, gameserverID)
+	return s.store.ListInstalledMods(gameserverID)
 }
 
 // --- Workshop helpers ---
@@ -358,7 +367,7 @@ func (s *ModService) installWorkshop(ctx context.Context, gs *model.Gameserver, 
 		InstalledAt:  time.Now(),
 	}
 
-	if err := model.CreateInstalledMod(s.db, mod); err != nil {
+	if err := s.store.CreateInstalledMod(mod); err != nil {
 		return nil, fmt.Errorf("saving workshop mod: %w", err)
 	}
 
@@ -382,7 +391,7 @@ func (s *ModService) installWorkshop(ctx context.Context, gs *model.Gameserver, 
 func (s *ModService) uninstallWorkshop(ctx context.Context, gameserverID string, mod *model.InstalledMod) error {
 	// Rewrite the manifest after removing this mod (DB row deleted by caller after this returns)
 	// We need to read current mods, exclude this one, and rewrite
-	mods, err := model.ListInstalledMods(s.db, gameserverID)
+	mods, err := s.store.ListInstalledMods(gameserverID)
 	if err != nil {
 		return fmt.Errorf("listing mods for manifest update: %w", err)
 	}
@@ -410,7 +419,7 @@ func (s *ModService) uninstallWorkshop(ctx context.Context, gameserverID string,
 }
 
 func (s *ModService) writeWorkshopManifest(ctx context.Context, gameserverID string) error {
-	mods, err := model.ListInstalledMods(s.db, gameserverID)
+	mods, err := s.store.ListInstalledMods(gameserverID)
 	if err != nil {
 		return err
 	}
@@ -433,7 +442,7 @@ func (s *ModService) writeWorkshopManifest(ctx context.Context, gameserverID str
 // --- Internal helpers ---
 
 func (s *ModService) getGameserver(gameserverID string) (*model.Gameserver, error) {
-	gs, err := model.GetGameserver(s.db, gameserverID)
+	gs, err := s.store.GetGameserver(gameserverID)
 	if err != nil {
 		return nil, fmt.Errorf("getting gameserver: %w", err)
 	}
@@ -494,7 +503,7 @@ func (s *ModService) resolveFilters(gs *model.Gameserver, srcConfig *games.ModSo
 	if srcConfig.VersionEnv != "" {
 		gameVersion = env[srcConfig.VersionEnv]
 
-		// Resolve alias values like "latest" → "1.21.11" via the options registry.
+		// Resolve alias values like "latest" -> "1.21.11" via the options registry.
 		// The version env var's dynamic_options source (e.g., "mojang-versions") knows how to resolve these.
 		if s.optionsRegistry != nil {
 			game := s.gameStore.GetGame(gs.GameID)
@@ -551,7 +560,7 @@ func (s *ModService) downloadFile(ctx context.Context, downloadURL string) ([]by
 		return nil, fmt.Errorf("download returned status %d", resp.StatusCode)
 	}
 
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxModDownloadBytes))
+	data, err := io.ReadAll(io.LimitReader(resp.Body, MaxModDownloadBytes))
 	if err != nil {
 		return nil, fmt.Errorf("reading download: %w", err)
 	}

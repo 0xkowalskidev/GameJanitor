@@ -11,10 +11,11 @@ import (
 	"github.com/warsmite/gamejanitor/controller/backup"
 	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/controller/gameserver"
+	"github.com/warsmite/gamejanitor/controller/mod"
+	"github.com/warsmite/gamejanitor/controller/schedule"
 	"github.com/warsmite/gamejanitor/controller/status"
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/model"
-	"github.com/warsmite/gamejanitor/service"
 	"github.com/warsmite/gamejanitor/store"
 )
 
@@ -33,10 +34,10 @@ type ServiceBundle struct {
 	ConsoleSvc    *gameserver.ConsoleService
 	FileSvc       *gameserver.FileService
 	BackupSvc     *backup.BackupService
-	Scheduler     *service.Scheduler
-	ScheduleSvc   *service.ScheduleService
+	Scheduler     *schedule.Scheduler
+	ScheduleSvc   *schedule.ScheduleService
 	AuthSvc       *auth.AuthService
-	ModSvc        *service.ModService
+	ModSvc        *mod.ModService
 	BackupStorage backup.Storage
 	StatusSub     *status.StatusSubscriber
 	EventStore    *event.EventStoreSubscriber
@@ -83,12 +84,20 @@ func NewTestServices(t *testing.T) *ServiceBundle {
 		*store.GameserverStore
 	}{backupDBStore, gsStore}
 	backupSvc := backup.NewBackupService(backupCompositeStore, dispatcher, gameserverSvc, gameStore, backupStorage, settingsSvc, broadcaster, log)
-	scheduler := service.NewScheduler(db, backupSvc, gameserverSvc, consoleSvc, broadcaster, log)
-	scheduleSvc := service.NewScheduleService(db, scheduler, broadcaster, log)
+	scheduleStore := struct {
+		*store.ScheduleStore
+		*store.GameserverStore
+	}{store.NewScheduleStore(db), gsStore}
+	scheduler := schedule.NewScheduler(scheduleStore, backupSvc, gameserverSvc, consoleSvc, broadcaster, log)
+	scheduleSvc := schedule.NewScheduleService(scheduleStore, scheduler, broadcaster, log)
 	authSvc := auth.NewAuthService(db, log)
 
 	optionsRegistry := games.NewOptionsRegistry(log)
-	modSvc := service.NewModService(db, fileSvc, gameStore, settingsSvc, optionsRegistry, broadcaster, log)
+	modStore := struct {
+		*store.ModStore
+		*store.GameserverStore
+	}{store.NewModStore(db), gsStore}
+	modSvc := mod.NewModService(modStore, fileSvc, gameStore, settingsSvc, optionsRegistry, broadcaster, log)
 
 	svc := &ServiceBundle{
 		DB:            db,
