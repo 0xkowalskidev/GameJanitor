@@ -1,6 +1,7 @@
 <script lang="ts">
   
   import { navigate } from '$lib/router';
+  import { embedded } from '$lib/base';
   import { onMount } from 'svelte';
   import { api, type Gameserver, type Game, type DynamicOption } from '$lib/api';
   import { toast, confirm } from '$lib/stores';
@@ -153,7 +154,12 @@
     try {
       await api.gameservers.delete(gsId);
       toast('Gameserver deleted', 'info');
-      navigate('/');
+      if (embedded) {
+        // In embedded mode, redirect to hosting dashboard
+        window.location.href = window.location.origin;
+      } else {
+        navigate('/');
+      }
     } catch (e: any) {
       toast(`Failed: ${e.message}`, 'error');
     } finally {
