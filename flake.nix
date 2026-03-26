@@ -31,7 +31,9 @@
           env.CGO_ENABLED = "0";
 
           preBuild = ''
+            rm -rf ui/dist
             cp -r ${ui} ui/dist
+            chmod -R u+w ui/dist
           '';
         };
       };

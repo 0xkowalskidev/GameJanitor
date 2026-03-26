@@ -1,21 +1,22 @@
 <script lang="ts">
-  
   import { navigate } from '$lib/router';
   import { embedded } from '$lib/base';
   import { onMount } from 'svelte';
   import { api, type Gameserver, type Game, type DynamicOption } from '$lib/api';
-  import { toast, confirm } from '$lib/stores';
-  import { GameIcon, GameserverForm } from '$lib/components';
+  import { toast, confirm, gameserverStore } from '$lib/stores';
+  import { ResourceSlider, EnvEditor } from '$lib/components';
 
   let { id }: { id: string } = $props();
   const gsId = id;
+
+  const can = (p: string) => gameserverStore.can(p);
 
   let gameserver = $state<Gameserver | null>(null);
   let game = $state<Game | null>(null);
   let loading = $state(true);
   let saving = $state(false);
 
-  // Form state — bound to GameserverForm
+  // Form state
   let serverName = $state('');
   let env = $state<Record<string, string>>({});
   let memoryLimitMB = $state(2048);
@@ -37,6 +38,13 @@
   let reinstalling = $state(false);
   let deleting = $state(false);
 
+  // Can this user edit anything?
+  const canEditAnything = $derived(
+    can('gameserver.configure.name') || can('gameserver.configure.env') ||
+    can('gameserver.configure.resources') || can('gameserver.configure.ports') ||
+    can('gameserver.configure.auto-restart')
+  );
+
   onMount(async () => {
     try {
       gameserver = await api.gameservers.get(gsId);
@@ -46,23 +54,18 @@
       cpuLimit = gameserver.cpu_limit;
       cpuEnforced = gameserver.cpu_enforced;
       backupLimit = gameserver.backup_limit || 0;
-      autoRestart = gameserver.auto_restart;
+      autoRestart = gameserver.auto_restart ?? false;
       portMode = gameserver.port_mode || 'auto';
 
       const gsEnv = typeof gameserver.env === 'string' ? JSON.parse(gameserver.env) : gameserver.env;
-      if (gsEnv && typeof gsEnv === 'object') {
-        env = { ...gsEnv };
-      }
+      if (gsEnv && typeof gsEnv === 'object') env = { ...gsEnv };
 
-      // Parse existing ports for manual mode
       try {
         const ports = typeof gameserver.ports === 'string' ? JSON.parse(gameserver.ports) : gameserver.ports;
         if (ports && ports.length > 0) {
           manualPorts = ports.map((p: any) => ({
-            name: p.name || '',
-            host_port: p.host_port || p.container_port,
-            container_port: p.container_port,
-            protocol: p.protocol || 'tcp',
+            name: p.name || '', host_port: p.host_port || p.container_port,
+            container_port: p.container_port, protocol: p.protocol || 'tcp',
           }));
         }
       } catch (e) { console.warn('GameserverSettings: failed to parse ports', e); }
@@ -71,9 +74,8 @@
         game = await api.games.get(gameserver.game_id);
         for (const e of game.default_env) {
           if (e.dynamic_options) {
-            try {
-              dynamicOptions[e.key] = await api.games.options(game.id, e.key);
-            } catch (e) { console.warn('GameserverSettings: failed to load dynamic options', e); }
+            try { dynamicOptions[e.key] = await api.games.options(game.id, e.key); }
+            catch (e) { console.warn('GameserverSettings: failed to load dynamic options', e); }
           }
         }
       } catch (e) { console.warn('GameserverSettings: game definition not found', e); }
@@ -87,19 +89,20 @@
   async function saveAll() {
     saving = true;
     try {
-      await api.gameservers.update(gsId, {
-        name: serverName,
-        env,
-        memory_limit_mb: memoryLimitMB,
-        storage_limit_mb: storageLimitMB,
-        cpu_limit: cpuLimit,
-        cpu_enforced: cpuEnforced,
-        backup_limit: backupLimit,
-        auto_restart: autoRestart,
-      });
-      if (gameserver) {
-        gameserver = { ...gameserver, name: serverName, memory_limit_mb: memoryLimitMB, storage_limit_mb: storageLimitMB, cpu_limit: cpuLimit, cpu_enforced: cpuEnforced, backup_limit: backupLimit, auto_restart: autoRestart };
+      const update: Record<string, any> = {};
+      if (can('gameserver.configure.name')) update.name = serverName;
+      if (can('gameserver.configure.env')) update.env = env;
+      if (can('gameserver.configure.resources')) {
+        update.memory_limit_mb = memoryLimitMB;
+        update.storage_limit_mb = storageLimitMB;
+        update.cpu_limit = cpuLimit;
+        update.cpu_enforced = cpuEnforced;
+        update.backup_limit = backupLimit;
       }
+      if (can('gameserver.configure.auto-restart')) update.auto_restart = autoRestart;
+
+      await api.gameservers.update(gsId, update);
+      gameserver = await api.gameservers.get(gsId);
       toast('Settings saved', 'success');
     } catch (e: any) {
       toast(`Failed to save: ${e.message}`, 'error');
@@ -155,7 +158,6 @@
       await api.gameservers.delete(gsId);
       toast('Gameserver deleted', 'info');
       if (embedded) {
-        // In embedded mode, redirect to hosting dashboard
         window.location.href = window.location.origin;
       } else {
         navigate('/');
@@ -172,86 +174,161 @@
   <p style="color:var(--text-tertiary); text-align:center; padding:40px;">Loading...</p>
 {:else if gameserver && game}
   <div class="settings-panel">
-    <GameserverForm
-      {game}
-      bind:serverName={serverName}
-      bind:memoryMb={memoryLimitMB}
-      bind:storageLimitMb={storageLimitMB}
-      bind:cpuLimit={cpuLimit}
-      bind:cpuEnforced={cpuEnforced}
-      bind:backupLimit={backupLimit}
-      bind:portMode={portMode}
-      bind:manualPorts={manualPorts}
-      bind:autoRestart={autoRestart}
-      bind:envValues={env}
-      {dynamicOptions}
-    />
 
-    <!-- Save -->
-    <div class="save-row">
-      <button class="btn-solid" onclick={saveAll} disabled={saving} style="padding:9px 24px; font-size:0.86rem;">
-        {saving ? 'Saving...' : 'Save Changes'}
-      </button>
-    </div>
+    {#if can('gameserver.configure.name')}
+      <div class="s-section">
+        <div class="s-title">Server Name</div>
+        <input class="input" type="text" bind:value={serverName} placeholder="My Server">
+      </div>
+    {/if}
 
-    <!-- SFTP -->
-    <div class="s-section">
-      <div class="s-title">SFTP</div>
-      <div class="sftp-row">
-        <div style="flex:1;">
-          <label class="label">Username</label>
-          <div class="s-mono-value">{gameserver.sftp_username}</div>
+    {#if can('gameserver.configure.env') && game}
+      <div class="s-section">
+        <div class="s-title">Game Configuration</div>
+        <EnvEditor envDefs={game.default_env} bind:values={env} {dynamicOptions} gridClass="form-grid" />
+      </div>
+    {/if}
+
+    {#if can('gameserver.configure.resources') && game}
+      <div class="s-section">
+        <div class="s-title">Resources</div>
+        <ResourceSlider label="Memory" bind:value={memoryLimitMB} min={0} max={16384} step={256} display={(v) => v === 0 ? 'Unlimited' : v < 1024 ? `${v} MB` : `${(v/1024).toFixed(v%1024===0?0:1)} GB`} />
+        <div class="form-grid" style="margin-top: 14px;">
+          <div class="form-row">
+            <label class="label">CPU Limit</label>
+            <div class="input-with-suffix">
+              <input class="input input-mono" type="number" min="0" step="0.5" placeholder="Unlimited" value={cpuLimit || ''} oninput={(e) => cpuLimit = parseFloat((e.target as HTMLInputElement).value) || 0}>
+              <span class="input-suffix">cores</span>
+            </div>
+          </div>
+          <div class="form-row">
+            <label class="label">Enforce CPU</label>
+            <div class="toggle-row">
+              <button class="toggle" class:on={cpuEnforced} onclick={() => cpuEnforced = !cpuEnforced}></button>
+              <span class="toggle-label">{cpuEnforced ? 'Hard limit' : 'Soft limit'}</span>
+            </div>
+          </div>
         </div>
-        <button class="btn-accent" onclick={regenerateSftpPassword} disabled={regenerating} style="padding:8px 14px; font-size:0.8rem; align-self:flex-end;">
-          {regenerating ? 'Regenerating...' : 'Regenerate Password'}
+        <ResourceSlider label="Storage" bind:value={storageLimitMB} min={0} max={1024000} step={10240} display={(v) => v === 0 ? 'Unlimited' : v >= 1024 ? `${Math.round(v/1024)} GB` : `${v} MB`} />
+        <div class="form-row" style="margin-top: 14px;">
+          <label class="label">Backup Limit</label>
+          <div class="input-with-suffix">
+            <input class="input input-mono" type="number" min="0" placeholder="Global default" value={backupLimit || ''} oninput={(e) => backupLimit = parseInt((e.target as HTMLInputElement).value) || 0}>
+            <span class="input-suffix">max</span>
+          </div>
+        </div>
+      </div>
+    {/if}
+
+    {#if can('gameserver.configure.ports')}
+      <div class="s-section">
+        <div class="s-title">Ports</div>
+        <div class="toggle-row" style="margin-bottom: 14px;">
+          <button class="toggle" class:on={portMode === 'manual'} onclick={() => portMode = portMode === 'auto' ? 'manual' : 'auto'}></button>
+          <span class="toggle-label">{portMode === 'auto' ? 'Auto (allocated from port range)' : 'Manual'}</span>
+        </div>
+        {#if portMode === 'manual'}
+          {#each manualPorts as port, i}
+            <div class="port-row">
+              <span class="port-name">{port.name}</span>
+              <div class="port-field">
+                <label class="port-label">Host</label>
+                <input class="input input-mono" type="number" style="width:100px;" bind:value={manualPorts[i].host_port}>
+              </div>
+              <div class="port-field">
+                <label class="port-label">Container</label>
+                <input class="input input-mono" type="number" style="width:100px;" bind:value={manualPorts[i].container_port}>
+              </div>
+              <span class="port-proto">{port.protocol}</span>
+            </div>
+          {/each}
+        {/if}
+      </div>
+    {/if}
+
+    {#if can('gameserver.configure.auto-restart')}
+      <div class="s-section">
+        <div class="s-title">Behavior</div>
+        <div class="toggle-row">
+          <button class="toggle" class:on={autoRestart} onclick={() => autoRestart = !autoRestart}></button>
+          <span class="toggle-label">Auto-restart on crash</span>
+        </div>
+      </div>
+    {/if}
+
+    {#if canEditAnything}
+      <div class="save-row">
+        <button class="btn-solid" onclick={saveAll} disabled={saving} style="padding:9px 24px; font-size:0.86rem;">
+          {saving ? 'Saving...' : 'Save Changes'}
         </button>
       </div>
-      {#if sftpPassword}
-        <div class="sftp-pass">
-          <label class="label">New Password (copy now — shown only once)</label>
-          <div class="s-mono-value" style="color:var(--accent);">{sftpPassword}</div>
-        </div>
-      {:else}
-        <div class="sftp-warn">Current SFTP password will stop working immediately.</div>
-      {/if}
-    </div>
+    {/if}
 
-    <!-- Danger Zone -->
-    <div class="s-section">
-      <div class="danger-zone">
-        <div class="s-title">Danger Zone</div>
-        <div class="danger-item">
-          <div class="danger-text">
-            <div class="danger-label">Update Game</div>
-            <div class="danger-desc">Re-runs the install script to update to the latest game version. The server will restart.</div>
+    {#if can('gameserver.regenerate-sftp')}
+      <div class="s-section">
+        <div class="s-title">SFTP</div>
+        <div class="sftp-row">
+          <div style="flex:1;">
+            <label class="label">Username</label>
+            <div class="s-mono-value">{gameserver.sftp_username}</div>
           </div>
-          <button class="btn-action restart" onclick={updateGame} disabled={updating} style="flex-shrink:0;">
-            {updating ? 'Updating...' : 'Update'}
+          <button class="btn-accent" onclick={regenerateSftpPassword} disabled={regenerating} style="padding:8px 14px; font-size:0.8rem; align-self:flex-end;">
+            {regenerating ? 'Regenerating...' : 'Regenerate Password'}
           </button>
         </div>
-        <div class="danger-item">
-          <div class="danger-text">
-            <div class="danger-label">Reinstall Server</div>
-            <div class="danger-desc">Wipes all data and reinstalls from scratch. Backups are preserved.</div>
+        {#if sftpPassword}
+          <div class="sftp-pass">
+            <label class="label">New Password (copy now — shown only once)</label>
+            <div class="s-mono-value" style="color:var(--accent);">{sftpPassword}</div>
           </div>
-          <button class="btn-action stop" onclick={reinstall} disabled={reinstalling} style="flex-shrink:0;">
-            {reinstalling ? 'Reinstalling...' : 'Reinstall'}
-          </button>
-        </div>
-        <div class="danger-item">
-          <div class="danger-text">
-            <div class="danger-label">Delete Gameserver</div>
-            <div class="danger-desc">Permanently deletes this gameserver and all its data. This cannot be undone.</div>
-          </div>
-          <button class="btn-action stop" onclick={deleteServer} disabled={deleting} style="flex-shrink:0;">
-            {deleting ? 'Deleting...' : 'Delete'}
-          </button>
+        {:else}
+          <div class="sftp-warn">Current SFTP password will stop working immediately.</div>
+        {/if}
+      </div>
+    {/if}
+
+    {#if can('gameserver.update-game') || can('gameserver.reinstall') || can('gameserver.delete')}
+      <div class="s-section">
+        <div class="danger-zone">
+          <div class="s-title">Danger Zone</div>
+          {#if can('gameserver.update-game')}
+            <div class="danger-item">
+              <div class="danger-text">
+                <div class="danger-label">Update Game</div>
+                <div class="danger-desc">Re-runs the install script to update to the latest game version. The server will restart.</div>
+              </div>
+              <button class="btn-action restart" onclick={updateGame} disabled={updating} style="flex-shrink:0;">
+                {updating ? 'Updating...' : 'Update'}
+              </button>
+            </div>
+          {/if}
+          {#if can('gameserver.reinstall')}
+            <div class="danger-item">
+              <div class="danger-text">
+                <div class="danger-label">Reinstall Server</div>
+                <div class="danger-desc">Wipes all data and reinstalls from scratch. Backups are preserved.</div>
+              </div>
+              <button class="btn-action stop" onclick={reinstall} disabled={reinstalling} style="flex-shrink:0;">
+                {reinstalling ? 'Reinstalling...' : 'Reinstall'}
+              </button>
+            </div>
+          {/if}
+          {#if can('gameserver.delete')}
+            <div class="danger-item">
+              <div class="danger-text">
+                <div class="danger-label">Delete Gameserver</div>
+                <div class="danger-desc">Permanently deletes this gameserver and all its data. This cannot be undone.</div>
+              </div>
+              <button class="btn-action stop" onclick={deleteServer} disabled={deleting} style="flex-shrink:0;">
+                {deleting ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          {/if}
         </div>
       </div>
-    </div>
+    {/if}
   </div>
 {:else if gameserver}
-  <!-- Game definition not found — show minimal settings -->
   <div class="settings-panel">
     <p style="color:var(--text-tertiary);">Game definition not found for "{gameserver.game_id}". Settings limited.</p>
   </div>
@@ -275,6 +352,35 @@
     content: ''; position: absolute; inset: 0;
     background: radial-gradient(ellipse 80% 40% at 50% 0%, rgba(232,114,42,0.015) 0%, transparent 50%);
     pointer-events: none;
+  }
+
+  .input {
+    width: 100%; padding: 9px 14px;
+    background: var(--bg-inset); border: 1px solid var(--border-dim);
+    border-radius: var(--radius-sm); color: var(--text-primary);
+    font-family: var(--font-body); font-size: 0.85rem; outline: none;
+  }
+  .input:focus { border-color: var(--accent-border); }
+  .input-mono { font-family: var(--font-mono); }
+
+  .form-row { margin-bottom: 18px; position: relative; z-index: 1; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+  .input-with-suffix { position: relative; }
+  .input-with-suffix input { padding-right: 50px; }
+  .input-suffix { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: 0.72rem; font-family: var(--font-mono); color: var(--text-tertiary); pointer-events: none; }
+
+  .port-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; }
+  .port-row + .port-row { border-top: 1px solid var(--border-dim); }
+  .port-name { font-size: 0.82rem; font-weight: 500; min-width: 60px; }
+  .port-field { display: flex; flex-direction: column; gap: 3px; }
+  .port-label { font-size: 0.65rem; font-family: var(--font-mono); color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.08em; }
+  .port-proto { font-size: 0.72rem; font-family: var(--font-mono); color: var(--text-tertiary); text-transform: uppercase; }
+
+  .toggle-row {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 0.85rem; color: var(--text-secondary);
+    cursor: pointer; position: relative; z-index: 1;
   }
 
   .save-row {
