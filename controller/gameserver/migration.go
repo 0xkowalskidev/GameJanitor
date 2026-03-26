@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/warsmite/gamejanitor/controller"
 	"github.com/warsmite/gamejanitor/controller/settings"
+	"github.com/warsmite/gamejanitor/model"
 )
 
 // MigrateGameserver moves a gameserver from its current node to a different node.
@@ -35,6 +36,24 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 	targetWorker, err := s.dispatcher.SelectWorkerByNodeID(targetNodeID)
 	if err != nil {
 		return controller.ErrUnavailablef("target worker unavailable: %v", err)
+	}
+
+	opID, opErr := s.trackOp(ctx, gameserverID, currentNodeID, model.OpMigrate, map[string]string{
+		"source_node": currentNodeID,
+		"target_node": targetNodeID,
+	})
+	if opErr != nil {
+		return opErr
+	}
+	if opID != "" {
+		ctx = WithOperationID(ctx, opID)
+		defer func() {
+			if err != nil {
+				s.failOp(opID, err)
+			} else {
+				s.completeOp(opID)
+			}
+		}()
 	}
 
 	// Validate target node labels

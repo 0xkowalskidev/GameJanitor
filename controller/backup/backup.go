@@ -49,6 +49,13 @@ func backupOperationFailedReason(prefix string, err error) string {
 	}
 }
 
+// OperationTracker records the lifecycle of long-running operations.
+type OperationTracker interface {
+	Start(gameserverID, workerID, opType string, metadata any) (string, error)
+	Complete(opID string)
+	Fail(opID string, reason error)
+}
+
 type BackupService struct {
 	store         Store
 	dispatcher    *orchestrator.Dispatcher
@@ -57,7 +64,36 @@ type BackupService struct {
 	storage       Storage
 	settingsSvc   *settings.SettingsService
 	broadcaster   *controller.EventBus
+	ops           OperationTracker
 	log           *slog.Logger
+}
+
+func (s *BackupService) SetOperationTracker(ops OperationTracker) {
+	s.ops = ops
+}
+
+func (s *BackupService) startOp(gsID, workerID, opType string, metadata any) string {
+	if s.ops == nil {
+		return ""
+	}
+	opID, err := s.ops.Start(gsID, workerID, opType, metadata)
+	if err != nil {
+		s.log.Warn("failed to start operation tracking", "type", opType, "error", err)
+		return ""
+	}
+	return opID
+}
+
+func (s *BackupService) completeOp(opID string) {
+	if s.ops != nil && opID != "" {
+		s.ops.Complete(opID)
+	}
+}
+
+func (s *BackupService) failOp(opID string, reason error) {
+	if s.ops != nil && opID != "" {
+		s.ops.Fail(opID, reason)
+	}
 }
 
 func NewBackupService(store Store, dispatcher *orchestrator.Dispatcher, gameserverSvc GameserverLifecycle, gameStore *games.GameStore, storage Storage, settingsSvc *settings.SettingsService, broadcaster *controller.EventBus, log *slog.Logger) *BackupService {
@@ -154,9 +190,16 @@ func (s *BackupService) runBackup(gameserverID, backupID, name string, gs *model
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
+	workerID := ""
+	if gs.NodeID != nil {
+		workerID = *gs.NodeID
+	}
+	opID := s.startOp(gameserverID, workerID, model.OpBackup, map[string]string{"backup_id": backupID})
+
 	game := s.gameStore.GetGame(gs.GameID)
 	w := s.dispatcher.WorkerFor(gameserverID)
 	if w == nil {
+		s.failOp(opID, fmt.Errorf("worker unavailable"))
 		s.failBackup(ctx, gameserverID, backupID, name, actor, "worker unavailable for backup")
 		return
 	}
@@ -175,6 +218,7 @@ func (s *BackupService) runBackup(gameserverID, backupID, name string, gs *model
 	// Get tar stream from volume
 	tarReader, err := w.BackupVolume(ctx, gs.VolumeName)
 	if err != nil {
+		s.failOp(opID, err)
 		s.failBackup(ctx, gameserverID, backupID, name, actor, fmt.Sprintf("backing up volume: %v", err))
 		return
 	}
@@ -201,11 +245,13 @@ func (s *BackupService) runBackup(gameserverID, backupID, name string, gs *model
 	}()
 
 	if err := s.storage.Save(ctx, gameserverID, backupID, pr); err != nil {
+		s.failOp(opID, err)
 		s.failBackup(ctx, gameserverID, backupID, name, actor, fmt.Sprintf("saving to store: %v", err))
 		return
 	}
 	if compressErr != nil {
 		s.storage.Delete(ctx, gameserverID, backupID)
+		s.failOp(opID, compressErr)
 		s.failBackup(ctx, gameserverID, backupID, name, actor, compressErr.Error())
 		return
 	}
@@ -221,6 +267,7 @@ func (s *BackupService) runBackup(gameserverID, backupID, name string, gs *model
 		return
 	}
 
+	s.completeOp(opID)
 	s.log.Info("backup completed", "gameserver_id", gameserverID, "backup_id", backupID, "size_bytes", sizeBytes)
 
 	completedBackup, _ := s.store.GetBackup(backupID)
@@ -293,12 +340,26 @@ func (s *BackupService) runRestore(gameserverID, backupID, backupName, volumeNam
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
-	// Stop gameserver if running
 	gs, err := s.store.GetGameserver(gameserverID)
 	if err != nil || gs == nil {
 		s.failRestore(gameserverID, backupID, backupName, actor, "gameserver not found")
 		return
 	}
+
+	workerID := ""
+	if gs.NodeID != nil {
+		workerID = *gs.NodeID
+	}
+	opID := s.startOp(gameserverID, workerID, model.OpRestore, map[string]string{"backup_id": backupID})
+	opSucceeded := false
+	defer func() {
+		if opSucceeded {
+			s.completeOp(opID)
+		} else {
+			s.failOp(opID, fmt.Errorf("restore failed"))
+		}
+	}()
+
 	if gs.Status != controller.StatusStopped {
 		if err := s.gameserverSvc.Stop(ctx, gameserverID); err != nil {
 			s.failRestore(gameserverID, backupID, backupName, actor, fmt.Sprintf("stopping gameserver: %v", err))
@@ -335,6 +396,7 @@ func (s *BackupService) runRestore(gameserverID, backupID, backupName, volumeNam
 	gzReader.Close()
 	reader.Close()
 
+	opSucceeded = true
 	s.log.Info("backup restored", "backup_id", backupID, "gameserver_id", gameserverID)
 
 	restoredBackup, _ := s.store.GetBackup(backupID)

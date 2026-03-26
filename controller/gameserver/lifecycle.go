@@ -37,7 +37,7 @@ func operationFailedReason(prefix string, err error) string {
 	}
 }
 
-func (s *GameserverService) Start(ctx context.Context, id string) error {
+func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 	gs, err := s.store.GetGameserver(id)
 	if err != nil {
 		return err
@@ -69,6 +69,25 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 	w := s.dispatcher.WorkerFor(id)
 	if w == nil {
 		return controller.ErrUnavailablef("worker unavailable for gameserver %s", id)
+	}
+
+	workerID := ""
+	if gs.NodeID != nil {
+		workerID = *gs.NodeID
+	}
+	opID, opErr := s.trackOp(ctx, id, workerID, model.OpStart, nil)
+	if opErr != nil {
+		return opErr
+	}
+	if opID != "" {
+		ctx = WithOperationID(ctx, opID)
+		defer func() {
+			if err != nil {
+				s.failOp(opID, err)
+			} else {
+				s.completeOp(opID)
+			}
+		}()
 	}
 
 	// Pull image
@@ -170,7 +189,7 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 	return nil
 }
 
-func (s *GameserverService) Stop(ctx context.Context, id string) error {
+func (s *GameserverService) Stop(ctx context.Context, id string) (err error) {
 	gs, err := s.store.GetGameserver(id)
 	if err != nil {
 		return err
@@ -198,6 +217,22 @@ func (s *GameserverService) Stop(ctx context.Context, id string) error {
 	})
 
 	s.broadcaster.Publish(controller.ContainerStoppingEvent{GameserverID: id, Timestamp: time.Now()})
+
+	workerID := ""
+	if gs.NodeID != nil {
+		workerID = *gs.NodeID
+	}
+	opID, _ := s.trackOp(ctx, id, workerID, model.OpStop, nil)
+	if opID != "" {
+		ctx = WithOperationID(ctx, opID)
+		defer func() {
+			if err != nil {
+				s.failOp(opID, err)
+			} else {
+				s.completeOp(opID)
+			}
+		}()
+	}
 
 	if gs.ContainerID != nil {
 		w := s.dispatcher.WorkerFor(id)
@@ -231,13 +266,32 @@ func (s *GameserverService) Stop(ctx context.Context, id string) error {
 	return nil
 }
 
-func (s *GameserverService) Restart(ctx context.Context, id string) error {
+func (s *GameserverService) Restart(ctx context.Context, id string) (err error) {
 	gs, err := s.store.GetGameserver(id)
 	if err != nil {
 		return err
 	}
 	if gs == nil {
 		return controller.ErrNotFoundf("gameserver %s not found", id)
+	}
+
+	workerID := ""
+	if gs.NodeID != nil {
+		workerID = *gs.NodeID
+	}
+	opID, opErr := s.trackOp(ctx, id, workerID, model.OpRestart, nil)
+	if opErr != nil {
+		return opErr
+	}
+	if opID != "" {
+		ctx = WithOperationID(ctx, opID)
+		defer func() {
+			if err != nil {
+				s.failOp(opID, err)
+			} else {
+				s.completeOp(opID)
+			}
+		}()
 	}
 
 	s.store.PopulateNode(gs)
@@ -274,6 +328,18 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) (er
 
 	s.log.Info("updating game for gameserver", "id", id, "game", game.ID)
 
+	workerID := ""
+	if gs.NodeID != nil {
+		workerID = *gs.NodeID
+	}
+	opID, opErr := s.trackOp(ctx, id, workerID, model.OpUpdate, nil)
+	if opErr != nil {
+		return opErr
+	}
+	if opID != "" {
+		ctx = WithOperationID(ctx, opID)
+	}
+
 	s.store.PopulateNode(gs)
 	s.broadcaster.Publish(controller.GameserverActionEvent{
 		Type:         controller.EventGameserverUpdateGame,
@@ -286,7 +352,10 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) (er
 	s.broadcaster.Publish(controller.ImagePullingEvent{GameserverID: id, Timestamp: time.Now()})
 	defer func() {
 		if err != nil {
+			s.failOp(opID, err)
 			s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: id, Reason: operationFailedReason("Game update failed", err), Timestamp: time.Now()})
+		} else {
+			s.completeOp(opID)
 		}
 	}()
 
@@ -365,6 +434,18 @@ func (s *GameserverService) Reinstall(ctx context.Context, id string) (err error
 
 	s.log.Info("reinstalling gameserver (full wipe)", "id", id)
 
+	workerID := ""
+	if gs.NodeID != nil {
+		workerID = *gs.NodeID
+	}
+	opID, opErr := s.trackOp(ctx, id, workerID, model.OpReinstall, nil)
+	if opErr != nil {
+		return opErr
+	}
+	if opID != "" {
+		ctx = WithOperationID(ctx, opID)
+	}
+
 	s.store.PopulateNode(gs)
 	s.broadcaster.Publish(controller.GameserverActionEvent{
 		Type:         controller.EventGameserverReinstall,
@@ -377,7 +458,10 @@ func (s *GameserverService) Reinstall(ctx context.Context, id string) (err error
 	s.broadcaster.Publish(controller.ImagePullingEvent{GameserverID: id, Timestamp: time.Now()})
 	defer func() {
 		if err != nil {
+			s.failOp(opID, err)
 			s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: id, Reason: operationFailedReason("Reinstall failed", err), Timestamp: time.Now()})
+		} else {
+			s.completeOp(opID)
 		}
 	}()
 

@@ -70,12 +70,42 @@ type GameserverService struct {
 	dataDir      string
 	placementMu  sync.Mutex // serializes port allocation + gameserver creation to prevent races
 	portProbe func(int) bool // nil uses default net.Listen probe
+	ops       *OperationTracker
 }
 
 // SetPortProbe overrides the host port availability check. Used in tests
 // where net.Listen probes would interfere with port allocation.
 func (s *GameserverService) SetPortProbe(fn func(int) bool) {
 	s.portProbe = fn
+}
+
+func (s *GameserverService) SetOperationTracker(ops *OperationTracker) {
+	s.ops = ops
+}
+
+// trackOp starts an operation if the tracker is set. Returns "" if tracker is nil (tests)
+// or if this call is already part of a larger operation (e.g. Stop/Start within Restart).
+func (s *GameserverService) trackOp(ctx context.Context, gsID, workerID, opType string, metadata any) (string, error) {
+	if s.ops == nil {
+		return "", nil
+	}
+	// Skip if we're already inside a parent operation (e.g. Restart → Stop → Start)
+	if OperationIDFromContext(ctx) != "" {
+		return "", nil
+	}
+	return s.ops.Start(gsID, workerID, opType, metadata)
+}
+
+func (s *GameserverService) completeOp(opID string) {
+	if s.ops != nil {
+		s.ops.Complete(opID)
+	}
+}
+
+func (s *GameserverService) failOp(opID string, err error) {
+	if s.ops != nil {
+		s.ops.Fail(opID, err)
+	}
 }
 
 func NewGameserverService(store Store, dispatcher *orchestrator.Dispatcher, broadcaster *controller.EventBus, settingsSvc *settings.SettingsService, gameStore *games.GameStore, dataDir string, log *slog.Logger) *GameserverService {
