@@ -69,10 +69,13 @@ func NewTestServices(t *testing.T) *ServiceBundle {
 	gameserverSvc.SetReadyWatcher(readyWatcher)
 	gameserverSvc.SetBackupStore(backupStorage)
 	gameserverSvc.SetPortProbe(func(int) bool { return true }) // skip host probe in tests
+	opTracker := gameserver.NewOperationTracker(s, log)
+	gameserverSvc.SetOperationTracker(opTracker)
 
 	consoleSvc := gameserver.NewConsoleService(s, dispatcher, gameStore, log)
 	fileSvc := gameserver.NewFileService(s, dispatcher, log)
 	backupSvc := backup.NewBackupService(s, dispatcher, gameserverSvc, gameStore, backupStorage, settingsSvc, broadcaster, log)
+	backupSvc.SetOperationTracker(opTracker)
 	scheduler := schedule.NewScheduler(s, backupSvc, gameserverSvc, consoleSvc, broadcaster, log)
 	scheduleSvc := schedule.NewScheduleService(s, scheduler, broadcaster, log)
 	authSvc := auth.NewAuthService(s, log)
