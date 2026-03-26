@@ -11,7 +11,6 @@ import (
 	"crypto/x509"
 	"database/sql"
 	"fmt"
-	"io"
 	"io/fs"
 	"log/slog"
 	"net"
@@ -246,8 +245,18 @@ func runServe(cmd *cobra.Command, args []string) error {
 	}
 	defer logFile.Close()
 
-	logWriter := io.MultiWriter(os.Stderr, logFile)
-	logger := slog.New(slog.NewJSONHandler(logWriter, &slog.HandlerOptions{Level: level}))
+	// Log file always gets JSON (for log aggregation)
+	fileHandler := slog.NewJSONHandler(logFile, &slog.HandlerOptions{Level: level})
+
+	// Terminal gets human-readable text; pipes/systemd get JSON
+	var stderrHandler slog.Handler
+	if isTTY() {
+		stderrHandler = slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level})
+	} else {
+		stderrHandler = slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: level})
+	}
+
+	logger := slog.New(multiHandler{stderrHandler, fileHandler})
 	slog.SetDefault(logger)
 
 	// Worker-only mode: start gRPC agent and exit (no DB, no web UI)
@@ -531,6 +540,45 @@ func isTTY() bool {
 		return false
 	}
 	return fi.Mode()&os.ModeCharDevice != 0
+}
+
+// multiHandler fans out log records to multiple handlers.
+type multiHandler []slog.Handler
+
+func (m multiHandler) Enabled(_ context.Context, level slog.Level) bool {
+	for _, h := range m {
+		if h.Enabled(context.Background(), level) {
+			return true
+		}
+	}
+	return false
+}
+
+func (m multiHandler) Handle(ctx context.Context, r slog.Record) error {
+	for _, h := range m {
+		if h.Enabled(ctx, r.Level) {
+			if err := h.Handle(ctx, r); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (m multiHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	handlers := make(multiHandler, len(m))
+	for i, h := range m {
+		handlers[i] = h.WithAttrs(attrs)
+	}
+	return handlers
+}
+
+func (m multiHandler) WithGroup(name string) slog.Handler {
+	handlers := make(multiHandler, len(m))
+	for i, h := range m {
+		handlers[i] = h.WithGroup(name)
+	}
+	return handlers
 }
 
 func openBrowser(url string) {
