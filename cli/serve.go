@@ -162,8 +162,13 @@ func initServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 		return nil, err
 	}
 
+	// Operation tracking for long-running worker dispatches
+	opTracker := gameserver.NewOperationTracker(db, logger)
+	gameserverSvc.SetOperationTracker(opTracker)
+
 	gameserverSvc.SetBackupStore(backupStorage)
 	backupSvc := backup.NewBackupService(db, dispatcher, gameserverSvc, gameStore, backupStorage, settingsSvc, broadcaster, logger)
+	backupSvc.SetOperationTracker(opTracker)
 	scheduler := schedule.NewScheduler(db, backupSvc, gameserverSvc, consoleSvc, broadcaster, logger)
 	scheduleSvc := schedule.NewScheduleService(db, scheduler, broadcaster, logger)
 	authSvc := auth.NewAuthService(db, logger)
@@ -433,6 +438,13 @@ func runServe(cmd *cobra.Command, args []string) error {
 	// are marked unreachable and recovered when the worker reconnects.
 	if err := svcs.statusMgr.RecoverOnStartup(ctx); err != nil {
 		logger.Error("failed to recover gameserver status on startup", "error", err)
+	}
+
+	// Mark any operations still "running" from a previous crash as abandoned.
+	if abandoned, err := db.AbandonRunningOperations(); err != nil {
+		logger.Error("failed to abandon stale operations", "error", err)
+	} else if abandoned > 0 {
+		logger.Warn("abandoned stale operations from previous run", "count", abandoned)
 	}
 
 	router := api.NewRouter(api.RouterOptions{
