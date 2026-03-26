@@ -17,7 +17,7 @@ func newGameserver(id, name, gameID string, nodeID *string) *model.Gameserver {
 		ID:         id,
 		Name:       name,
 		GameID:     gameID,
-		Ports:      json.RawMessage(`[]`),
+		Ports:      model.Ports{},
 		Env:        json.RawMessage(`{}`),
 		VolumeName: "vol-" + id,
 		Status:     "stopped",
@@ -177,17 +177,19 @@ func TestGameserver_JSONColumns(t *testing.T) {
 	t.Parallel()
 	db := store.New(testutil.NewTestDB(t))
 
-	ports := `[{"name":"game","host_port":27015,"container_port":27015,"protocol":"udp"}]`
+	expectedPorts := model.Ports{
+		{Name: "game", HostPort: 27015, ContainerPort: 27015, Protocol: "udp"},
+	}
 	env := `{"SERVER_NAME":"Test","MAX_PLAYERS":"16"}`
 	gs := newGameserver("gs-1", "JSON Test", "test-game", nil)
-	gs.Ports = json.RawMessage(ports)
+	gs.Ports = expectedPorts
 	gs.Env = json.RawMessage(env)
 
 	require.NoError(t, db.CreateGameserver(gs))
 
 	fetched, err := db.GetGameserver("gs-1")
 	require.NoError(t, err)
-	assert.JSONEq(t, ports, string(fetched.Ports))
+	assert.Equal(t, expectedPorts, fetched.Ports)
 	assert.JSONEq(t, env, string(fetched.Env))
 }
 

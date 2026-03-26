@@ -46,8 +46,8 @@ func TestScenario_Newbie_CreateAndStartGameserver(t *testing.T) {
 	require.NotNil(t, gs.NodeID)
 
 	// Should have ports assigned (even without setting PortMode explicitly)
-	assert.NotEqual(t, "null", string(gs.Ports))
-	assert.NotEqual(t, "[]", string(gs.Ports))
+	assert.NotNil(t, gs.Ports)
+	assert.NotEmpty(t, gs.Ports)
 
 	// Start should work
 	require.NoError(t, svc.GameserverSvc.Start(ctx, gs.ID))

@@ -146,7 +146,7 @@ func TestUpdateMerge_PortsNilNotOverwritten(t *testing.T) {
 	require.NoError(t, err)
 
 	original, _ := svc.GameserverSvc.GetGameserver(gs.ID)
-	originalPorts := string(original.Ports)
+	originalPorts := original.Ports
 
 	// Update name only — ports should be untouched
 	update := &model.Gameserver{ID: gs.ID, Name: "Renamed"}
@@ -154,7 +154,7 @@ func TestUpdateMerge_PortsNilNotOverwritten(t *testing.T) {
 	require.NoError(t, err)
 
 	after, _ := svc.GameserverSvc.GetGameserver(gs.ID)
-	assert.JSONEq(t, originalPorts, string(after.Ports), "ports should not change on name-only update")
+	assert.Equal(t, originalPorts, after.Ports, "ports should not change on name-only update")
 }
 
 func TestUpdateMerge_AutoMigrationTriggered(t *testing.T) {

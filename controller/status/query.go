@@ -2,7 +2,6 @@ package status
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
 	"sync"
 	"time"
@@ -210,25 +209,18 @@ func (s *QueryService) gameSupportsQuery(game *games.Game) bool {
 }
 
 func (s *QueryService) getHostPort(gs *model.Gameserver) uint16 {
-	var ports []struct {
-		Name     string  `json:"name"`
-		HostPort model.FlexInt `json:"host_port"`
-	}
-	if err := json.Unmarshal(gs.Ports, &ports); err != nil {
-		return 0
-	}
-	for _, p := range ports {
+	for _, p := range gs.Ports {
 		if p.Name == controller.PortNameQuery {
 			return uint16(p.HostPort)
 		}
 	}
-	for _, p := range ports {
+	for _, p := range gs.Ports {
 		if p.Name == controller.PortNameGame {
 			return uint16(p.HostPort)
 		}
 	}
-	if len(ports) > 0 {
-		return uint16(ports[0].HostPort)
+	if len(gs.Ports) > 0 {
+		return uint16(gs.Ports[0].HostPort)
 	}
 	return 0
 }

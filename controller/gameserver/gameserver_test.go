@@ -43,8 +43,8 @@ func TestGameserver_Create_HappyPath(t *testing.T) {
 	assert.Equal(t, "worker-1", *fetched.NodeID)
 
 	// Verify ports were auto-allocated
-	assert.NotEqual(t, "[]", string(fetched.Ports))
-	assert.NotEqual(t, "null", string(fetched.Ports))
+	assert.NotEmpty(t, fetched.Ports)
+	assert.NotNil(t, fetched.Ports)
 }
 
 func TestGameserver_Create_InvalidGameID(t *testing.T) {

@@ -148,7 +148,7 @@ func TestMigration_PortsPreservedInClusterScope(t *testing.T) {
 	}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.NoError(t, err)
-	originalPorts := string(gs.Ports)
+	originalPorts := gs.Ports
 
 	err = svc.GameserverSvc.MigrateGameserver(ctx, gs.ID, "worker-2")
 	require.NoError(t, err)
@@ -156,7 +156,7 @@ func TestMigration_PortsPreservedInClusterScope(t *testing.T) {
 	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
 	require.NoError(t, err)
 
-	assert.Equal(t, originalPorts, string(fetched.Ports), "ports should be preserved in cluster scope")
+	assert.Equal(t, originalPorts, fetched.Ports, "ports should be preserved in cluster scope")
 }
 
 func TestMigration_PortsReallocatedInNodeScope(t *testing.T) {

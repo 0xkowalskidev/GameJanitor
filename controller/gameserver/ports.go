@@ -1,7 +1,6 @@
 package gameserver
 
 import (
-	"encoding/json"
 	"fmt"
 	"sort"
 
@@ -30,11 +29,7 @@ func (s *GameserverService) UsedHostPorts(nodeID string, excludeID string) (map[
 		if gs.ID == excludeID {
 			continue
 		}
-		var ports []portMapping
-		if err := json.Unmarshal(gs.Ports, &ports); err != nil {
-			continue
-		}
-		for _, p := range ports {
+		for _, p := range gs.Ports {
 			if hp := int(p.HostPort); hp != 0 {
 				used[hp] = true
 			}
@@ -136,10 +131,10 @@ func ptrIntOr0(p *int) int {
 }
 
 // AllocatePorts finds a contiguous block of free host ports for the game's port requirements.
-func (s *GameserverService) AllocatePorts(game *games.Game, nodeID string, excludeID string) (json.RawMessage, error) {
+func (s *GameserverService) AllocatePorts(game *games.Game, nodeID string, excludeID string) (model.Ports, error) {
 	gamePorts := game.DefaultPorts
 	if len(gamePorts) == 0 {
-		return json.RawMessage("[]"), nil
+		return model.Ports{}, nil
 	}
 
 	// Find unique port numbers in order
@@ -189,10 +184,10 @@ func (s *GameserverService) AllocatePorts(game *games.Game, nodeID string, exclu
 	}
 
 	// Map game ports to allocated ports
-	result := make([]portMapping, len(gamePorts))
+	result := make(model.Ports, len(gamePorts))
 	for i, p := range gamePorts {
 		allocatedPort := base + portIndex[p.Port]
-		result[i] = portMapping{
+		result[i] = model.PortMapping{
 			Name:          p.Name,
 			HostPort:      model.FlexInt(allocatedPort),
 			ContainerPort: model.FlexInt(allocatedPort),
@@ -202,5 +197,5 @@ func (s *GameserverService) AllocatePorts(game *games.Game, nodeID string, exclu
 
 	s.log.Info("auto-allocated ports", "game", game.ID, "base", base, "block_size", blockSize)
 
-	return json.Marshal(result)
+	return result, nil
 }

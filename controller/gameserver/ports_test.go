@@ -2,7 +2,6 @@ package gameserver_test
 
 import (
 	"github.com/warsmite/gamejanitor/controller/settings"
-	"encoding/json"
 	"sync"
 	"testing"
 
@@ -109,15 +108,12 @@ func TestPortAllocation_ContiguousBlock(t *testing.T) {
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.NoError(t, err)
 
-	// Parse the allocated ports
-	var ports []map[string]any
-	err = json.Unmarshal(gs.Ports, &ports)
-	require.NoError(t, err)
-	assert.Len(t, ports, 2, "test game has 2 ports")
+	// Verify the allocated ports
+	assert.Len(t, gs.Ports, 2, "test game has 2 ports")
 
 	// Verify ports are within the range
-	for _, p := range ports {
-		hostPort := int(p["host_port"].(float64))
+	for _, p := range gs.Ports {
+		hostPort := int(p.HostPort)
 		assert.GreaterOrEqual(t, hostPort, 27000)
 		assert.LessOrEqual(t, hostPort, 27010)
 	}
@@ -226,10 +222,8 @@ func TestPortAllocation_MultipleGameserversFillRange(t *testing.T) {
 		_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 		require.NoError(t, err, "gameserver %d should fit", i)
 
-		var ports []map[string]any
-		require.NoError(t, json.Unmarshal(gs.Ports, &ports))
-		for _, p := range ports {
-			hp := int(p["host_port"].(float64))
+		for _, p := range gs.Ports {
+			hp := int(p.HostPort)
 			assert.False(t, allPorts[hp], "port %d allocated twice", hp)
 			allPorts[hp] = true
 		}
@@ -288,10 +282,8 @@ func TestPortAllocation_ConcurrentCreates(t *testing.T) {
 			continue
 		}
 		successCount++
-		var ports []map[string]any
-		require.NoError(t, json.Unmarshal(gameservers[i].Ports, &ports))
-		for _, p := range ports {
-			hp := int(p["host_port"].(float64))
+		for _, p := range gameservers[i].Ports {
+			hp := int(p.HostPort)
 			assert.False(t, allPorts[hp], "port %d allocated to multiple gameservers", hp)
 			allPorts[hp] = true
 		}

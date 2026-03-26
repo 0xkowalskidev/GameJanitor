@@ -393,13 +393,6 @@ func (s *GameserverService) Reinstall(ctx context.Context, id string) (err error
 	return s.Start(ctx, id)
 }
 
-type portMapping struct {
-	Name          string  `json:"name"`
-	HostPort      model.FlexInt `json:"host_port"`
-	ContainerPort model.FlexInt `json:"container_port"`
-	Protocol      string  `json:"protocol"`
-}
-
 func mergeEnv(game *games.Game, gs *model.Gameserver) ([]string, error) {
 	env := make(map[string]string)
 	systemKeys := make(map[string]bool)
@@ -423,10 +416,7 @@ func mergeEnv(game *games.Game, gs *model.Gameserver) ([]string, error) {
 	}
 
 	// Step 3: Override system fields from port mappings
-	var ports []portMapping
-	if err := json.Unmarshal(gs.Ports, &ports); err != nil {
-		return nil, fmt.Errorf("parsing gameserver ports: %w", err)
-	}
+	ports := gs.Ports
 
 	// Map game definition ports to their allocated host ports
 	// System env vars whose default matches a game port get overridden with the host port
@@ -462,13 +452,8 @@ func mergeEnv(game *games.Game, gs *model.Gameserver) ([]string, error) {
 }
 
 func parseGameserverPorts(gs *model.Gameserver) ([]worker.PortBinding, error) {
-	var ports []portMapping
-	if err := json.Unmarshal(gs.Ports, &ports); err != nil {
-		return nil, fmt.Errorf("parsing gameserver ports: %w", err)
-	}
-
-	bindings := make([]worker.PortBinding, len(ports))
-	for i, p := range ports {
+	bindings := make([]worker.PortBinding, len(gs.Ports))
+	for i, p := range gs.Ports {
 		bindings[i] = worker.PortBinding{
 			HostPort:      int(p.HostPort),
 			ContainerPort: int(p.ContainerPort),

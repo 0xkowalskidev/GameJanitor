@@ -292,21 +292,17 @@ func (s *GameserverService) RegenerateSFTPPassword(ctx context.Context, gameserv
 // applyGameDefaults fills in zero/empty gameserver fields from the game definition.
 func applyGameDefaults(gs *model.Gameserver, game *games.Game) error {
 	// Apply default ports if none provided
-	if len(gs.Ports) == 0 || string(gs.Ports) == "null" || string(gs.Ports) == "[]" {
-		gsPorts := make([]portMapping, len(game.DefaultPorts))
+	if len(gs.Ports) == 0 {
+		gsPorts := make(model.Ports, len(game.DefaultPorts))
 		for i, p := range game.DefaultPorts {
-			gsPorts[i] = portMapping{
+			gsPorts[i] = model.PortMapping{
 				Name:          p.Name,
 				HostPort:      model.FlexInt(p.Port),
 				ContainerPort: model.FlexInt(p.Port),
 				Protocol:      p.Protocol,
 			}
 		}
-		portsJSON, err := json.Marshal(gsPorts)
-		if err != nil {
-			return fmt.Errorf("marshaling default ports: %w", err)
-		}
-		gs.Ports = portsJSON
+		gs.Ports = gsPorts
 	}
 
 	// Merge env: start with game defaults, then overlay user-provided values
