@@ -349,6 +349,21 @@ type Event struct {
 	CreatedAt    time.Time       `json:"created_at"`
 }
 
+// --- Operations ---
+
+// Operation represents a tracked long-running worker dispatch.
+type Operation struct {
+	ID           string          `json:"id"`
+	GameserverID string          `json:"gameserver_id"`
+	WorkerID     string          `json:"worker_id"`
+	Type         string          `json:"type"`
+	Status       string          `json:"status"`
+	Error        string          `json:"error,omitempty"`
+	Metadata     json.RawMessage `json:"metadata"`
+	StartedAt    time.Time       `json:"started_at"`
+	CompletedAt  *time.Time      `json:"completed_at,omitempty"`
+}
+
 // --- Mods ---
 
 // InstalledMod represents a mod installed on a gameserver.

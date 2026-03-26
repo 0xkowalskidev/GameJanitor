@@ -43,6 +43,7 @@ type Client struct {
 	Tokens      *TokenService
 	Webhooks    *WebhookService
 	Events      *EventService
+	Operations  *OperationService
 	Settings    *SettingsService
 	Games       *GameService
 	Status      *StatusService
@@ -93,6 +94,7 @@ func New(baseURL string, opts ...Option) *Client {
 	c.Tokens = &TokenService{client: c}
 	c.Webhooks = &WebhookService{client: c}
 	c.Events = &EventService{client: c}
+	c.Operations = &OperationService{client: c}
 	c.Settings = &SettingsService{client: c}
 	c.Games = &GameService{client: c}
 	c.Status = &StatusService{client: c}
