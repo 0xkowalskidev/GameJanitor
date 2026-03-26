@@ -22,7 +22,6 @@ func TestBackup_CreateAndGet(t *testing.T) {
 		GameserverID: "gs-bak",
 		Name:         "world-backup",
 		SizeBytes:    1048576,
-		Status:       model.BackupStatusCompleted,
 	}
 	require.NoError(t, db.CreateBackup(b))
 	assert.False(t, b.CreatedAt.IsZero())
@@ -35,6 +34,7 @@ func TestBackup_CreateAndGet(t *testing.T) {
 	assert.Equal(t, "gs-bak", got.GameserverID)
 	assert.Equal(t, "world-backup", got.Name)
 	assert.Equal(t, int64(1048576), got.SizeBytes)
+	// Status defaults to completed when no activity exists
 	assert.Equal(t, model.BackupStatusCompleted, got.Status)
 	assert.Empty(t, got.ErrorReason)
 }
@@ -60,7 +60,6 @@ func TestBackup_ListByGameserver(t *testing.T) {
 			ID:           "bak-" + string(rune('a'+i)),
 			GameserverID: "gs-list",
 			Name:         "backup-" + string(rune('a'+i)),
-			Status:       model.BackupStatusCompleted,
 		}
 		require.NoError(t, db.CreateBackup(b))
 	}
@@ -79,7 +78,7 @@ func TestBackup_ListByGameserver_Empty(t *testing.T) {
 	assert.Empty(t, list)
 }
 
-func TestBackup_UpdateStatus(t *testing.T) {
+func TestBackup_UpdateSize(t *testing.T) {
 	t.Parallel()
 	db := store.New(testutil.NewTestDB(t))
 
@@ -90,21 +89,61 @@ func TestBackup_UpdateStatus(t *testing.T) {
 		ID:           "bak-upd",
 		GameserverID: "gs-upd",
 		Name:         "updating-backup",
-		Status:       model.BackupStatusInProgress,
 	}
 	require.NoError(t, db.CreateBackup(b))
 
-	require.NoError(t, db.UpdateBackupStatus("bak-upd", model.BackupStatusCompleted, 2097152, ""))
+	require.NoError(t, db.UpdateBackupSize("bak-upd", 2097152))
 
 	got, err := db.GetBackup("bak-upd")
 	require.NoError(t, err)
 	require.NotNil(t, got)
-	assert.Equal(t, model.BackupStatusCompleted, got.Status)
 	assert.Equal(t, int64(2097152), got.SizeBytes)
-	assert.Empty(t, got.ErrorReason)
 }
 
-func TestBackup_UpdateStatusFailed(t *testing.T) {
+func TestBackup_PopulateStatusFromActivity(t *testing.T) {
+	t.Parallel()
+	db := store.New(testutil.NewTestDB(t))
+
+	gs := newGameserver("gs-pop", "Populate Host", "minecraft-java", nil)
+	require.NoError(t, db.CreateGameserver(gs))
+
+	b := &model.Backup{
+		ID:           "bak-pop",
+		GameserverID: "gs-pop",
+		Name:         "status-backup",
+	}
+	require.NoError(t, db.CreateBackup(b))
+
+	// No activity yet — should default to completed
+	got, err := db.GetBackup("bak-pop")
+	require.NoError(t, err)
+	assert.Equal(t, model.BackupStatusCompleted, got.Status)
+
+	// Create a running activity for this backup
+	gsID := "gs-pop"
+	a := &model.Activity{
+		ID:           "act-run",
+		GameserverID: &gsID,
+		Type:         "backup",
+		Status:       "running",
+		Actor:        []byte(`{}`),
+		Data:         []byte(`{"backup_id":"bak-pop"}`),
+	}
+	require.NoError(t, db.CreateActivity(a))
+
+	got, err = db.GetBackup("bak-pop")
+	require.NoError(t, err)
+	assert.Equal(t, model.BackupStatusInProgress, got.Status)
+
+	// Complete the activity
+	require.NoError(t, db.CompleteActivity("act-run"))
+
+	got, err = db.GetBackup("bak-pop")
+	require.NoError(t, err)
+	assert.Equal(t, model.BackupStatusCompleted, got.Status)
+}
+
+func TestBackup_PopulateStatusFailed(t *testing.T) {
 	t.Parallel()
 	db := store.New(testutil.NewTestDB(t))
 
@@ -115,11 +154,20 @@ func TestBackup_UpdateStatusFailed(t *testing.T) {
 		ID:           "bak-fail",
 		GameserverID: "gs-fail",
 		Name:         "failing-backup",
-		Status:       model.BackupStatusInProgress,
 	}
 	require.NoError(t, db.CreateBackup(b))
 
-	require.NoError(t, db.UpdateBackupStatus("bak-fail", model.BackupStatusFailed, 0, "disk full"))
+	gsID := "gs-fail"
+	a := &model.Activity{
+		ID:           "act-fail",
+		GameserverID: &gsID,
+		Type:         "backup",
+		Status:       "running",
+		Actor:        []byte(`{}`),
+		Data:         []byte(`{"backup_id":"bak-fail"}`),
+	}
+	require.NoError(t, db.CreateActivity(a))
+	require.NoError(t, db.FailActivity("act-fail", "disk full"))
 
 	got, err := db.GetBackup("bak-fail")
 	require.NoError(t, err)
@@ -139,7 +187,6 @@ func TestBackup_Delete(t *testing.T) {
 		ID:           "bak-del",
 		GameserverID: "gs-bdel",
 		Name:         "delete-me",
-		Status:       model.BackupStatusCompleted,
 	}
 	require.NoError(t, db.CreateBackup(b))
 
@@ -171,7 +218,6 @@ func TestBackup_DeleteByGameserver(t *testing.T) {
 			ID:           id,
 			GameserverID: "gs-bulk",
 			Name:         id,
-			Status:       model.BackupStatusCompleted,
 		}
 		require.NoError(t, db.CreateBackup(b))
 	}
@@ -190,8 +236,8 @@ func TestBackup_TotalSizeByGameserver(t *testing.T) {
 	gs := newGameserver("gs-size", "Size Host", "minecraft-java", nil)
 	require.NoError(t, db.CreateGameserver(gs))
 
-	b1 := &model.Backup{ID: "bak-s1", GameserverID: "gs-size", Name: "b1", SizeBytes: 100, Status: model.BackupStatusCompleted}
-	b2 := &model.Backup{ID: "bak-s2", GameserverID: "gs-size", Name: "b2", SizeBytes: 250, Status: model.BackupStatusCompleted}
+	b1 := &model.Backup{ID: "bak-s1", GameserverID: "gs-size", Name: "b1", SizeBytes: 100}
+	b2 := &model.Backup{ID: "bak-s2", GameserverID: "gs-size", Name: "b2", SizeBytes: 250}
 	require.NoError(t, db.CreateBackup(b1))
 	require.NoError(t, db.CreateBackup(b2))
 
@@ -216,7 +262,6 @@ func TestBackup_CascadeOnGameserverDelete(t *testing.T) {
 		ID:           "bak-cas",
 		GameserverID: "gs-cas",
 		Name:         "cascade-backup",
-		Status:       model.BackupStatusCompleted,
 	}
 	require.NoError(t, db.CreateBackup(b))
 

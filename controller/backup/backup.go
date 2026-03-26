@@ -23,7 +23,7 @@ type Store interface {
 	ListBackups(filter model.BackupFilter) ([]model.Backup, error)
 	GetBackup(id string) (*model.Backup, error)
 	CreateBackup(b *model.Backup) error
-	UpdateBackupStatus(id string, status string, sizeBytes int64, errorReason string) error
+	UpdateBackupSize(id string, sizeBytes int64) error
 	DeleteBackup(id string) error
 	DeleteBackupsByGameserver(gameserverID string) error
 	TotalBackupSizeByGameserver(gameserverID string) (int64, error)
@@ -159,7 +159,8 @@ func (s *BackupService) CreateBackup(ctx context.Context, gameserverID string, n
 		name = time.Now().Format("2006-01-02 15:04:05")
 	}
 
-	// Create backup record immediately with in_progress status
+	// Create backup record — status is derived from the activity table,
+	// but we set it on the returned struct since the activity hasn't started yet
 	backup := &model.Backup{
 		ID:           backupID,
 		GameserverID: gameserverID,
@@ -263,10 +264,8 @@ func (s *BackupService) runBackup(gameserverID, backupID, name string, gs *model
 		s.log.Warn("failed to get backup size", "backup_id", backupID, "error", err)
 	}
 
-	// Mark completed
-	if err := s.store.UpdateBackupStatus(backupID, model.BackupStatusCompleted, sizeBytes, ""); err != nil {
-		s.log.Error("failed to mark backup completed", "backup_id", backupID, "error", err)
-		return
+	if err := s.store.UpdateBackupSize(backupID, sizeBytes); err != nil {
+		s.log.Error("failed to update backup size", "backup_id", backupID, "error", err)
 	}
 
 	s.completeActivity(opID)
@@ -290,11 +289,7 @@ func (s *BackupService) failBackup(ctx context.Context, gameserverID, backupID, 
 		s.log.Warn("failed to clean up partial backup data", "backup_id", backupID, "error", err)
 	}
 
-	// Mark failed in DB
-	if err := s.store.UpdateBackupStatus(backupID, model.BackupStatusFailed, 0, reason); err != nil {
-		s.log.Error("failed to mark backup as failed", "backup_id", backupID, "error", err)
-	}
-
+	// Status is derived from the activity table — no DB update needed here
 	failedBackup, _ := s.store.GetBackup(backupID)
 	s.broadcaster.Publish(controller.BackupActionEvent{
 		Type:         controller.EventBackupFailed,
