@@ -1,312 +1,145 @@
 # Refactor Tracking
 
----
-
-## Active: Architecture Refactor — Store Layer + Domain Packages
-
-### Problem
-
-Every service holds `*sql.DB` and calls `model.GetGameserver()`, `model.ListGameservers()` etc.
-directly — even for data owned by other domains. ~120 direct model DB calls across service/,
-~15 of which are cross-domain (backup calling model.GetGameserver, status calling
-model.UpdateGameserver, etc). This means:
-
-1. Domain boundaries are unenforceable — sub-packages can still reach into any domain's data
-2. Cross-cutting concerns (caching, audit logging, auth checks) can't be added at a single chokepoint
-3. Services bypass each other, making the service layer optional rather than authoritative
-
-### Solution: Three-layer architecture
+## Architecture
 
 ```
 api/handler/    → controller/*     → store interfaces → model/
 (HTTP transport)  (business logic)   (data access)      (pure types)
 ```
 
-Strict dependency direction. No layer reaches down more than one level.
-
-### Target Structure
-
-```
-gamejanitor/
-├── main.go
-│
-├── model/                             # Pure types + validation. ZERO SQL.
-│   ├── gameserver.go                  #   Gameserver struct, GameserverFilter, validation
-│   ├── backup.go                      #   Backup struct, BackupFilter
-│   ├── event.go                       #   Event struct, EventFilter
-│   ├── schedule.go                    #   Schedule struct
-│   ├── token.go                       #   Token struct
-│   ├── webhook_endpoint.go            #   WebhookEndpoint struct
-│   ├── webhook_delivery.go            #   WebhookDelivery struct
-│   ├── worker_node.go                 #   WorkerNode struct
-│   ├── mod.go                         #   InstalledMod struct
-│   ├── setting.go                     #   Setting struct
-│   ├── labels.go                      #   Labels type
-│   ├── pagination.go                  #   Pagination struct
-│   └── validate.go                    #   Validation methods on model types
-│
-├── store/                             # ALL database operations. Returns model types.
-│   ├── gameserver.go                  #   GameserverStore — List, Get, Create, Update, Delete, PopulateNodes
-│   ├── backup.go                      #   BackupStore — List, Get, Create, Update, Delete, TotalSize
-│   ├── event.go                       #   EventStore — List, Create
-│   ├── schedule.go                    #   ScheduleStore — List, Get, Create, Update, Delete
-│   ├── token.go                       #   TokenStore — List, Get, Create, Delete, GetByPrefix
-│   ├── webhook.go                     #   WebhookStore — endpoints + deliveries CRUD
-│   ├── worker_node.go                 #   WorkerNodeStore — List, Get, Create, Update, Delete
-│   ├── mod.go                         #   ModStore — CRUD for installed mods
-│   └── setting.go                     #   SettingStore — Get, Set, List
-│
-├── controller/                        # Shared: EventBus, errors, status constants, event types
-│   ├── eventbus.go
-│   ├── errors.go
-│   ├── status.go
-│   ├── events.go
-│   │
-│   ├── gameserver/                    # GameserverService — CRUD, lifecycle, ports, migration, console, file
-│   │   ├── gameserver.go              #   Service struct + Store interface + sibling interfaces
-│   │   ├── lifecycle.go               #   Start, Stop, Restart, UpdateServerGame, Reinstall
-│   │   ├── ports.go                   #   Port allocation, used ports, worker limit checks
-│   │   ├── migration.go              #   Cross-node migration
-│   │   ├── inspect.go                #   Container info, stats, logs
-│   │   ├── console.go                #   Console/command service (merged — same domain)
-│   │   └── file.go                   #   File operations (merged — same domain)
-│   │
-│   ├── backup/                        # BackupService + file storage (local/S3)
-│   │   ├── backup.go                  #   Service struct + Store interface + GameserverLifecycle interface
-│   │   └── storage.go                #   BackupStorage interface + LocalStorage + S3Storage impls
-│   │
-│   ├── schedule/                      # ScheduleService + Scheduler (cron)
-│   │   ├── schedule.go               #   CRUD service + Store interface
-│   │   └── scheduler.go              #   Cron runner + sibling interfaces (GameserverOps, BackupOps, ConsoleOps)
-│   │
-│   ├── status/                        # Runtime monitoring — status manager, query, ready, stats
-│   │   ├── manager.go                #   StatusManager — container event → status transitions
-│   │   ├── query.go                  #   QueryService — A2S/GJQ polling
-│   │   ├── ready.go                  #   ReadyWatcher — log pattern matching → Running promotion
-│   │   ├── poller.go                 #   StatsPoller — CPU/memory/disk polling
-│   │   └── subscriber.go            #   StatusSubscriber — event → status derivation
-│   │
-│   ├── webhook/                       # Webhook delivery + endpoint management
-│   │   ├── webhook.go                #   WebhookWorker — event → HTTP delivery
-│   │   └── endpoint.go              #   WebhookEndpointService — CRUD + test delivery
-│   │
-│   ├── mod/                           # Mod management + sources
-│   │   ├── mod.go                    #   ModService + FileOperator interface
-│   │   ├── source.go                 #   ModSource interface + types
-│   │   ├── modrinth.go
-│   │   ├── umod.go
-│   │   └── workshop.go
-│   │
-│   ├── auth/                          # [DONE] AuthService + permissions + token context
-│   ├── settings/                      # [DONE] SettingsService
-│   ├── event/                         # EventStore subscriber + EventHistoryService
-│   │   ├── subscriber.go            #   EventStoreSubscriber — persist events to DB
-│   │   └── history.go               #   [DONE] EventHistoryService — query persisted events
-│   │
-│   └── orchestrator/                  # [DONE] Dispatcher + Registry + ControllerGRPC + WorkerNodeService
-│       ├── dispatcher.go
-│       ├── registry.go
-│       ├── grpc.go
-│       └── worker_node.go            #   WorkerNodeService (moves here after events moved to controller/)
-│
-├── worker/                            # Worker interface + implementations
-│   ├── worker.go                      #   Worker interface
-│   ├── types.go                       #   ContainerOptions, ContainerInfo, etc.
-│   ├── local.go                       #   LocalWorker (Docker-based)
-│   ├── remote.go                      #   RemoteWorker (gRPC client)
-│   ├── logparse/                      #   [DONE] Log parsing
-│   └── ...                            #   remaining worker files stay (tightly coupled to LocalWorker)
-│
-├── api/                               # HTTP transport layer
-│   ├── router.go
-│   ├── middleware.go
-│   ├── ratelimit.go
-│   └── handler/
-│
-├── cli/                               # CLI commands + server wiring (serve.go)
-├── pkg/                               # [DONE] Shared utilities: naming/, netinfo/, tlsutil/, validate/
-├── config/
-├── db/
-├── games/
-├── sftp/
-├── ui/
-├── testutil/
-└── e2e/
-```
-
-### Key Design Rules
-
-**1. model/ has ZERO database queries.**
-All `model.ListGameservers(db, filter)` style functions move to `store/`.
-model/ is pure types, validation methods, and constants.
-
-**2. Services receive store interfaces, not `*sql.DB`.**
-Each controller sub-package defines a `Store` interface with only the queries it needs.
-`store/` provides the concrete implementations. Services never see `*sql.DB`.
-
-```go
-// controller/gameserver/gameserver.go
-type Store interface {
-    List(filter model.GameserverFilter) ([]model.Gameserver, error)
-    Get(id string) (*model.Gameserver, error)
-    Create(gs *model.Gameserver) error
-    Update(gs *model.Gameserver) error
-    Delete(id string) error
-    PopulateNodes(gs []model.Gameserver)
-}
-
-type Service struct {
-    store      Store
-    dispatcher Dispatcher      // interface to orchestrator
-    bus        *controller.EventBus
-    settings   SettingsReader  // interface to settings
-    games      *games.GameStore
-    log        *slog.Logger
-}
-```
-
-**3. Cross-domain data access goes through sibling interfaces, never direct DB.**
-Backup needs a gameserver? It calls `GameserverLookup.GetGameserver()`, not `model.GetGameserver(db)`.
-
-```go
-// controller/backup/backup.go
-type GameserverLifecycle interface {
-    GetGameserver(id string) (*model.Gameserver, error)
-    Stop(ctx context.Context, id string) error
-    Start(ctx context.Context, id string) error
-}
-
-type Service struct {
-    store    Store
-    gs       GameserverLifecycle  // NOT *sql.DB
-    storage  Storage              // file storage (local/S3)
-    bus      *controller.EventBus
-}
-```
-
-**4. Leaf packages (auth, settings) can be imported concretely.**
-They have zero deps on other controller sub-packages. No cycle risk.
-
-**5. Event types stay in controller/ parent.**
-All sub-packages import `controller` for event types and EventBus. No cycles.
+All controller sub-packages use Store interfaces, not `*sql.DB`.
+Cross-domain data access goes through sibling interfaces.
+Event types live in `controller/` parent.
 
 ---
 
-## Completed Work
+## Remaining Cleanup
 
-### Phase 1: Leaf renames [DONE]
-- [x] `models/` → `model/`, `validate/` → `pkg/validate/`
-- [x] `naming/` → `pkg/naming/`, `netinfo/` → `pkg/netinfo/`, `tlsutil/` → `pkg/tlsutil/`
-- [x] `constants/` deleted, values inlined
-- [x] `api/handlers/` → `api/handler/`
+### 1. Remove model/ DB functions (medium effort, high value)
 
-### Phase 2: Worker sub-packages [DONE]
-- [x] `worker/logparse.go` → `worker/logparse/`
+model/ still has ~70 DB query functions duplicated in store/. Three production callers remain:
 
-### Phase 3: Controller parent package [DONE]
-- [x] `controller/eventbus.go` — EventBus, WebhookEvent, StatusEvent
-- [x] `controller/errors.go` — ServiceError + error constructors
-- [x] `controller/status.go` — status constants + helpers
-- [x] `controller/events.go` — event types, constants, Actor, AllEventTypes
+- `sftp/auth_local.go:22` — `model.GetGameserverBySFTPUsername(a.db, ...)`
+- `cli/serve.go:338` — `model.PruneEvents(database, ...)`
+- `cli/serve.go:349` — `model.PruneEvents(database, ...)`
 
-### Phase 4: Controller domain packages [PARTIAL]
-- [x] `controller/auth/` — AuthService, permissions, token context
-- [x] `controller/settings/` — SettingsService
-- [x] `controller/event/history.go` — EventHistoryService
-- [x] `controller/orchestrator/` — Dispatcher, Registry, ControllerGRPC
+Plus ~14 calls in service/ test files for direct DB setup.
 
----
+**Fix:** Update 3 production callers to use stores, update test helpers, delete all
+DB functions from model/. model/ becomes truly pure types + validation + constants.
 
-## Remaining Work
-
-### Phase 5: Create store layer
-
-Extract ~120 database query functions from `model/` into `store/`.
-Each store struct holds `*sql.DB` and exposes domain-specific query methods.
-`model/` becomes pure types + validation.
-
-**5a — Create store/ package with all DB operations**
-- [ ] `store/gameserver.go` — move gameserver queries from model/gameserver.go
-- [ ] `store/backup.go` — move backup queries from model/backup.go
-- [ ] `store/event.go` — move event queries from model/event.go
-- [ ] `store/schedule.go` — move schedule queries from model/schedule.go
-- [ ] `store/token.go` — move token queries from model/token.go
-- [ ] `store/webhook.go` — move webhook endpoint + delivery queries
-- [ ] `store/worker_node.go` — move worker node queries from model/worker_node.go
-- [ ] `store/mod.go` — move installed mod queries from model/mod.go
-- [ ] `store/setting.go` — move setting queries from model/setting.go
-- [ ] Strip model/ down to pure types + validation
-- [ ] Update all callers: `model.GetGameserver(db, id)` → `store.Get(id)` (via interface)
+- [ ] Add `GetGameserverBySFTPUsername` to store/gameserver.go (if not already there)
+- [ ] Add `PruneEvents` to store/event.go (if not already there)
+- [ ] Update `sftp/auth_local.go` to receive a store interface instead of `*sql.DB`
+- [ ] Update `cli/serve.go` PruneEvents calls to use event store
+- [ ] Update service/ test files to use store methods instead of model functions
+- [ ] Delete all `func X(db *sql.DB, ...)` functions from model/*.go
+- [ ] Delete `model/setting.go` entirely (100% DB queries, no types)
+- [ ] Remove `database/sql` import from model files that no longer need it
 - [ ] Run tests
 
-### Phase 6: Extract remaining controller sub-packages with store interfaces
+### 2. Add EventActor() to WebhookEvent interface (low effort, eliminates type switch)
 
-Now that services receive store interfaces instead of `*sql.DB`, extraction
-is clean — each sub-package defines its own Store interface + sibling interfaces.
+`controller/event/subscriber.go:extractActor()` type-switches on 6 event types to get the
+Actor field. Adding `EventActor() Actor` to the `WebhookEvent` interface eliminates this.
 
-**6a — `controller/gameserver/`**
-- [ ] Move 7 files from service/ (gameserver, lifecycle, ports, migration, inspect, console, file)
-- [ ] Define Store interface (gameserver queries only)
-- [ ] Define sibling interfaces: ReadyWatcher, BackupDeleter
-- [ ] Replace `*sql.DB` with Store in Service struct
-- [ ] Replace cross-domain `model.X(db)` calls with sibling interface calls
-- [ ] Eliminate `SetReadyWatcher()` hack — use constructor injection with interface
-- [ ] Update api/, cli/, testutil/
+- [ ] Add `EventActor() Actor` to `controller.WebhookEvent` interface
+- [ ] Implement on all event types (action events return their Actor, lifecycle events return SystemActor)
+- [ ] Replace `extractActor()` in subscriber.go with `event.EventActor()`
+- [ ] Inline `extractData()` (it just returns its argument)
+- [ ] Run tests
 
-**6b — `controller/backup/`**
-- [ ] Move backup.go + backup_store.go from service/
-- [ ] Define Store interface (backup queries only)
-- [ ] Define GameserverLifecycle interface (GetGameserver, Stop, Start)
-- [ ] Replace `*sql.DB` + `*GameserverService` with Store + interface
-- [ ] Update consumers
+### 3. Unified store.DB struct (medium effort, cleaner wiring)
 
-**6c — `controller/status/`**
-- [ ] Move 5 files (status, query, ready, stats_poller, subscriber)
-- [ ] Define Store interface (gameserver queries for status checks)
-- [ ] ReadyWatcher receives QueryService + StatsPoller via constructor (same package — no interface needed)
-- [ ] Eliminate `SetQueryService()` / `SetStatsPoller()` hacks
-- [ ] StatusManager receives `restartFunc` (already a func value — clean)
-- [ ] Update consumers
+`cli/serve.go` has 7 anonymous composite structs to satisfy multi-store interfaces:
 
-**6d — `controller/schedule/`**
-- [ ] Move schedule.go + scheduler.go
-- [ ] Define Store interface (schedule queries)
-- [ ] Define sibling interfaces: GameserverOps, BackupOps, ConsoleOps
-- [ ] Replace 3 concrete service deps with interfaces
-- [ ] Update consumers
+```go
+scheduleStore := struct {
+    *store.ScheduleStore
+    *store.GameserverStore
+}{store.NewScheduleStore(database), gsStore}
+```
 
-**6e — `controller/webhook/`**
-- [ ] Move webhook.go + webhook_endpoint.go
-- [ ] Define Store interface (webhook endpoint + delivery queries)
-- [ ] All event types already in controller/ — no cycle
-- [ ] Update consumers
+Replace with a single `store.DB` struct that embeds all domain stores:
 
-**6f — `controller/mod/`**
-- [ ] Move 5 files (mod, source, modrinth, umod, workshop)
-- [ ] Define Store interface (installed mod queries)
-- [ ] Define FileOperator interface (satisfied by gameserver.FileService)
-- [ ] Update consumers
+```go
+type DB struct {
+    *GameserverStore
+    *BackupStore
+    *EventStore
+    *ScheduleStore
+    *TokenStore
+    *WebhookStore
+    *WorkerNodeStore
+    *ModStore
+    *SettingStore
+}
 
-**6g — `controller/event/subscriber.go`**
-- [ ] Move event_store.go → controller/event/subscriber.go
-- [ ] Define Store interface (event persistence queries)
-- [ ] Rewrite `extractGameserverID()` → use `event.EventGameserverID()` (interface method)
-- [ ] Rewrite `extractActor()` → add `EventActor()` method to WebhookEvent interface
-- [ ] Update consumers
+func New(db *sql.DB) *DB { ... }
+```
 
-**6h — `controller/orchestrator/worker_node.go`**
-- [ ] Move worker_node.go from service/ to controller/orchestrator/
-- [ ] Define Store interface (worker node queries)
-- [ ] Event types now in controller/ — no cycle
-- [ ] Update consumers
+Services receive `*store.DB` which satisfies any Store interface via embedding.
+Interface enforcement still limits what each service can call.
 
-### Phase 7: Cleanup + verification
+- [ ] Create `store/store.go` with `DB` struct and `New()` constructor
+- [ ] Replace all composite structs in `cli/serve.go` with `store.New(database)`
+- [ ] Replace all composite structs in `testutil/services.go` with same
+- [ ] Remove `webhookGameserverLookup` struct in serve.go (store.DB satisfies it directly)
+- [ ] Run tests
 
-- [ ] Delete empty `service/` directory
-- [ ] Run full test suite
-- [ ] Run `go vet ./...`
-- [ ] Verify `go build ./cli/` works
-- [ ] Verify dev server starts
-- [ ] Review: no service holds `*sql.DB` directly
-- [ ] Review: no cross-domain `model.X(db)` calls remain in controller/
-- [ ] Review: all `Set*()` hacks eliminated
+### 4. sftp/ store interface (low effort)
+
+`sftp/auth_local.go` holds `*sql.DB` and calls `model.GetGameserverBySFTPUsername` directly.
+Should receive a store interface.
+
+- [ ] Define `Auth` interface in sftp/auth_local.go: `GetGameserverBySFTPUsername(username string) (*model.Gameserver, error)`
+- [ ] Replace `db *sql.DB` with interface
+- [ ] Update `cli/serve.go` to pass store
+- [ ] Run tests
+
+### 5. Store method naming (large effort, optional — discuss first)
+
+Store methods repeat the domain name: `GameserverStore.ListGameservers`, `WebhookStore.ListWebhookEndpoints`.
+Through interfaces this reads as `s.store.ListGameservers()` inside a gameserver service.
+
+Cleaner: `List`, `Get`, `Create`, `Update`, `Delete`. The store type/interface already scopes the domain.
+
+**Trade-off:** Touches every store method, every interface definition, and every call site.
+Significant churn for a naming preference. The current names are unambiguous and grep-able.
+
+- [ ] Discuss: is this worth the churn?
+
+### 6. Docker UID/GID constant duplication (low effort)
+
+`docker/docker.go` duplicates `gameserverUID/gameserverGID/gameserverPerm` from `worker/types.go`
+to avoid a circular import. Comment says "Phase 2 of the refactor" — that's done.
+
+- [ ] Move constants to `model/` or `pkg/container/` (both importable by docker/ and worker/)
+- [ ] Remove duplicates
+- [ ] Run tests
+
+---
+
+## Completed
+
+### Phase 1–3: Foundation [DONE]
+- model/ renamed from models/, validate/→pkg/validate/, naming/netinfo/tlsutil→pkg/
+- constants/ deleted and inlined, api/handlers/→api/handler/
+- worker/logparse/ extracted
+- controller/ parent: EventBus, errors, status constants, event types
+
+### Phase 4: Controller domain extractions [DONE]
+- controller/auth/ — AuthService, permissions, token context (store interface)
+- controller/settings/ — SettingsService (store interface)
+- controller/event/ — EventHistoryService + EventStoreSubscriber (store interface)
+- controller/orchestrator/ — Dispatcher, Registry, ControllerGRPC, WorkerNodeService (store interfaces)
+- controller/gameserver/ — GameserverService + lifecycle + ports + migration + inspect + console + file (store interface)
+- controller/backup/ — BackupService + LocalStorage/S3Storage (store interface)
+- controller/status/ — StatusManager, QueryService, ReadyWatcher, StatsPoller, StatusSubscriber (store interface)
+- controller/schedule/ — ScheduleService + Scheduler (store interface)
+- controller/webhook/ — WebhookWorker + WebhookEndpointService (store interface)
+- controller/mod/ — ModService + ModSource impls (store interface)
+
+### Phase 5: Store layer [DONE]
+- store/ package with 9 domain stores (gameserver, backup, event, schedule, token, webhook, worker_node, mod, setting)
+- All controller sub-packages use store interfaces, zero *sql.DB
