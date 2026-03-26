@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 
+	"github.com/warsmite/gamejanitor/config"
 	"github.com/warsmite/gamejanitor/pkg/tlsutil"
 	"github.com/spf13/cobra"
 )
@@ -15,7 +16,7 @@ var genWorkerCertCmd = &cobra.Command{
 }
 
 func init() {
-	genWorkerCertCmd.Flags().StringP("data-dir", "d", "/var/lib/gamejanitor", "Data directory (must match the controller's data-dir)")
+	genWorkerCertCmd.Flags().StringP("data-dir", "d", config.DefaultConfig().DataDir, "Data directory (must match the controller's data-dir)")
 }
 
 func runGenWorkerCert(cmd *cobra.Command, args []string) error {

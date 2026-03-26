@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/warsmite/gamejanitor/config"
 	"github.com/warsmite/gamejanitor/db"
 	"github.com/warsmite/gamejanitor/store"
 	"github.com/spf13/cobra"
@@ -19,12 +20,12 @@ var tokensOfflineCmd = &cobra.Command{
 }
 
 func init() {
-	tokensOfflineCreateCmd.Flags().StringP("data-dir", "d", "/var/lib/gamejanitor", "Data directory containing the database")
+	tokensOfflineCreateCmd.Flags().StringP("data-dir", "d", config.DefaultConfig().DataDir, "Data directory containing the database")
 	tokensOfflineCreateCmd.Flags().String("name", "", "Token name (required)")
 	tokensOfflineCreateCmd.Flags().String("type", "worker", "Token type: worker, admin")
 	tokensOfflineCreateCmd.MarkFlagRequired("name")
 
-	tokensOfflineRotateCmd.Flags().StringP("data-dir", "d", "/var/lib/gamejanitor", "Data directory containing the database")
+	tokensOfflineRotateCmd.Flags().StringP("data-dir", "d", config.DefaultConfig().DataDir, "Data directory containing the database")
 	tokensOfflineRotateCmd.Flags().String("name", "", "Token name (required)")
 	tokensOfflineRotateCmd.Flags().String("type", "worker", "Token type: worker, admin")
 	tokensOfflineRotateCmd.MarkFlagRequired("name")

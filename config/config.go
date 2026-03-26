@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -87,8 +88,15 @@ func DefaultConfig() Config {
 		WebUI:      true,
 		Controller: true,
 		Worker:     true,
-		DataDir:    "/var/lib/gamejanitor",
+		DataDir:    defaultDataDir(),
 	}
+}
+
+func defaultDataDir() string {
+	if dir, err := os.UserHomeDir(); err == nil {
+		return filepath.Join(dir, ".local", "share", "gamejanitor")
+	}
+	return "/var/lib/gamejanitor"
 }
 
 // Load reads a YAML config file and merges it over defaults.

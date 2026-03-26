@@ -58,7 +58,7 @@ const newbieConfig = `# Gamejanitor configuration
 # sftp_port: 2222           # SFTP file server port (0 to disable)
 
 # Storage
-# data_dir: /var/lib/gamejanitor   # database, backups, and config
+# data_dir: ~/.local/share/gamejanitor   # database, backups, and config
 
 # Backup storage — default is local ({data_dir}/backups)
 # For S3-compatible storage (AWS, MinIO, Backblaze B2, Wasabi):
