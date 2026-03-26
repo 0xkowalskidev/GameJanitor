@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"github.com/warsmite/gamejanitor/pkg/validate"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -191,7 +192,9 @@ func (s *AuthService) CreateCustomToken(name string, gameserverIDs []string, per
 
 	for _, p := range permissions {
 		if !isValidPermission(p) {
-			return "", nil, fmt.Errorf("invalid permission: %s", p)
+			var fe validate.FieldErrors
+			fe.Add("permissions", fmt.Sprintf("invalid permission: %q", p))
+			return "", nil, fe
 		}
 	}
 

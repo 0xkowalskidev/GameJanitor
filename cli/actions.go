@@ -216,15 +216,18 @@ func runStatusOverview() error {
 		return nil
 	}
 
-	var gameservers []struct {
-		ID     string `json:"id"`
-		Name   string `json:"name"`
-		GameID string `json:"game_id"`
-		Status string `json:"status"`
+	var listResp struct {
+		Gameservers []struct {
+			ID     string `json:"id"`
+			Name   string `json:"name"`
+			GameID string `json:"game_id"`
+			Status string `json:"status"`
+		} `json:"gameservers"`
 	}
-	if err := json.Unmarshal(resp.Data, &gameservers); err != nil {
+	if err := json.Unmarshal(resp.Data, &listResp); err != nil {
 		return fmt.Errorf("parsing response: %w", err)
 	}
+	gameservers := listResp.Gameservers
 
 	if len(gameservers) == 0 {
 		fmt.Println("No gameservers found.")
