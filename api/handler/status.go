@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/warsmite/gamejanitor/config"
+	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/service"
 )
@@ -13,12 +14,12 @@ import (
 type StatusHandlers struct {
 	gameserverSvc *service.GameserverService
 	querySvc      *service.QueryService
-	workerSvc     *service.WorkerNodeService
+	workerSvc     *orchestrator.WorkerNodeService
 	cfg           config.Config
 	log           *slog.Logger
 }
 
-func NewStatusHandlers(gameserverSvc *service.GameserverService, querySvc *service.QueryService, workerSvc *service.WorkerNodeService, cfg config.Config, log *slog.Logger) *StatusHandlers {
+func NewStatusHandlers(gameserverSvc *service.GameserverService, querySvc *service.QueryService, workerSvc *orchestrator.WorkerNodeService, cfg config.Config, log *slog.Logger) *StatusHandlers {
 	return &StatusHandlers{gameserverSvc: gameserverSvc, querySvc: querySvc, workerSvc: workerSvc, cfg: cfg, log: log}
 }
 

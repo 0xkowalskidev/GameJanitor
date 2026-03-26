@@ -1,26 +1,33 @@
-package service
+package orchestrator
 
 import (
-	"github.com/warsmite/gamejanitor/controller/orchestrator"
-	"github.com/warsmite/gamejanitor/controller"
 	"context"
-	"database/sql"
 	"log/slog"
 	"time"
 
+	"github.com/warsmite/gamejanitor/controller"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/pkg/validate"
 )
 
+// WorkerNodeStore is the persistence interface for worker node operations.
+type WorkerNodeStore interface {
+	GetWorkerNode(id string) (*model.WorkerNode, error)
+	SetWorkerNodeLimits(id string, maxMemoryMB *int, maxCPU *float64, maxStorageMB *int) error
+	SetWorkerNodeCordoned(id string, cordoned bool) error
+	SetWorkerNodeTags(id string, tags model.Labels) error
+	ListGameservers(filter model.GameserverFilter) ([]model.Gameserver, error)
+}
+
 type WorkerNodeService struct {
-	db          *sql.DB
-	registry    *orchestrator.Registry
+	store       WorkerNodeStore
+	registry    *Registry
 	broadcaster *controller.EventBus
 	log         *slog.Logger
 }
 
-func NewWorkerNodeService(db *sql.DB, registry *orchestrator.Registry, broadcaster *controller.EventBus, log *slog.Logger) *WorkerNodeService {
-	return &WorkerNodeService{db: db, registry: registry, broadcaster: broadcaster, log: log}
+func NewWorkerNodeService(store WorkerNodeStore, registry *Registry, broadcaster *controller.EventBus, log *slog.Logger) *WorkerNodeService {
+	return &WorkerNodeService{store: store, registry: registry, broadcaster: broadcaster, log: log}
 }
 
 // WorkerView is the enriched API representation of a worker node.
@@ -57,7 +64,7 @@ func (s *WorkerNodeService) List() ([]WorkerView, error) {
 
 	views := make([]WorkerView, 0, len(infos))
 	for _, info := range infos {
-		node, _ := model.GetWorkerNode(s.db, info.ID)
+		node, _ := s.store.GetWorkerNode(info.ID)
 		views = append(views, s.buildView(info, gsCount[info.ID], allocMem[info.ID], allocCPU[info.ID], allocStorage[info.ID], node))
 	}
 	return views, nil
@@ -74,7 +81,7 @@ func (s *WorkerNodeService) Get(id string) (*WorkerView, error) {
 	}
 
 	gsCount, allocMem, allocCPU, allocStorage := s.nodeStats()
-	node, _ := model.GetWorkerNode(s.db, id)
+	node, _ := s.store.GetWorkerNode(id)
 	v := s.buildView(info, gsCount[id], allocMem[id], allocCPU[id], allocStorage[id], node)
 	return &v, nil
 }
@@ -103,17 +110,17 @@ func (s *WorkerNodeService) Update(ctx context.Context, id string, update *Worke
 	}
 
 	if update.MaxMemoryMB != nil || update.MaxCPU != nil || update.MaxStorageMB != nil {
-		if err := model.SetWorkerNodeLimits(s.db, id, update.MaxMemoryMB, update.MaxCPU, update.MaxStorageMB); err != nil {
+		if err := s.store.SetWorkerNodeLimits(id, update.MaxMemoryMB, update.MaxCPU, update.MaxStorageMB); err != nil {
 			return err
 		}
 	}
 	if update.Cordoned != nil {
-		if err := model.SetWorkerNodeCordoned(s.db, id, *update.Cordoned); err != nil {
+		if err := s.store.SetWorkerNodeCordoned(id, *update.Cordoned); err != nil {
 			return err
 		}
 	}
 	if update.Tags != nil {
-		if err := model.SetWorkerNodeTags(s.db, id, *update.Tags); err != nil {
+		if err := s.store.SetWorkerNodeTags(id, *update.Tags); err != nil {
 			return err
 		}
 	}
@@ -130,7 +137,7 @@ func (s *WorkerNodeService) Update(ctx context.Context, id string, update *Worke
 	return nil
 }
 
-func (s *WorkerNodeService) buildView(info orchestrator.WorkerInfo, gsCount, allocMem int, allocCPU float64, allocStorage int, node *model.WorkerNode) WorkerView {
+func (s *WorkerNodeService) buildView(info WorkerInfo, gsCount, allocMem int, allocCPU float64, allocStorage int, node *model.WorkerNode) WorkerView {
 	var lastSeen *string
 	if !info.LastSeen.IsZero() {
 		ls := info.LastSeen.UTC().Format(time.RFC3339)
@@ -171,7 +178,7 @@ func (s *WorkerNodeService) nodeStats() (gsCount map[string]int, allocMem map[st
 	allocMem = make(map[string]int)
 	allocCPU = make(map[string]float64)
 	allocStorage = make(map[string]int)
-	gameservers, err := model.ListGameservers(s.db, model.GameserverFilter{})
+	gameservers, err := s.store.ListGameservers(model.GameserverFilter{})
 	if err != nil {
 		s.log.Error("listing gameservers for worker stats", "error", err)
 		return

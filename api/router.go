@@ -75,7 +75,13 @@ func NewRouter(opts RouterOptions) http.Handler {
 	fileHandlers := handler.NewFileHandlers(opts.FileSvc, opts.Log)
 	logHandlers := handler.NewLogHandlers(opts.LogPath, opts.Log)
 	authHandlers := handler.NewAuthHandlers(opts.AuthSvc, opts.Log)
-	workerNodeSvc := service.NewWorkerNodeService(opts.DB, opts.Registry, opts.Broadcaster, opts.Log)
+	workerNodeSvc := orchestrator.NewWorkerNodeService(
+		struct {
+			*store.WorkerNodeStore
+			*store.GameserverStore
+		}{store.NewWorkerNodeStore(opts.DB), store.NewGameserverStore(opts.DB)},
+		opts.Registry, opts.Broadcaster, opts.Log,
+	)
 	workerHandlers := handler.NewWorkerHandlers(workerNodeSvc, opts.Log)
 	statusHandlers := handler.NewStatusHandlers(opts.GameserverSvc, opts.QuerySvc, workerNodeSvc, opts.Config, opts.Log)
 	settingsAPIHandlers := handler.NewSettingsAPIHandlers(opts.SettingsSvc, opts.Log)
