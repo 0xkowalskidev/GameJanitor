@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"github.com/warsmite/gamejanitor/controller"
 	"context"
 	"database/sql"
@@ -9,17 +10,16 @@ import (
 
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/pkg/validate"
-	"github.com/warsmite/gamejanitor/worker"
 )
 
 type WorkerNodeService struct {
 	db          *sql.DB
-	registry    *worker.Registry
+	registry    *orchestrator.Registry
 	broadcaster *controller.EventBus
 	log         *slog.Logger
 }
 
-func NewWorkerNodeService(db *sql.DB, registry *worker.Registry, broadcaster *controller.EventBus, log *slog.Logger) *WorkerNodeService {
+func NewWorkerNodeService(db *sql.DB, registry *orchestrator.Registry, broadcaster *controller.EventBus, log *slog.Logger) *WorkerNodeService {
 	return &WorkerNodeService{db: db, registry: registry, broadcaster: broadcaster, log: log}
 }
 
@@ -130,7 +130,7 @@ func (s *WorkerNodeService) Update(ctx context.Context, id string, update *Worke
 	return nil
 }
 
-func (s *WorkerNodeService) buildView(info worker.WorkerInfo, gsCount, allocMem int, allocCPU float64, allocStorage int, node *model.WorkerNode) WorkerView {
+func (s *WorkerNodeService) buildView(info orchestrator.WorkerInfo, gsCount, allocMem int, allocCPU float64, allocStorage int, node *model.WorkerNode) WorkerView {
 	var lastSeen *string
 	if !info.LastSeen.IsZero() {
 		ls := info.LastSeen.UTC().Format(time.RFC3339)

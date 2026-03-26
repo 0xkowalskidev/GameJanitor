@@ -1,6 +1,7 @@
-package worker
+package orchestrator
 
 import (
+	"github.com/warsmite/gamejanitor/worker"
 	"context"
 	"database/sql"
 	"fmt"
@@ -37,12 +38,12 @@ type Registry struct {
 	log     *slog.Logger
 
 	// Callbacks fired on state transitions
-	onOnline  func(nodeID string, w Worker)
+	onOnline  func(nodeID string, w worker.Worker)
 	onOffline func(nodeID string)
 }
 
 type registeredWorker struct {
-	worker Worker // nil for offline workers
+	worker worker.Worker // nil for offline workers
 	info   WorkerInfo
 }
 
@@ -95,13 +96,13 @@ func (r *Registry) LoadFromDB() error {
 
 // SetCallbacks sets the state transition callbacks.
 // Must be called before any workers register.
-func (r *Registry) SetCallbacks(onOnline func(string, Worker), onOffline func(string)) {
+func (r *Registry) SetCallbacks(onOnline func(string, worker.Worker), onOffline func(string)) {
 	r.onOnline = onOnline
 	r.onOffline = onOffline
 }
 
 // Register adds a worker with an active connection and marks it online.
-func (r *Registry) Register(nodeID string, w Worker, info WorkerInfo) {
+func (r *Registry) Register(nodeID string, w worker.Worker, info WorkerInfo) {
 	r.mu.Lock()
 
 	if old, ok := r.workers[nodeID]; ok && old.worker != nil {
@@ -186,9 +187,9 @@ func (r *Registry) Unregister(nodeID string) {
 	}
 }
 
-// Get returns the active Worker connection for a node.
+// Get returns the active worker.Worker connection for a node.
 // Returns nil, false if the worker is offline or unknown.
-func (r *Registry) Get(nodeID string) (Worker, bool) {
+func (r *Registry) Get(nodeID string) (worker.Worker, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 

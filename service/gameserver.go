@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/controller/auth"
 	"github.com/warsmite/gamejanitor/controller"
@@ -27,7 +28,7 @@ import (
 
 type GameserverService struct {
 	db           *sql.DB
-	dispatcher   *worker.Dispatcher
+	dispatcher   *orchestrator.Dispatcher
 	log          *slog.Logger
 	broadcaster  *controller.EventBus
 	readyWatcher *ReadyWatcher
@@ -38,7 +39,7 @@ type GameserverService struct {
 	placementMu  sync.Mutex // serializes port allocation + gameserver creation to prevent races
 }
 
-func NewGameserverService(db *sql.DB, dispatcher *worker.Dispatcher, broadcaster *controller.EventBus, settingsSvc *settings.SettingsService, gameStore *games.GameStore, dataDir string, log *slog.Logger) *GameserverService {
+func NewGameserverService(db *sql.DB, dispatcher *orchestrator.Dispatcher, broadcaster *controller.EventBus, settingsSvc *settings.SettingsService, gameStore *games.GameStore, dataDir string, log *slog.Logger) *GameserverService {
 	return &GameserverService{db: db, dispatcher: dispatcher, broadcaster: broadcaster, settingsSvc: settingsSvc, gameStore: gameStore, dataDir: dataDir, log: log}
 }
 

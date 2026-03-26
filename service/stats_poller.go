@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"github.com/warsmite/gamejanitor/controller"
 	"context"
 	"database/sql"
@@ -9,7 +10,6 @@ import (
 	"time"
 
 	"github.com/warsmite/gamejanitor/model"
-	"github.com/warsmite/gamejanitor/worker"
 )
 
 const statsPollInterval = 5 * time.Second
@@ -19,7 +19,7 @@ const statsPollInterval = 5 * time.Second
 // the GET /stats endpoint can serve them instantly without hitting Docker.
 type StatsPoller struct {
 	db          *sql.DB
-	dispatcher  *worker.Dispatcher
+	dispatcher  *orchestrator.Dispatcher
 	broadcaster *controller.EventBus
 	log         *slog.Logger
 	mu          sync.RWMutex
@@ -27,7 +27,7 @@ type StatsPoller struct {
 	cache       map[string]*GameserverStatsEvent
 }
 
-func NewStatsPoller(db *sql.DB, dispatcher *worker.Dispatcher, broadcaster *controller.EventBus, log *slog.Logger) *StatsPoller {
+func NewStatsPoller(db *sql.DB, dispatcher *orchestrator.Dispatcher, broadcaster *controller.EventBus, log *slog.Logger) *StatsPoller {
 	return &StatsPoller{
 		db:          db,
 		dispatcher:  dispatcher,

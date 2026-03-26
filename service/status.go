@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"github.com/warsmite/gamejanitor/controller"
 	"context"
 	"database/sql"
@@ -21,8 +22,8 @@ type StatusManager struct {
 	querySvc     *QueryService
 	statsPoller  *StatsPoller
 	readyWatcher *ReadyWatcher
-	dispatcher   *worker.Dispatcher
-	registry     *worker.Registry
+	dispatcher   *orchestrator.Dispatcher
+	registry     *orchestrator.Registry
 	restartFunc  func(ctx context.Context, id string) error
 
 	cancel context.CancelFunc
@@ -36,7 +37,7 @@ type StatusManager struct {
 	crashMu     sync.Mutex
 }
 
-func NewStatusManager(db *sql.DB, broadcaster *controller.EventBus, querySvc *QueryService, statsPoller *StatsPoller, readyWatcher *ReadyWatcher, dispatcher *worker.Dispatcher, registry *worker.Registry, restartFunc func(ctx context.Context, id string) error, log *slog.Logger) *StatusManager {
+func NewStatusManager(db *sql.DB, broadcaster *controller.EventBus, querySvc *QueryService, statsPoller *StatsPoller, readyWatcher *ReadyWatcher, dispatcher *orchestrator.Dispatcher, registry *orchestrator.Registry, restartFunc func(ctx context.Context, id string) error, log *slog.Logger) *StatusManager {
 	sm := &StatusManager{
 		db:            db,
 		broadcaster:   broadcaster,

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"github.com/warsmite/gamejanitor/controller/auth"
 	"context"
 	"crypto/ecdsa"
@@ -81,7 +82,7 @@ func runWorkerAgent(cfg config.Config, logger *slog.Logger) error {
 
 	// Start SFTP on worker if port is configured
 	if cfg.SFTPPort > 0 && cfg.ControllerAddress != "" {
-		sftpClient, sftpConn, err := worker.DialController(cfg.ControllerAddress, cfg.WorkerToken, workerTLSConfig)
+		sftpClient, sftpConn, err := orchestrator.DialController(cfg.ControllerAddress, cfg.WorkerToken, workerTLSConfig)
 		if err != nil {
 			logger.Warn("failed to connect to controller for sftp auth, sftp disabled", "error", err)
 		} else {
@@ -192,7 +193,7 @@ func enrollWithController(cfg config.Config, grpcPort int, logger *slog.Logger) 
 		netInfo := netinfo.Detect(logger)
 		ownAddr := fmt.Sprintf("%s:%d", netInfo.LANIP, grpcPort)
 
-		client, conn, err := worker.DialControllerEnrollment(cfg.ControllerAddress, cfg.WorkerToken)
+		client, conn, err := orchestrator.DialControllerEnrollment(cfg.ControllerAddress, cfg.WorkerToken)
 		if err != nil {
 			logger.Error("failed to connect to controller for enrollment", "error", err, "retry_in", backoff)
 			time.Sleep(backoff)
@@ -310,7 +311,7 @@ func runRegistrationLoop(cfg config.Config, workerID string, grpcPort int, tlsCo
 			)
 		}
 
-		client, conn, err := worker.DialController(cfg.ControllerAddress, cfg.WorkerToken, tlsConfig)
+		client, conn, err := orchestrator.DialController(cfg.ControllerAddress, cfg.WorkerToken, tlsConfig)
 		if err != nil {
 			logger.Error("failed to connect to controller", "error", err, "retry_in", backoff)
 			time.Sleep(backoff)
@@ -418,7 +419,7 @@ func buildHeartbeatRequest(workerID string, netInfo *netinfo.Info) *pb.Heartbeat
 	return req
 }
 
-func startGRPCServer(w worker.Worker, gameStore *games.GameStore, dataDir string, registry *worker.Registry, authSvc *auth.AuthService, database *sql.DB, bindAddress string, port int, tlsConfig *tls.Config, dialBackTLS *tls.Config, caCert *x509.Certificate, caKey *ecdsa.PrivateKey, logger *slog.Logger) error {
+func startGRPCServer(w worker.Worker, gameStore *games.GameStore, dataDir string, registry *orchestrator.Registry, authSvc *auth.AuthService, database *sql.DB, bindAddress string, port int, tlsConfig *tls.Config, dialBackTLS *tls.Config, caCert *x509.Certificate, caKey *ecdsa.PrivateKey, logger *slog.Logger) error {
 	addr := fmt.Sprintf("%s:%d", bindAddress, port)
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -444,7 +445,7 @@ func startGRPCServer(w worker.Worker, gameStore *games.GameStore, dataDir string
 
 	// Register ControllerService if we have a registry (controller or controller+worker mode)
 	if registry != nil {
-		controllerSvc := worker.NewControllerGRPC(registry, authSvc, database, dialBackTLS, caCert, caKey, logger)
+		controllerSvc := orchestrator.NewControllerGRPC(registry, authSvc, database, dialBackTLS, caCert, caKey, logger)
 		pb.RegisterControllerServiceServer(grpcServer, controllerSvc)
 	}
 

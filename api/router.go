@@ -1,6 +1,7 @@
 package api
 
 import (
+	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/controller/auth"
@@ -15,7 +16,6 @@ import (
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/service"
 	"github.com/warsmite/gamejanitor/api/handler"
-	"github.com/warsmite/gamejanitor/worker"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
@@ -36,7 +36,7 @@ type RouterOptions struct {
 	AuthSvc       *auth.AuthService
 	ModSvc        *service.ModService
 	Broadcaster   *controller.EventBus
-	Registry      *worker.Registry
+	Registry      *orchestrator.Registry
 	DB            *sql.DB
 	Log           *slog.Logger
 	WebUI         fs.FS // embedded UI static files (nil to disable)

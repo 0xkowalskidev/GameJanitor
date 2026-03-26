@@ -1,6 +1,7 @@
-package worker
+package orchestrator
 
 import (
+	"github.com/warsmite/gamejanitor/worker"
 	"database/sql"
 	"fmt"
 	"log/slog"
@@ -12,12 +13,12 @@ import (
 
 // PlacementCandidate is a worker ranked for gameserver placement.
 type PlacementCandidate struct {
-	Worker Worker
+	Worker worker.Worker
 	NodeID string
 	Score  float64
 }
 
-// Dispatcher routes operations to the correct Worker for a given gameserver.
+// Dispatcher routes operations to the correct worker.Worker for a given gameserver.
 // All workers (local and remote) are accessed through the registry.
 type Dispatcher struct {
 	registry *Registry
@@ -33,9 +34,9 @@ func NewDispatcher(registry *Registry, db *sql.DB, log *slog.Logger) *Dispatcher
 	}
 }
 
-// WorkerFor returns the Worker responsible for an existing gameserver.
+// WorkerFor returns the worker.Worker responsible for an existing gameserver.
 // Looks up the gameserver's node_id and routes to the corresponding worker.
-func (d *Dispatcher) WorkerFor(gameserverID string) Worker {
+func (d *Dispatcher) WorkerFor(gameserverID string) worker.Worker {
 	nodeID, err := d.lookupNodeID(gameserverID)
 	if err != nil {
 		d.log.Error("looking up node for gameserver", "gameserver_id", gameserverID, "error", err)
@@ -146,9 +147,9 @@ func (d *Dispatcher) RankWorkersForPlacement(requiredLabels model.Labels) []Plac
 	return candidates
 }
 
-// SelectWorkerByNodeID returns the Worker for a specific node ID.
+// SelectWorkerByNodeID returns the worker.Worker for a specific node ID.
 // Used when the user explicitly chooses a node for placement.
-func (d *Dispatcher) SelectWorkerByNodeID(nodeID string) (Worker, error) {
+func (d *Dispatcher) SelectWorkerByNodeID(nodeID string) (worker.Worker, error) {
 	if nodeID == "" {
 		return nil, fmt.Errorf("node_id is required")
 	}

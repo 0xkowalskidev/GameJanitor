@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/controller"
 	"compress/gzip"
@@ -13,13 +14,12 @@ import (
 
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/model"
-	"github.com/warsmite/gamejanitor/worker"
 	"github.com/google/uuid"
 )
 
 type BackupService struct {
 	db            *sql.DB
-	dispatcher    *worker.Dispatcher
+	dispatcher    *orchestrator.Dispatcher
 	gameserverSvc *GameserverService
 	gameStore     *games.GameStore
 	store         BackupStore
@@ -28,7 +28,7 @@ type BackupService struct {
 	log           *slog.Logger
 }
 
-func NewBackupService(db *sql.DB, dispatcher *worker.Dispatcher, gameserverSvc *GameserverService, gameStore *games.GameStore, store BackupStore, settingsSvc *settings.SettingsService, broadcaster *controller.EventBus, log *slog.Logger) *BackupService {
+func NewBackupService(db *sql.DB, dispatcher *orchestrator.Dispatcher, gameserverSvc *GameserverService, gameStore *games.GameStore, store BackupStore, settingsSvc *settings.SettingsService, broadcaster *controller.EventBus, log *slog.Logger) *BackupService {
 	return &BackupService{db: db, dispatcher: dispatcher, gameserverSvc: gameserverSvc, gameStore: gameStore, store: store, settingsSvc: settingsSvc, broadcaster: broadcaster, log: log}
 }
 

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/controller/auth"
 	"github.com/warsmite/gamejanitor/controller"
@@ -31,7 +32,6 @@ import (
 	"github.com/warsmite/gamejanitor/pkg/tlsutil"
 	"github.com/warsmite/gamejanitor/api"
 	"github.com/warsmite/gamejanitor/ui"
-	"github.com/warsmite/gamejanitor/worker"
 	"github.com/spf13/cobra"
 )
 
@@ -131,7 +131,7 @@ type services struct {
 	modSvc        *service.ModService
 }
 
-func initServices(database *sql.DB, dispatcher *worker.Dispatcher, registry *worker.Registry, gameStore *games.GameStore, cfg config.Config, logger *slog.Logger) (*services, error) {
+func initServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registry *orchestrator.Registry, gameStore *games.GameStore, cfg config.Config, logger *slog.Logger) (*services, error) {
 	broadcaster := controller.NewEventBus()
 	settingsSvc := settings.NewSettingsServiceWithMode(database, logger, cfg.Mode)
 
@@ -261,11 +261,11 @@ func runServe(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to initialize game store: %w", err)
 	}
 
-	registry := worker.NewRegistry(database, logger)
+	registry := orchestrator.NewRegistry(database, logger)
 	if err := registry.LoadFromDB(); err != nil {
 		return fmt.Errorf("failed to load workers from database: %w", err)
 	}
-	dispatcher := worker.NewDispatcher(registry, database, logger)
+	dispatcher := orchestrator.NewDispatcher(registry, database, logger)
 
 	svcs, err := initServices(database, dispatcher, registry, gameStore, cfg, logger)
 	if err != nil {

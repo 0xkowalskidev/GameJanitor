@@ -1,6 +1,7 @@
 package sftp
 
 import (
+	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"context"
 	"os"
 
@@ -20,13 +21,13 @@ func NewWorkerFileOperator(w worker.Worker) *WorkerFileOperator {
 // DispatcherFileOperator routes file operations through the dispatcher to the correct worker.
 // Used on controller/standalone nodes where SFTP needs to reach remote workers.
 type DispatcherFileOperator struct {
-	dispatcher *worker.Dispatcher
+	dispatcher *orchestrator.Dispatcher
 	// gameserverID is used by the dispatcher to route to the correct worker.
 	// Set per-session via the auth callback.
 	gameserverID string
 }
 
-func NewDispatcherFileOperator(dispatcher *worker.Dispatcher, gameserverID string) *DispatcherFileOperator {
+func NewDispatcherFileOperator(dispatcher *orchestrator.Dispatcher, gameserverID string) *DispatcherFileOperator {
 	return &DispatcherFileOperator{dispatcher: dispatcher, gameserverID: gameserverID}
 }
 

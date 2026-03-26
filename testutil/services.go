@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/controller/auth"
 	"github.com/warsmite/gamejanitor/controller"
@@ -10,15 +11,14 @@ import (
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/service"
-	"github.com/warsmite/gamejanitor/worker"
 )
 
 // ServiceBundle holds all services wired together for testing.
 type ServiceBundle struct {
 	DB            *sql.DB
 	GameStore     *games.GameStore
-	Registry      *worker.Registry
-	Dispatcher    *worker.Dispatcher
+	Registry      *orchestrator.Registry
+	Dispatcher    *orchestrator.Dispatcher
 	Broadcaster   *controller.EventBus
 	SettingsSvc   *settings.SettingsService
 	GameserverSvc *service.GameserverService
@@ -46,8 +46,8 @@ func NewTestServices(t *testing.T) *ServiceBundle {
 	log := TestLogger()
 	gameStore := NewTestGameStore(t)
 
-	registry := worker.NewRegistry(db, log)
-	dispatcher := worker.NewDispatcher(registry, db, log)
+	registry := orchestrator.NewRegistry(db, log)
+	dispatcher := orchestrator.NewDispatcher(registry, db, log)
 	broadcaster := controller.NewEventBus()
 	settingsSvc := settings.NewSettingsService(db, log)
 
@@ -162,7 +162,7 @@ func RegisterFakeWorker(t *testing.T, svc *ServiceBundle, nodeID string, opts ..
 		t.Fatalf("inserting worker node: %v", err)
 	}
 
-	info := worker.WorkerInfo{ID: nodeID}
+	info := orchestrator.WorkerInfo{ID: nodeID}
 	svc.Registry.Register(nodeID, fw, info)
 
 	t.Cleanup(func() {

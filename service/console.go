@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"github.com/warsmite/gamejanitor/controller"
 	"context"
 	"database/sql"
@@ -14,7 +15,6 @@ import (
 
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/model"
-	"github.com/warsmite/gamejanitor/worker"
 )
 
 type LogSession struct {
@@ -24,12 +24,12 @@ type LogSession struct {
 
 type ConsoleService struct {
 	db         *sql.DB
-	dispatcher *worker.Dispatcher
+	dispatcher *orchestrator.Dispatcher
 	gameStore  *games.GameStore
 	log        *slog.Logger
 }
 
-func NewConsoleService(db *sql.DB, dispatcher *worker.Dispatcher, gameStore *games.GameStore, log *slog.Logger) *ConsoleService {
+func NewConsoleService(db *sql.DB, dispatcher *orchestrator.Dispatcher, gameStore *games.GameStore, log *slog.Logger) *ConsoleService {
 	return &ConsoleService{db: db, dispatcher: dispatcher, gameStore: gameStore, log: log}
 }
 

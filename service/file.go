@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"github.com/warsmite/gamejanitor/controller"
 	"context"
 	"database/sql"
@@ -15,11 +16,11 @@ import (
 
 type FileService struct {
 	db         *sql.DB
-	dispatcher *worker.Dispatcher
+	dispatcher *orchestrator.Dispatcher
 	log        *slog.Logger
 }
 
-func NewFileService(db *sql.DB, dispatcher *worker.Dispatcher, log *slog.Logger) *FileService {
+func NewFileService(db *sql.DB, dispatcher *orchestrator.Dispatcher, log *slog.Logger) *FileService {
 	return &FileService{
 		db:         db,
 		dispatcher: dispatcher,
