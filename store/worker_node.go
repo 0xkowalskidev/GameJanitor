@@ -8,7 +8,7 @@ import (
 	"github.com/warsmite/gamejanitor/model"
 )
 
-const workerNodeColumns = "id, grpc_address, lan_ip, external_ip, status, max_memory_mb, max_cpu, max_storage_mb, cordoned, tags, sftp_port, last_seen, created_at, updated_at"
+const workerNodeColumns = "id, grpc_address, lan_ip, external_ip, status, max_memory_mb, max_cpu, max_storage_mb, cordoned, tags, port_range_start, port_range_end, sftp_port, last_seen, created_at, updated_at"
 
 type WorkerNodeStore struct {
 	db *sql.DB
@@ -20,7 +20,7 @@ func NewWorkerNodeStore(db *sql.DB) *WorkerNodeStore {
 
 func scanWorkerNode(scanner interface{ Scan(...any) error }) (*model.WorkerNode, error) {
 	var n model.WorkerNode
-	err := scanner.Scan(&n.ID, &n.GRPCAddress, &n.LanIP, &n.ExternalIP, &n.Status, &n.MaxMemoryMB, &n.MaxCPU, &n.MaxStorageMB, &n.Cordoned, &n.Tags, &n.SFTPPort, &n.LastSeen, &n.CreatedAt, &n.UpdatedAt)
+	err := scanner.Scan(&n.ID, &n.GRPCAddress, &n.LanIP, &n.ExternalIP, &n.Status, &n.MaxMemoryMB, &n.MaxCPU, &n.MaxStorageMB, &n.Cordoned, &n.Tags, &n.PortRangeStart, &n.PortRangeEnd, &n.SFTPPort, &n.LastSeen, &n.CreatedAt, &n.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +77,7 @@ func (s *WorkerNodeStore) ListWorkerNodes() ([]model.WorkerNode, error) {
 	var nodes []model.WorkerNode
 	for rows.Next() {
 		var n model.WorkerNode
-		if err := rows.Scan(&n.ID, &n.GRPCAddress, &n.LanIP, &n.ExternalIP, &n.Status, &n.MaxMemoryMB, &n.MaxCPU, &n.MaxStorageMB, &n.Cordoned, &n.Tags, &n.SFTPPort, &n.LastSeen, &n.CreatedAt, &n.UpdatedAt); err != nil {
+		if err := rows.Scan(&n.ID, &n.GRPCAddress, &n.LanIP, &n.ExternalIP, &n.Status, &n.MaxMemoryMB, &n.MaxCPU, &n.MaxStorageMB, &n.Cordoned, &n.Tags, &n.PortRangeStart, &n.PortRangeEnd, &n.SFTPPort, &n.LastSeen, &n.CreatedAt, &n.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scanning worker node row: %w", err)
 		}
 		nodes = append(nodes, n)
@@ -156,6 +156,24 @@ func (s *WorkerNodeStore) SetWorkerNodeTags(id string, tags model.Labels) error 
 	)
 	if err != nil {
 		return fmt.Errorf("setting tags for worker node %s: %w", id, err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("checking rows affected for worker node %s: %w", id, err)
+	}
+	if rows == 0 {
+		return fmt.Errorf("worker node %s not found", id)
+	}
+	return nil
+}
+
+func (s *WorkerNodeStore) SetWorkerNodePortRange(id string, start *int, end *int) error {
+	result, err := s.db.Exec(
+		"UPDATE worker_nodes SET port_range_start = ?, port_range_end = ?, updated_at = ? WHERE id = ?",
+		start, end, time.Now(), id,
+	)
+	if err != nil {
+		return fmt.Errorf("setting port range for worker node %s: %w", id, err)
 	}
 	rows, err := result.RowsAffected()
 	if err != nil {

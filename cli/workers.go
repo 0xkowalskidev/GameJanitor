@@ -19,6 +19,8 @@ func init() {
 	workersSetCmd.Flags().Float64("cpu", 0, "Max CPU cores (0 to clear)")
 	workersSetCmd.Flags().Int("storage", 0, "Max storage in MB (0 to clear)")
 	workersSetCmd.Flags().StringSlice("tags", nil, "Worker labels (key=value, comma-separated)")
+	workersSetCmd.Flags().Int("port-range-start", 0, "Port range start (0 to clear)")
+	workersSetCmd.Flags().Int("port-range-end", 0, "Port range end (0 to clear)")
 
 	workersClearCmd.Flags().Bool("limits", false, "Clear all resource limits")
 	workersClearCmd.Flags().Bool("tags", false, "Clear all tags")
@@ -184,6 +186,22 @@ var workersSetCmd = &cobra.Command{
 				tags[parts[0]] = parts[1]
 			}
 			body["tags"] = tags
+		}
+		if cmd.Flags().Changed("port-range-start") {
+			v, _ := cmd.Flags().GetInt("port-range-start")
+			if v == 0 {
+				body["port_range_start"] = nil
+			} else {
+				body["port_range_start"] = v
+			}
+		}
+		if cmd.Flags().Changed("port-range-end") {
+			v, _ := cmd.Flags().GetInt("port-range-end")
+			if v == 0 {
+				body["port_range_end"] = nil
+			} else {
+				body["port_range_end"] = v
+			}
 		}
 
 		if len(body) == 0 {

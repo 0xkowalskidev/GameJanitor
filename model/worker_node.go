@@ -17,9 +17,11 @@ type WorkerNode struct {
 	MaxMemoryMB  *int       `json:"max_memory_mb"`
 	MaxCPU       *float64   `json:"max_cpu"`
 	MaxStorageMB *int       `json:"max_storage_mb"`
-	Cordoned     bool       `json:"cordoned"`
-	Tags         Labels     `json:"tags"`
-	SFTPPort     int        `json:"sftp_port"`
+	Cordoned       bool       `json:"cordoned"`
+	Tags           Labels     `json:"tags"`
+	PortRangeStart *int       `json:"port_range_start"`
+	PortRangeEnd   *int       `json:"port_range_end"`
+	SFTPPort       int        `json:"sftp_port"`
 	LastSeen     *time.Time `json:"last_seen"`
 	CreatedAt    time.Time  `json:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`

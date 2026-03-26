@@ -43,6 +43,18 @@ func (s *GameserverService) portRange() (int, int) {
 	return s.settingsSvc.GetInt(settings.SettingPortRangeStart), s.settingsSvc.GetInt(settings.SettingPortRangeEnd)
 }
 
+// portRangeForNode returns the port range for a specific worker node.
+// Uses the worker's per-node range if set, otherwise falls back to the global range.
+func (s *GameserverService) portRangeForNode(nodeID string) (int, int) {
+	if nodeID != "" {
+		node, err := s.store.GetWorkerNode(nodeID)
+		if err == nil && node != nil && node.PortRangeStart != nil && node.PortRangeEnd != nil {
+			return *node.PortRangeStart, *node.PortRangeEnd
+		}
+	}
+	return s.portRange()
+}
+
 // checkWorkerLimits returns an error if the worker has exceeded its configured resource limits.
 func (s *GameserverService) checkWorkerLimits(nodeID string, memoryNeeded int, cpuNeeded float64, storageNeeded int) error {
 	node, err := s.store.GetWorkerNode(nodeID)
@@ -156,7 +168,7 @@ func (s *GameserverService) AllocatePorts(game *games.Game, nodeID string, exclu
 		portIndex[p] = i
 	}
 
-	rangeStart, rangeEnd := s.portRange()
+	rangeStart, rangeEnd := s.portRangeForNode(nodeID)
 
 	used, err := s.UsedHostPorts(nodeID, excludeID)
 	if err != nil {

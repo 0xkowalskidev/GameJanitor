@@ -79,6 +79,8 @@ CREATE TABLE worker_nodes (
     max_storage_mb INTEGER,
     cordoned BOOLEAN NOT NULL DEFAULT 0,
     tags TEXT NOT NULL DEFAULT '{}',
+    port_range_start INTEGER,
+    port_range_end INTEGER,
     sftp_port INTEGER NOT NULL DEFAULT 0,
     last_seen DATETIME,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
