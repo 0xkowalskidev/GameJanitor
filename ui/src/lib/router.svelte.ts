@@ -15,6 +15,7 @@ interface Route {
 
 const standardPatterns: { name: string; pattern: RegExp; paramNames: string[] }[] = [
   { name: 'dashboard', pattern: /^\/$/, paramNames: [] },
+  { name: 'cluster', pattern: /^\/cluster$/, paramNames: [] },
   { name: 'settings', pattern: /^\/settings$/, paramNames: [] },
   { name: 'newGameserver', pattern: /^\/gameservers\/new$/, paramNames: [] },
   { name: 'gameserverConsole', pattern: /^\/gameservers\/([^/]+)\/console$/, paramNames: ['id'] },

@@ -375,6 +375,7 @@ export const api = {
     updateGame: (id: string) => post<Gameserver>(`/api/gameservers/${id}/update-game`),
     reinstall: (id: string) => post<Gameserver>(`/api/gameservers/${id}/reinstall`),
     migrate: (id: string, nodeId: string) => post<Gameserver>(`/api/gameservers/${id}/migrate`, { node_id: nodeId }),
+    bulk: (action: string, ids: string[]) => post<any>('/api/gameservers/bulk', { action, all: ids.length === 0 }),
     regenerateSftpPassword: (id: string) => post<{ sftp_password: string }>(`/api/gameservers/${id}/regenerate-sftp-password`),
     status: (id: string) => get<GameserverStatus>(`/api/gameservers/${id}/status`),
     stats: (id: string) => get<GameserverStats>(`/api/gameservers/${id}/stats`),

@@ -3,10 +3,12 @@
   import { onMount, onDestroy } from 'svelte';
   import { ToastContainer, ConfirmModal } from '$lib/components';
   import { connect, disconnect, enableAutoToasts, initAuth, gameserverStore } from '$lib/stores';
+  import { api } from '$lib/api';
   import { getRoute, navigate } from '$lib/router';
   import { embedded, basePath } from '$lib/base';
 
   import Dashboard from './views/Dashboard.svelte';
+  import Cluster from './views/Cluster.svelte';
   import Settings from './views/Settings.svelte';
   import NewGameserver from './views/NewGameserver.svelte';
   import GameserverLayout from './views/gameserver/Layout.svelte';
@@ -31,11 +33,18 @@
   );
   const gameserverId = $derived(embedded ? embeddedId : route.params.id || '');
 
+  let multiNode = $state(false);
+
   onMount(() => {
     initAuth();
     connect();
     enableAutoToasts();
     gameserverStore.init();
+
+    // Check if multi-node for cluster nav
+    if (!embedded) {
+      api.workers.list().then(w => { multiNode = w.length > 1; }).catch(() => {});
+    }
 
     // Intercept internal link clicks for client-side navigation
     document.addEventListener('click', handleLinkClick);
@@ -73,6 +82,9 @@
       </a>
       <div class="n-links">
         <a href="/">Dashboard</a>
+        {#if multiNode && gameserverStore.can('nodes.manage')}
+          <a href="/cluster">Cluster</a>
+        {/if}
         {#if gameserverStore.can('settings.view')}
           <a href="/settings">Settings</a>
         {/if}
@@ -106,6 +118,8 @@
   </GameserverLayout>
 {:else if route.name === 'newGameserver'}
   <NewGameserver />
+{:else if route.name === 'cluster'}
+  <Cluster />
 {:else if route.name === 'settings'}
   <Settings />
 {:else}
