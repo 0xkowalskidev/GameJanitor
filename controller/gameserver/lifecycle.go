@@ -393,38 +393,10 @@ func (s *GameserverService) Reinstall(ctx context.Context, id string) (err error
 	return s.Start(ctx, id)
 }
 
-// Port mapping from gameserver's ports JSON
-// flexInt handles JSON values that may be a number or a string containing a number.
-type flexInt int
-
-func (fi *flexInt) UnmarshalJSON(b []byte) error {
-	// Try number first
-	var n int
-	if err := json.Unmarshal(b, &n); err == nil {
-		*fi = flexInt(n)
-		return nil
-	}
-	// Try string
-	var s string
-	if err := json.Unmarshal(b, &s); err != nil {
-		return fmt.Errorf("cannot unmarshal %s into int or string", string(b))
-	}
-	if s == "" {
-		*fi = 0
-		return nil
-	}
-	n, err := strconv.Atoi(s)
-	if err != nil {
-		return fmt.Errorf("cannot parse %q as int: %w", s, err)
-	}
-	*fi = flexInt(n)
-	return nil
-}
-
 type portMapping struct {
 	Name          string  `json:"name"`
-	HostPort      flexInt `json:"host_port"`
-	ContainerPort flexInt `json:"container_port"`
+	HostPort      model.FlexInt `json:"host_port"`
+	ContainerPort model.FlexInt `json:"container_port"`
 	Protocol      string  `json:"protocol"`
 }
 

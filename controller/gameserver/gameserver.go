@@ -297,8 +297,8 @@ func applyGameDefaults(gs *model.Gameserver, game *games.Game) error {
 		for i, p := range game.DefaultPorts {
 			gsPorts[i] = portMapping{
 				Name:          p.Name,
-				HostPort:      flexInt(p.Port),
-				ContainerPort: flexInt(p.Port),
+				HostPort:      model.FlexInt(p.Port),
+				ContainerPort: model.FlexInt(p.Port),
 				Protocol:      p.Protocol,
 			}
 		}

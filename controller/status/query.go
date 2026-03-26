@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
-	"strconv"
 	"sync"
 	"time"
 
@@ -210,35 +209,10 @@ func (s *QueryService) gameSupportsQuery(game *games.Game) bool {
 	return true
 }
 
-// flexInt handles JSON values that may be a number or a string containing a number.
-type flexInt int
-
-func (fi *flexInt) UnmarshalJSON(b []byte) error {
-	var n int
-	if err := json.Unmarshal(b, &n); err == nil {
-		*fi = flexInt(n)
-		return nil
-	}
-	var s string
-	if err := json.Unmarshal(b, &s); err != nil {
-		return err
-	}
-	if s == "" {
-		*fi = 0
-		return nil
-	}
-	n64, err := strconv.Atoi(s)
-	if err != nil {
-		return err
-	}
-	*fi = flexInt(n64)
-	return nil
-}
-
 func (s *QueryService) getHostPort(gs *model.Gameserver) uint16 {
 	var ports []struct {
 		Name     string  `json:"name"`
-		HostPort flexInt `json:"host_port"`
+		HostPort model.FlexInt `json:"host_port"`
 	}
 	if err := json.Unmarshal(gs.Ports, &ports); err != nil {
 		return 0

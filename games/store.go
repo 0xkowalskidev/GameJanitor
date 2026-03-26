@@ -105,6 +105,16 @@ type Game struct {
 	Mods                 ModConfig `json:"mods,omitempty"`
 }
 
+// HasCapability returns true if the capability is NOT in the game's DisabledCapabilities list.
+func (g *Game) HasCapability(capability string) bool {
+	for _, cap := range g.DisabledCapabilities {
+		if cap == capability {
+			return false
+		}
+	}
+	return true
+}
+
 type GameStore struct {
 	games    map[string]*Game
 	aliases  map[string]string // alias → game ID

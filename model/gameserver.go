@@ -2,6 +2,8 @@ package model
 
 import (
 	"encoding/json"
+	"fmt"
+	"strconv"
 	"time"
 )
 
@@ -42,6 +44,32 @@ type Gameserver struct {
 	AutoRestart    bool            `json:"auto_restart"`
 	CreatedAt     time.Time       `json:"created_at"`
 	UpdatedAt     time.Time       `json:"updated_at"`
+}
+
+// FlexInt handles JSON values that may be a number or a string containing a number.
+// Used for port mappings where values come from user-provided JSON.
+type FlexInt int
+
+func (fi *FlexInt) UnmarshalJSON(b []byte) error {
+	var n int
+	if err := json.Unmarshal(b, &n); err == nil {
+		*fi = FlexInt(n)
+		return nil
+	}
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("cannot unmarshal %s into int or string", string(b))
+	}
+	if s == "" {
+		*fi = 0
+		return nil
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return fmt.Errorf("cannot parse %q as int: %w", s, err)
+	}
+	*fi = FlexInt(n)
+	return nil
 }
 
 type GameserverFilter struct {

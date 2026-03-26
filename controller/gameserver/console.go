@@ -57,7 +57,7 @@ func (s *ConsoleService) StreamLogs(ctx context.Context, gameserverID string, ta
 	if game == nil {
 		return nil, controller.ErrNotFoundf("game %s not found for gameserver %s", gs.GameID, gameserverID)
 	}
-	if !HasCapability(game, "console_read") {
+	if !game.HasCapability("console_read") {
 		return nil, controller.ErrBadRequestf("console_read capability is disabled for game %s", game.Name)
 	}
 
@@ -87,7 +87,7 @@ func (s *ConsoleService) SendCommand(ctx context.Context, gameserverID string, c
 	if game == nil {
 		return "", controller.ErrNotFoundf("game %s not found for gameserver %s", gs.GameID, gameserverID)
 	}
-	if !HasCapability(game, "command") {
+	if !game.HasCapability("command") {
 		return "", controller.ErrBadRequestf("command capability is disabled for game %s", game.Name)
 	}
 
@@ -173,18 +173,4 @@ func (s *ConsoleService) ReadHistoricalLogs(ctx context.Context, gameserverID st
 		lines = lines[len(lines)-tail:]
 	}
 	return lines, nil
-}
-
-// HasCapability returns true if the capability is NOT in the game's DisabledCapabilities list.
-func HasCapability(game *games.Game, capability string) bool {
-	if len(game.DisabledCapabilities) == 0 {
-		return true
-	}
-
-	for _, cap := range game.DisabledCapabilities {
-		if cap == capability {
-			return false
-		}
-	}
-	return true
 }
