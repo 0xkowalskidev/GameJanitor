@@ -17,7 +17,7 @@ func TestSchedule_Create_HappyPath(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	ctx := testutil.TestContext()
 
-	gs := &model.Gameserver{Name: "Sched Host", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
+	gs := &model.Gameserver{Name: "Sched Host", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.NoError(t, err)
 
@@ -40,7 +40,7 @@ func TestSchedule_Create_InvalidCron(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	ctx := testutil.TestContext()
 
-	gs := &model.Gameserver{Name: "Sched Host", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
+	gs := &model.Gameserver{Name: "Sched Host", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.NoError(t, err)
 
@@ -62,7 +62,7 @@ func TestSchedule_List_ByGameserver(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	ctx := testutil.TestContext()
 
-	gs := &model.Gameserver{Name: "List Host", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
+	gs := &model.Gameserver{Name: "List Host", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.NoError(t, err)
 
@@ -85,7 +85,7 @@ func TestSchedule_Delete_HappyPath(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	ctx := testutil.TestContext()
 
-	gs := &model.Gameserver{Name: "Del Host", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
+	gs := &model.Gameserver{Name: "Del Host", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.NoError(t, err)
 
@@ -109,7 +109,7 @@ func TestSchedule_Create_InvalidType(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	ctx := testutil.TestContext()
 
-	gs := &model.Gameserver{Name: "Type Host", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
+	gs := &model.Gameserver{Name: "Type Host", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.NoError(t, err)
 

@@ -2,7 +2,6 @@ package gameserver_test
 
 import (
 	"github.com/warsmite/gamejanitor/controller/auth"
-	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -37,14 +36,14 @@ func TestUpdate_EnvChange(t *testing.T) {
 
 	gs := testutil.CreateTestGameserver(t, svc)
 
-	newEnv := json.RawMessage(`{"REQUIRED_VAR":"updated","SERVER_NAME":"My Server"}`)
-	update := &model.Gameserver{ID: gs.ID, Env: newEnv}
+	update := &model.Gameserver{ID: gs.ID, Env: model.Env{"REQUIRED_VAR": "updated", "SERVER_NAME": "My Server"}}
 	_, err := svc.GameserverSvc.UpdateGameserver(ctx, update)
 	require.NoError(t, err)
 
 	fetched, err := svc.GameserverSvc.GetGameserver(gs.ID)
 	require.NoError(t, err)
-	assert.JSONEq(t, string(newEnv), string(fetched.Env))
+	assert.Equal(t, "updated", fetched.Env["REQUIRED_VAR"])
+	assert.Equal(t, "My Server", fetched.Env["SERVER_NAME"])
 }
 
 func TestUpdate_NonAdminBlockedFromResources(t *testing.T) {

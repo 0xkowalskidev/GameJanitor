@@ -33,7 +33,7 @@ func TestScenario_Newbie_CreateAndStartGameserver(t *testing.T) {
 	gs := &model.Gameserver{
 		Name:   "My Minecraft Server",
 		GameID: testutil.TestGameID,
-		Env:    []byte(`{"REQUIRED_VAR":"yes"}`),
+		Env:    model.Env{"REQUIRED_VAR": "yes"},
 	}
 	sftpPassword, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.NoError(t, err)
@@ -85,7 +85,7 @@ func TestScenario_Newbie_SFTPLogin(t *testing.T) {
 	gs := &model.Gameserver{
 		Name:   "SFTP Test",
 		GameID: testutil.TestGameID,
-		Env:    []byte(`{"REQUIRED_VAR":"v"}`),
+		Env:    model.Env{"REQUIRED_VAR": "v"},
 	}
 	sftpPassword, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.NoError(t, err)
@@ -112,7 +112,7 @@ func TestScenario_Newbie_RegenerateSFTPPassword(t *testing.T) {
 	gs := &model.Gameserver{
 		Name:   "SFTP Regen",
 		GameID: testutil.TestGameID,
-		Env:    []byte(`{"REQUIRED_VAR":"v"}`),
+		Env:    model.Env{"REQUIRED_VAR": "v"},
 	}
 	oldPassword, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.NoError(t, err)
@@ -138,7 +138,7 @@ func TestScenario_PowerUser_MultiNodePlacementAndMigration(t *testing.T) {
 		GameID:        testutil.TestGameID,
 		MemoryLimitMB: 2048,
 		NodeID:        testutil.StrPtr("node-us"),
-		Env:           []byte(`{"REQUIRED_VAR":"v"}`),
+		Env:           model.Env{"REQUIRED_VAR": "v"},
 	}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.NoError(t, err)
@@ -158,8 +158,8 @@ func TestScenario_PowerUser_ScopedTokenWorkflow(t *testing.T) {
 	ctx := testutil.TestContext()
 
 	// Create two gameservers
-	gs1 := &model.Gameserver{Name: "Minecraft", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
-	gs2 := &model.Gameserver{Name: "Rust", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
+	gs1 := &model.Gameserver{Name: "Minecraft", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
+	gs2 := &model.Gameserver{Name: "Rust", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs1)
 	require.NoError(t, err)
 	_, err = svc.GameserverSvc.CreateGameserver(ctx, gs2)
@@ -293,7 +293,7 @@ func TestScenario_Business_ResourceLimitsRequired(t *testing.T) {
 		Name:     "No Limits",
 		GameID:   testutil.TestGameID,
 		CPULimit: 0,
-		Env:      []byte(`{"REQUIRED_VAR":"v"}`),
+		Env:      model.Env{"REQUIRED_VAR": "v"},
 	}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.Error(t, err, "business mode should reject gameservers without resource limits")
@@ -345,7 +345,7 @@ func TestScenario_Business_MultipleWorkersWithCapacityPlanning(t *testing.T) {
 			MemoryLimitMB: 4096,
 			CPULimit:      2.0,
 			NodeID:        testutil.StrPtr("node-3"),
-			Env:           []byte(`{"REQUIRED_VAR":"v"}`),
+			Env:           model.Env{"REQUIRED_VAR": "v"},
 		}
 		_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 		require.NoError(t, err)
@@ -357,7 +357,7 @@ func TestScenario_Business_MultipleWorkersWithCapacityPlanning(t *testing.T) {
 		GameID:        testutil.TestGameID,
 		MemoryLimitMB: 4096,
 		CPULimit:      2.0,
-		Env:           []byte(`{"REQUIRED_VAR":"v"}`),
+		Env:           model.Env{"REQUIRED_VAR": "v"},
 	}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.NoError(t, err)

@@ -34,7 +34,7 @@ func TestBackup_Create_ReturnsInProgressRecord(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	ctx := testutil.TestContext()
 
-	gs := &model.Gameserver{Name: "Backup Host", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
+	gs := &model.Gameserver{Name: "Backup Host", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.NoError(t, err)
 
@@ -63,7 +63,7 @@ func TestBackup_List_ByGameserver(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	ctx := testutil.TestContext()
 
-	gs := &model.Gameserver{Name: "List Host", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
+	gs := &model.Gameserver{Name: "List Host", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.NoError(t, err)
 
@@ -86,7 +86,7 @@ func TestBackup_Delete_HappyPath(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	ctx := testutil.TestContext()
 
-	gs := &model.Gameserver{Name: "Del Host", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
+	gs := &model.Gameserver{Name: "Del Host", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.NoError(t, err)
 

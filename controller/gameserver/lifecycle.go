@@ -2,7 +2,6 @@ package gameserver
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -405,11 +404,7 @@ func mergeEnv(game *games.Game, gs *model.Gameserver) ([]string, error) {
 	}
 
 	// Step 2: Merge gameserver env overrides (user values win)
-	var overrides map[string]string
-	if err := json.Unmarshal(gs.Env, &overrides); err != nil {
-		return nil, fmt.Errorf("parsing gameserver env: %w", err)
-	}
-	for k, v := range overrides {
+	for k, v := range gs.Env {
 		if !systemKeys[k] {
 			env[k] = v
 		}

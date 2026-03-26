@@ -536,11 +536,10 @@ func (s *ModService) resolveInstallPath(srcConfig *games.ModSourceConfig, loader
 }
 
 func (s *ModService) parseEnv(gs *model.Gameserver) map[string]string {
-	env := make(map[string]string)
-	if err := json.Unmarshal(gs.Env, &env); err != nil {
-		s.log.Warn("failed to parse gameserver env", "gameserver_id", gs.ID, "error", err)
+	if gs.Env == nil {
+		return make(map[string]string)
 	}
-	return env
+	return map[string]string(gs.Env)
 }
 
 func (s *ModService) downloadFile(ctx context.Context, downloadURL string) ([]byte, error) {

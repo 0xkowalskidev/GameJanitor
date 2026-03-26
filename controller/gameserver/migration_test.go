@@ -23,7 +23,7 @@ func TestMigration_HappyPath(t *testing.T) {
 		Name:   "Migration Test",
 		GameID: testutil.TestGameID,
 		NodeID: testutil.StrPtr("worker-1"),
-		Env:    []byte(`{"REQUIRED_VAR":"v"}`),
+		Env:    model.Env{"REQUIRED_VAR": "v"},
 	}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.NoError(t, err)
@@ -62,7 +62,7 @@ func TestMigration_TargetNodeMustHaveCapacity(t *testing.T) {
 		Name:          "Migration Source",
 		GameID:        testutil.TestGameID,
 		MemoryLimitMB: 512,
-		Env:           []byte(`{"REQUIRED_VAR":"v"}`),
+		Env:           model.Env{"REQUIRED_VAR": "v"},
 	}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.NoError(t, err)
@@ -72,7 +72,7 @@ func TestMigration_TargetNodeMustHaveCapacity(t *testing.T) {
 		Name:          "Filler",
 		GameID:        testutil.TestGameID,
 		MemoryLimitMB: 512,
-		Env:           []byte(`{"REQUIRED_VAR":"v"}`),
+		Env:           model.Env{"REQUIRED_VAR": "v"},
 	}
 	_, err = svc.GameserverSvc.CreateGameserver(ctx, gs2)
 	require.NoError(t, err)
@@ -108,7 +108,7 @@ func TestMigration_SourceWorkerMustBeOnline(t *testing.T) {
 		Name:   "Source Offline Test",
 		GameID: testutil.TestGameID,
 		NodeID: testutil.StrPtr("worker-1"),
-		Env:    []byte(`{"REQUIRED_VAR":"v"}`),
+		Env:    model.Env{"REQUIRED_VAR": "v"},
 	}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.NoError(t, err)
@@ -144,7 +144,7 @@ func TestMigration_PortsPreservedInClusterScope(t *testing.T) {
 		GameID:   testutil.TestGameID,
 		PortMode: "auto",
 		NodeID:   testutil.StrPtr("worker-1"),
-		Env:      []byte(`{"REQUIRED_VAR":"v"}`),
+		Env:      model.Env{"REQUIRED_VAR": "v"},
 	}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.NoError(t, err)
@@ -172,7 +172,7 @@ func TestMigration_PortsReallocatedInNodeScope(t *testing.T) {
 		GameID:   testutil.TestGameID,
 		PortMode: "auto",
 		NodeID:   testutil.StrPtr("worker-1"),
-		Env:      []byte(`{"REQUIRED_VAR":"v"}`),
+		Env:      model.Env{"REQUIRED_VAR": "v"},
 	}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.NoError(t, err)

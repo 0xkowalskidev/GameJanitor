@@ -2,7 +2,6 @@ package auth_test
 
 import (
 	"github.com/warsmite/gamejanitor/controller/auth"
-	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -19,8 +18,8 @@ func TestPermission_HasPermission_AdminScope_AlwaysTrue(t *testing.T) {
 	t.Parallel()
 	token := &model.Token{
 		Scope:         "admin",
-		GameserverIDs: json.RawMessage(`[]`),
-		Permissions:   json.RawMessage(`[]`),
+		GameserverIDs: model.StringSlice{},
+		Permissions:   model.StringSlice{},
 	}
 	assert.True(t, auth.HasPermission(token, "any-id", auth.PermGameserverStart))
 	assert.True(t, auth.HasPermission(token, "other-id", auth.PermGameserverDelete))
@@ -31,8 +30,8 @@ func TestPermission_HasPermission_CustomScope_ChecksGameserverIDs(t *testing.T) 
 	t.Parallel()
 	token := &model.Token{
 		Scope:         "custom",
-		GameserverIDs: json.RawMessage(`["gs-1","gs-2"]`),
-		Permissions:   json.RawMessage(`["gameserver.start"]`),
+		GameserverIDs: model.StringSlice{"gs-1", "gs-2"},
+		Permissions:   model.StringSlice{"gameserver.start"},
 	}
 	assert.True(t, auth.HasPermission(token, "gs-1", auth.PermGameserverStart))
 	assert.True(t, auth.HasPermission(token, "gs-2", auth.PermGameserverStart))
@@ -43,8 +42,8 @@ func TestPermission_HasPermission_CustomScope_EmptyIDs_AllAccess(t *testing.T) {
 	t.Parallel()
 	token := &model.Token{
 		Scope:         "custom",
-		GameserverIDs: json.RawMessage(`[]`),
-		Permissions:   json.RawMessage(`["gameserver.start"]`),
+		GameserverIDs: model.StringSlice{},
+		Permissions:   model.StringSlice{"gameserver.start"},
 	}
 	assert.True(t, auth.HasPermission(token, "any-gs", auth.PermGameserverStart))
 }
@@ -53,8 +52,8 @@ func TestPermission_HasPermission_CustomScope_MissingPermission(t *testing.T) {
 	t.Parallel()
 	token := &model.Token{
 		Scope:         "custom",
-		GameserverIDs: json.RawMessage(`[]`),
-		Permissions:   json.RawMessage(`["gameserver.start"]`),
+		GameserverIDs: model.StringSlice{},
+		Permissions:   model.StringSlice{"gameserver.start"},
 	}
 	assert.True(t, auth.HasPermission(token, "gs-1", auth.PermGameserverStart))
 	assert.False(t, auth.HasPermission(token, "gs-1", auth.PermGameserverDelete))

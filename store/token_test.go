@@ -1,7 +1,6 @@
 package store_test
 
 import (
-	"encoding/json"
 	"testing"
 	"time"
 
@@ -19,8 +18,8 @@ func newTestToken(id, name, scope string) *model.Token {
 		HashedToken:   "hashed-" + id,
 		TokenPrefix:   "pfx-" + id,
 		Scope:         scope,
-		GameserverIDs: json.RawMessage(`[]`),
-		Permissions:   json.RawMessage(`[]`),
+		GameserverIDs: model.StringSlice{},
+		Permissions:   model.StringSlice{},
 	}
 }
 
@@ -150,21 +149,16 @@ func TestToken_GameserverIDsJSON(t *testing.T) {
 	db := store.New(testutil.NewTestDB(t))
 
 	tok := newTestToken("tok-gs", "Scoped Token", "gameserver")
-	tok.GameserverIDs = json.RawMessage(`["gs-1","gs-2"]`)
-	tok.Permissions = json.RawMessage(`["console","backup.create"]`)
+	tok.GameserverIDs = model.StringSlice{"gs-1", "gs-2"}
+	tok.Permissions = model.StringSlice{"console", "backup.create"}
 	require.NoError(t, db.CreateToken(tok))
 
 	got, err := db.GetToken("tok-gs")
 	require.NoError(t, err)
 	require.NotNil(t, got)
 
-	var gsIDs []string
-	require.NoError(t, json.Unmarshal(got.GameserverIDs, &gsIDs))
-	assert.Equal(t, []string{"gs-1", "gs-2"}, gsIDs)
-
-	var perms []string
-	require.NoError(t, json.Unmarshal(got.Permissions, &perms))
-	assert.Equal(t, []string{"console", "backup.create"}, perms)
+	assert.Equal(t, model.StringSlice{"gs-1", "gs-2"}, got.GameserverIDs)
+	assert.Equal(t, model.StringSlice{"console", "backup.create"}, got.Permissions)
 }
 
 func TestToken_ExistsByScope_ValidToken(t *testing.T) {

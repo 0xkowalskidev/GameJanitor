@@ -2,7 +2,6 @@ package store
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -20,17 +19,13 @@ func NewGameserverStore(db *sql.DB) *GameserverStore {
 
 const gameserverColumns = "id, name, game_id, ports, env, memory_limit_mb, cpu_limit, cpu_enforced, container_id, volume_name, status, error_reason, port_mode, node_id, sftp_username, hashed_sftp_password, installed, backup_limit, storage_limit_mb, node_tags, auto_restart, created_at, updated_at"
 
-// scanGameserver handles scanning JSON columns via string intermediaries
-// since SQLite drivers return JSON columns as strings, not []byte.
+// scanGameserver handles scanning JSON columns via sql.Scanner (model.Ports, model.Env, model.Labels).
 func scanGameserver(scan func(dest ...any) error) (model.Gameserver, error) {
 	var gs model.Gameserver
-	var portsStr, envStr string
-	err := scan(&gs.ID, &gs.Name, &gs.GameID, &portsStr, &envStr, &gs.MemoryLimitMB, &gs.CPULimit, &gs.CPUEnforced, &gs.ContainerID, &gs.VolumeName, &gs.Status, &gs.ErrorReason, &gs.PortMode, &gs.NodeID, &gs.SFTPUsername, &gs.HashedSFTPPassword, &gs.Installed, &gs.BackupLimit, &gs.StorageLimitMB, &gs.NodeTags, &gs.AutoRestart, &gs.CreatedAt, &gs.UpdatedAt)
+	err := scan(&gs.ID, &gs.Name, &gs.GameID, &gs.Ports, &gs.Env, &gs.MemoryLimitMB, &gs.CPULimit, &gs.CPUEnforced, &gs.ContainerID, &gs.VolumeName, &gs.Status, &gs.ErrorReason, &gs.PortMode, &gs.NodeID, &gs.SFTPUsername, &gs.HashedSFTPPassword, &gs.Installed, &gs.BackupLimit, &gs.StorageLimitMB, &gs.NodeTags, &gs.AutoRestart, &gs.CreatedAt, &gs.UpdatedAt)
 	if err != nil {
 		return gs, err
 	}
-	gs.Ports = json.RawMessage(portsStr)
-	gs.Env = json.RawMessage(envStr)
 	return gs, nil
 }
 

@@ -28,11 +28,11 @@ func TestScoping_Backup_CrossAccess_Blocked(t *testing.T) {
 	ctx := testutil.TestContext()
 
 	// Create two gameservers
-	gsA := &model.Gameserver{Name: "GS-A", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
+	gsA := &model.Gameserver{Name: "GS-A", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gsA)
 	require.NoError(t, err)
 
-	gsB := &model.Gameserver{Name: "GS-B", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
+	gsB := &model.Gameserver{Name: "GS-B", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
 	_, err = svc.GameserverSvc.CreateGameserver(ctx, gsB)
 	require.NoError(t, err)
 
@@ -69,11 +69,11 @@ func TestScoping_Schedule_CrossAccess_Blocked(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	ctx := testutil.TestContext()
 
-	gsA := &model.Gameserver{Name: "GS-A", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
+	gsA := &model.Gameserver{Name: "GS-A", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gsA)
 	require.NoError(t, err)
 
-	gsB := &model.Gameserver{Name: "GS-B", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
+	gsB := &model.Gameserver{Name: "GS-B", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
 	_, err = svc.GameserverSvc.CreateGameserver(ctx, gsB)
 	require.NoError(t, err)
 
@@ -110,11 +110,11 @@ func TestScoping_ListGameservers_TokenScoped(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	ctx := testutil.TestContext()
 
-	gsA := &model.Gameserver{Name: "GS-A", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
+	gsA := &model.Gameserver{Name: "GS-A", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gsA)
 	require.NoError(t, err)
 
-	gsB := &model.Gameserver{Name: "GS-B", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
+	gsB := &model.Gameserver{Name: "GS-B", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
 	_, err = svc.GameserverSvc.CreateGameserver(ctx, gsB)
 	require.NoError(t, err)
 
@@ -139,11 +139,11 @@ func TestScoping_ListGameservers_IDsIntersectsTokenScope(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	ctx := testutil.TestContext()
 
-	gsA := &model.Gameserver{Name: "GS-A", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
+	gsA := &model.Gameserver{Name: "GS-A", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gsA)
 	require.NoError(t, err)
 
-	gsB := &model.Gameserver{Name: "GS-B", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"v"}`)}
+	gsB := &model.Gameserver{Name: "GS-B", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "v"}}
 	_, err = svc.GameserverSvc.CreateGameserver(ctx, gsB)
 	require.NoError(t, err)
 

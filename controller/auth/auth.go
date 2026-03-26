@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"time"
@@ -156,16 +155,14 @@ func (s *AuthService) CreateAdminToken(name string) (string, *model.Token, error
 	}
 
 	// Admin tokens store all permissions for consistency
-	permsJSON, _ := json.Marshal(AllPermissions)
-
 	token := &model.Token{
 		ID:            uuid.New().String(),
 		Name:          name,
 		HashedToken:   string(hashed),
 		TokenPrefix:   tokenPrefix(rawToken),
 		Scope:         ScopeAdmin,
-		GameserverIDs: json.RawMessage("[]"),
-		Permissions:   permsJSON,
+		GameserverIDs: model.StringSlice{},
+		Permissions:   model.StringSlice(AllPermissions),
 	}
 
 	if err := s.store.CreateToken(token); err != nil {
@@ -212,8 +209,6 @@ func (s *AuthService) CreateCustomToken(name string, gameserverIDs []string, per
 	if gameserverIDs == nil {
 		gameserverIDs = []string{}
 	}
-	gsIDsJSON, _ := json.Marshal(gameserverIDs)
-	permsJSON, _ := json.Marshal(permissions)
 
 	token := &model.Token{
 		ID:            uuid.New().String(),
@@ -221,8 +216,8 @@ func (s *AuthService) CreateCustomToken(name string, gameserverIDs []string, per
 		HashedToken:   string(hashed),
 		TokenPrefix:   tokenPrefix(rawToken),
 		Scope:         ScopeCustom,
-		GameserverIDs: gsIDsJSON,
-		Permissions:   permsJSON,
+		GameserverIDs: model.StringSlice(gameserverIDs),
+		Permissions:   model.StringSlice(permissions),
 		ExpiresAt:     expiresAt,
 	}
 
@@ -264,8 +259,8 @@ func (s *AuthService) CreateWorkerToken(name string) (string, *model.Token, erro
 		HashedToken:   string(hashed),
 		TokenPrefix:   tokenPrefix(rawToken),
 		Scope:         ScopeWorker,
-		GameserverIDs: json.RawMessage("[]"),
-		Permissions:   json.RawMessage("[]"),
+		GameserverIDs: model.StringSlice{},
+		Permissions:   model.StringSlice{},
 	}
 
 	if err := s.store.CreateToken(token); err != nil {
@@ -300,16 +295,14 @@ func (s *AuthService) RotateAdminToken(name string) (string, *model.Token, error
 		return "", nil, fmt.Errorf("hashing token: %w", err)
 	}
 
-	permsJSON, _ := json.Marshal(AllPermissions)
-
 	token := &model.Token{
 		ID:            uuid.New().String(),
 		Name:          name,
 		HashedToken:   string(hashed),
 		TokenPrefix:   tokenPrefix(rawToken),
 		Scope:         ScopeAdmin,
-		GameserverIDs: json.RawMessage("[]"),
-		Permissions:   permsJSON,
+		GameserverIDs: model.StringSlice{},
+		Permissions:   model.StringSlice(AllPermissions),
 	}
 
 	if err := s.store.CreateToken(token); err != nil {
@@ -349,8 +342,8 @@ func (s *AuthService) RotateWorkerToken(name string) (string, *model.Token, erro
 		HashedToken:   string(hashed),
 		TokenPrefix:   tokenPrefix(rawToken),
 		Scope:         ScopeWorker,
-		GameserverIDs: json.RawMessage("[]"),
-		Permissions:   json.RawMessage("[]"),
+		GameserverIDs: model.StringSlice{},
+		Permissions:   model.StringSlice{},
 	}
 
 	if err := s.store.CreateToken(token); err != nil {
@@ -402,13 +395,9 @@ func HasPermission(token *model.Token, gameserverID string, permission string) b
 	}
 
 	// Check gameserver access — empty list means all-access
-	var gsIDs []string
-	if err := json.Unmarshal(token.GameserverIDs, &gsIDs); err != nil {
-		return false
-	}
-	if len(gsIDs) > 0 {
+	if len(token.GameserverIDs) > 0 {
 		hasAccess := false
-		for _, id := range gsIDs {
+		for _, id := range token.GameserverIDs {
 			if id == gameserverID {
 				hasAccess = true
 				break
@@ -420,11 +409,7 @@ func HasPermission(token *model.Token, gameserverID string, permission string) b
 	}
 
 	// Check permission
-	var perms []string
-	if err := json.Unmarshal(token.Permissions, &perms); err != nil {
-		return false
-	}
-	for _, p := range perms {
+	for _, p := range token.Permissions {
 		if p == permission {
 			return true
 		}
@@ -438,14 +423,10 @@ func AllowedGameserverIDs(token *model.Token) []string {
 	if token == nil || token.Scope == ScopeAdmin {
 		return nil
 	}
-	var ids []string
-	if err := json.Unmarshal(token.GameserverIDs, &ids); err != nil {
-		return nil
-	}
-	if len(ids) == 0 {
+	if len(token.GameserverIDs) == 0 {
 		return nil // all-access
 	}
-	return ids
+	return []string(token.GameserverIDs)
 }
 
 // intersectIDs returns the intersection of requested and allowed ID sets.

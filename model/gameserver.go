@@ -1,6 +1,7 @@
 package model
 
 import (
+	"database/sql/driver"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -23,8 +24,8 @@ type Gameserver struct {
 	ID            string          `json:"id"`
 	Name          string          `json:"name"`
 	GameID        string          `json:"game_id"`
-	Ports         json.RawMessage `json:"ports"`
-	Env           json.RawMessage `json:"env"`
+	Ports         Ports           `json:"ports"`
+	Env           Env             `json:"env"`
 	MemoryLimitMB  int             `json:"memory_limit_mb"`
 	CPULimit       float64         `json:"cpu_limit"`
 	CPUEnforced    bool            `json:"cpu_enforced"`
@@ -70,6 +71,86 @@ func (fi *FlexInt) UnmarshalJSON(b []byte) error {
 	}
 	*fi = FlexInt(n)
 	return nil
+}
+
+// PortMapping represents a single port binding stored in the gameserver's ports JSON.
+type PortMapping struct {
+	Name          string  `json:"name"`
+	HostPort      FlexInt `json:"host_port"`
+	ContainerPort FlexInt `json:"container_port"`
+	Protocol      string  `json:"protocol"`
+}
+
+// Ports is a slice of port mappings stored as JSON in the database.
+type Ports []PortMapping
+
+func (p *Ports) Scan(src any) error {
+	if src == nil {
+		*p = Ports{}
+		return nil
+	}
+	var data []byte
+	switch v := src.(type) {
+	case string:
+		data = []byte(v)
+	case []byte:
+		data = v
+	default:
+		return fmt.Errorf("ports: unsupported scan type %T", src)
+	}
+	var parsed Ports
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		return fmt.Errorf("ports: invalid JSON %q: %w", string(data), err)
+	}
+	*p = parsed
+	return nil
+}
+
+func (p Ports) Value() (driver.Value, error) {
+	if p == nil {
+		return "[]", nil
+	}
+	data, err := json.Marshal(p)
+	if err != nil {
+		return nil, fmt.Errorf("ports: marshal error: %w", err)
+	}
+	return string(data), nil
+}
+
+// Env is a key-value map of environment variables stored as JSON in the database.
+type Env map[string]string
+
+func (e *Env) Scan(src any) error {
+	if src == nil {
+		*e = Env{}
+		return nil
+	}
+	var data []byte
+	switch v := src.(type) {
+	case string:
+		data = []byte(v)
+	case []byte:
+		data = v
+	default:
+		return fmt.Errorf("env: unsupported scan type %T", src)
+	}
+	parsed := Env{}
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		return fmt.Errorf("env: invalid JSON %q: %w", string(data), err)
+	}
+	*e = parsed
+	return nil
+}
+
+func (e Env) Value() (driver.Value, error) {
+	if e == nil {
+		return "{}", nil
+	}
+	data, err := json.Marshal(e)
+	if err != nil {
+		return nil, fmt.Errorf("env: marshal error: %w", err)
+	}
+	return string(data), nil
 }
 
 type GameserverFilter struct {

@@ -21,7 +21,7 @@ func TestResourceEnforcement_MemoryExceedsNodeLimit(t *testing.T) {
 		Name:          "Too Much Memory",
 		GameID:        testutil.TestGameID,
 		MemoryLimitMB: 2048,
-		Env:           []byte(`{"REQUIRED_VAR":"v"}`),
+		Env:           model.Env{"REQUIRED_VAR": "v"},
 	}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.Error(t, err)
@@ -38,7 +38,7 @@ func TestResourceEnforcement_CPUExceedsNodeLimit(t *testing.T) {
 		Name:     "Too Much CPU",
 		GameID:   testutil.TestGameID,
 		CPULimit: 4.0,
-		Env:      []byte(`{"REQUIRED_VAR":"v"}`),
+		Env:      model.Env{"REQUIRED_VAR": "v"},
 	}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.Error(t, err)
@@ -56,7 +56,7 @@ func TestResourceEnforcement_CumulativeMemoryExceedsLimit(t *testing.T) {
 		Name:          "First",
 		GameID:        testutil.TestGameID,
 		MemoryLimitMB: 2048,
-		Env:           []byte(`{"REQUIRED_VAR":"v"}`),
+		Env:           model.Env{"REQUIRED_VAR": "v"},
 	}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs1)
 	require.NoError(t, err)
@@ -66,7 +66,7 @@ func TestResourceEnforcement_CumulativeMemoryExceedsLimit(t *testing.T) {
 		Name:          "Second",
 		GameID:        testutil.TestGameID,
 		MemoryLimitMB: 2048,
-		Env:           []byte(`{"REQUIRED_VAR":"v"}`),
+		Env:           model.Env{"REQUIRED_VAR": "v"},
 	}
 	_, err = svc.GameserverSvc.CreateGameserver(ctx, gs2)
 	require.Error(t, err, "cumulative allocation should exceed node limit")
@@ -85,7 +85,7 @@ func TestResourceEnforcement_RequireMemoryLimitSetting(t *testing.T) {
 		Name:          "No Memory Set",
 		GameID:        testutil.TestGameID,
 		MemoryLimitMB: 0,
-		Env:           []byte(`{"REQUIRED_VAR":"v"}`),
+		Env:           model.Env{"REQUIRED_VAR": "v"},
 	}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.Error(t, err)
@@ -105,7 +105,7 @@ func TestResourceEnforcement_RequireCPULimitSetting(t *testing.T) {
 		Name:     "No CPU Set",
 		GameID:   testutil.TestGameID,
 		CPULimit: 0,
-		Env:      []byte(`{"REQUIRED_VAR":"v"}`),
+		Env:      model.Env{"REQUIRED_VAR": "v"},
 	}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.Error(t, err)
@@ -123,7 +123,7 @@ func TestResourceEnforcement_RequireStorageLimitSetting(t *testing.T) {
 	gs := &model.Gameserver{
 		Name:   "No Storage Set",
 		GameID: testutil.TestGameID,
-		Env:    []byte(`{"REQUIRED_VAR":"v"}`),
+		Env:    model.Env{"REQUIRED_VAR": "v"},
 	}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.Error(t, err)
@@ -139,7 +139,7 @@ func TestResourceEnforcement_ZeroMemoryMeansUnlimited(t *testing.T) {
 		Name:          "Unlimited Memory",
 		GameID:        testutil.TestGameID,
 		MemoryLimitMB: 0,
-		Env:           []byte(`{"REQUIRED_VAR":"v"}`),
+		Env:           model.Env{"REQUIRED_VAR": "v"},
 	}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.NoError(t, err)

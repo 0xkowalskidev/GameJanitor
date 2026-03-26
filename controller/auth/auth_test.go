@@ -56,8 +56,8 @@ func TestAuth_CustomToken_GameserverScoping(t *testing.T) {
 	ctx := testutil.TestContext()
 
 	// Create two gameservers
-	gs1 := &model.Gameserver{Name: "Server1", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"a"}`)}
-	gs2 := &model.Gameserver{Name: "Server2", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"b"}`)}
+	gs1 := &model.Gameserver{Name: "Server1", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "a"}}
+	gs2 := &model.Gameserver{Name: "Server2", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "b"}}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs1)
 	require.NoError(t, err)
 	_, err = svc.GameserverSvc.CreateGameserver(ctx, gs2)
@@ -83,7 +83,7 @@ func TestAuth_AdminToken_BypassesAllChecks(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	ctx := testutil.TestContext()
 
-	gs := &model.Gameserver{Name: "Server", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"hello"}`)}
+	gs := &model.Gameserver{Name: "Server", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "hello"}}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.NoError(t, err)
 
@@ -104,7 +104,7 @@ func TestAuth_CustomToken_EmptyGameserverIDs_AllAccess(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	ctx := testutil.TestContext()
 
-	gs := &model.Gameserver{Name: "Server", GameID: testutil.TestGameID, Env: []byte(`{"REQUIRED_VAR":"hello"}`)}
+	gs := &model.Gameserver{Name: "Server", GameID: testutil.TestGameID, Env: model.Env{"REQUIRED_VAR": "hello"}}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.NoError(t, err)
 

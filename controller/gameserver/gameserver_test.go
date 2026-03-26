@@ -20,7 +20,7 @@ func TestGameserver_Create_HappyPath(t *testing.T) {
 	gs := &model.Gameserver{
 		Name:   "My Test Server",
 		GameID: testutil.TestGameID,
-		Env:    []byte(`{"REQUIRED_VAR":"hello"}`),
+		Env:    model.Env{"REQUIRED_VAR": "hello"},
 	}
 
 	sftpPassword, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
@@ -89,7 +89,7 @@ func TestGameserver_Create_NoWorkersAvailable(t *testing.T) {
 	gs := &model.Gameserver{
 		Name:   "No Workers",
 		GameID: testutil.TestGameID,
-		Env:    []byte(`{"REQUIRED_VAR":"hello"}`),
+		Env:    model.Env{"REQUIRED_VAR": "hello"},
 	}
 
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
@@ -106,7 +106,7 @@ func TestGameserver_Delete_CascadesCleanup(t *testing.T) {
 	gs := &model.Gameserver{
 		Name:   "To Delete",
 		GameID: testutil.TestGameID,
-		Env:    []byte(`{"REQUIRED_VAR":"hello"}`),
+		Env:    model.Env{"REQUIRED_VAR": "hello"},
 	}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.NoError(t, err)
@@ -139,7 +139,7 @@ func TestGameserver_Create_EventPublished(t *testing.T) {
 	gs := &model.Gameserver{
 		Name:   "Event Test",
 		GameID: testutil.TestGameID,
-		Env:    []byte(`{"REQUIRED_VAR":"hello"}`),
+		Env:    model.Env{"REQUIRED_VAR": "hello"},
 	}
 	_, err := svc.GameserverSvc.CreateGameserver(ctx, gs)
 	require.NoError(t, err)

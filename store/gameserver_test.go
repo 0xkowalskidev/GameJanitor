@@ -18,7 +18,7 @@ func newGameserver(id, name, gameID string, nodeID *string) *model.Gameserver {
 		Name:       name,
 		GameID:     gameID,
 		Ports:      model.Ports{},
-		Env:        json.RawMessage(`{}`),
+		Env:        model.Env{},
 		VolumeName: "vol-" + id,
 		Status:     "stopped",
 		PortMode:   "auto",
@@ -180,17 +180,16 @@ func TestGameserver_JSONColumns(t *testing.T) {
 	expectedPorts := model.Ports{
 		{Name: "game", HostPort: 27015, ContainerPort: 27015, Protocol: "udp"},
 	}
-	env := `{"SERVER_NAME":"Test","MAX_PLAYERS":"16"}`
 	gs := newGameserver("gs-1", "JSON Test", "test-game", nil)
 	gs.Ports = expectedPorts
-	gs.Env = json.RawMessage(env)
+	gs.Env = model.Env{"SERVER_NAME": "Test", "MAX_PLAYERS": "16"}
 
 	require.NoError(t, db.CreateGameserver(gs))
 
 	fetched, err := db.GetGameserver("gs-1")
 	require.NoError(t, err)
 	assert.Equal(t, expectedPorts, fetched.Ports)
-	assert.JSONEq(t, env, string(fetched.Env))
+	assert.Equal(t, model.Env{"SERVER_NAME": "Test", "MAX_PLAYERS": "16"}, fetched.Env)
 }
 
 func TestGameserver_DeleteCascadesBackups(t *testing.T) {

@@ -16,7 +16,7 @@ import (
 
 // TestGameID is the game ID used by the test game definition in testdata/.
 // When creating gameservers manually (not via CreateTestGameserver), remember:
-//   - Env must include REQUIRED_VAR: Env: []byte(`{"REQUIRED_VAR":"value"}`)
+//   - Env must include REQUIRED_VAR: Env: model.Env{"REQUIRED_VAR": "value"}
 //   - Set PortMode: "auto" if testing port allocation (Go zero value "" skips allocation — known bug)
 const TestGameID = "test-game"
 
@@ -35,7 +35,7 @@ func CreateTestGameserver(t *testing.T, svc *ServiceBundle) *model.Gameserver {
 	gs := &model.Gameserver{
 		Name:   "Test Gameserver",
 		GameID: TestGameID,
-		Env:    []byte(`{"REQUIRED_VAR":"test-value"}`),
+		Env:    model.Env{"REQUIRED_VAR": "test-value"},
 	}
 	_, err := svc.GameserverSvc.CreateGameserver(TestContext(), gs)
 	if err != nil {

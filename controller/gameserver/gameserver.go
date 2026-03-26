@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -315,12 +314,8 @@ func applyGameDefaults(gs *model.Gameserver, game *games.Game) error {
 	}
 
 	// User-provided env overrides defaults
-	var userEnv map[string]string
-	if len(gs.Env) > 0 && string(gs.Env) != "null" && string(gs.Env) != "{}" {
-		if err := json.Unmarshal(gs.Env, &userEnv); err != nil {
-			return fmt.Errorf("parsing user env: %w", err)
-		}
-		for k, v := range userEnv {
+	if len(gs.Env) > 0 {
+		for k, v := range gs.Env {
 			env[k] = v
 		}
 	}
@@ -345,11 +340,7 @@ func applyGameDefaults(gs *model.Gameserver, game *games.Game) error {
 		}
 	}
 
-	envJSON, err := json.Marshal(env)
-	if err != nil {
-		return fmt.Errorf("marshaling merged env: %w", err)
-	}
-	gs.Env = envJSON
+	gs.Env = model.Env(env)
 
 	return nil
 }
@@ -537,18 +528,9 @@ func (s *GameserverService) installTriggeringEnvChanged(existing, updated *model
 		return false
 	}
 
-	// Parse old and new env
-	var oldEnv, newEnv map[string]string
-	if err := json.Unmarshal(existing.Env, &oldEnv); err != nil {
-		return false
-	}
-	if err := json.Unmarshal(updated.Env, &newEnv); err != nil {
-		return false
-	}
-
 	for key := range triggerKeys {
-		if oldEnv[key] != newEnv[key] {
-			s.log.Info("install-triggering env var changed", "key", key, "old", oldEnv[key], "new", newEnv[key])
+		if existing.Env[key] != updated.Env[key] {
+			s.log.Info("install-triggering env var changed", "key", key, "old", existing.Env[key], "new", updated.Env[key])
 			return true
 		}
 	}
@@ -633,14 +615,9 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 }
 
 func (s *GameserverService) validateRequiredEnv(game *games.Game, gs *model.Gameserver) error {
-	var env map[string]string
-	if gs.Env != nil {
-		if err := json.Unmarshal(gs.Env, &env); err != nil {
-			return controller.ErrBadRequestf("invalid env format: %v", err)
-		}
-	}
+	env := gs.Env
 	if env == nil {
-		env = map[string]string{}
+		env = model.Env{}
 	}
 
 	for _, def := range game.DefaultEnv {

@@ -3,7 +3,6 @@ package api
 import (
 	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/controller/auth"
-	"encoding/json"
 	"net"
 	"net/http"
 	"strings"
@@ -111,12 +110,7 @@ func RequireClusterPermission(settingsSvc *settings.SettingsService, permission 
 				return
 			}
 			// Check if token has the specific cluster permission
-			var perms []string
-			if err := json.Unmarshal(token.Permissions, &perms); err != nil {
-				handleForbidden(w, r)
-				return
-			}
-			for _, p := range perms {
+			for _, p := range token.Permissions {
 				if p == permission {
 					next.ServeHTTP(w, r)
 					return
@@ -171,17 +165,12 @@ func RequireGameserverAccess(settingsSvc *settings.SettingsService) func(http.Ha
 				handleForbidden(w, r)
 				return
 			}
-			var gsIDs []string
-			if err := json.Unmarshal(token.GameserverIDs, &gsIDs); err != nil {
-				handleForbidden(w, r)
-				return
-			}
 			// Empty list means all-access
-			if len(gsIDs) == 0 {
+			if len(token.GameserverIDs) == 0 {
 				next.ServeHTTP(w, r)
 				return
 			}
-			for _, id := range gsIDs {
+			for _, id := range token.GameserverIDs {
 				if id == gsID {
 					next.ServeHTTP(w, r)
 					return
