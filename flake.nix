@@ -16,11 +16,11 @@
         ui = pkgs.buildNpmPackage {
           pname = "gamejanitor-ui";
           version = "0.1.0";
-          src = ./.;
-          postUnpack = ''
-            sourceRoot="$sourceRoot/ui"
+          src = ./ui;
+          postPatch = ''
+            cp -r ${./design} design
           '';
-          npmDepsHash = "sha256-4ylyfmqUiQDOVGit3MUC8Bh0NHQ/3U2aU9HWQJvIXAY=";
+          npmDepsHash = "sha256-b09AEsgcy52kcGj7rMuriVJcSimjZRzxTB0BOSvqY+w=";
           installPhase = ''
             cp -r dist $out
           '';
