@@ -60,7 +60,7 @@ func (s *EventStoreSubscriber) Stop() {
 func (s *EventStoreSubscriber) storeEvent(event controller.WebhookEvent) {
 	// Skip high-frequency telemetry events — served from in-memory cache, not history
 	switch event.EventType() {
-	case EventGameserverStats, EventGameserverQuery:
+	case controller.EventGameserverStats, controller.EventGameserverQuery:
 		return
 	}
 
@@ -87,54 +87,54 @@ func (s *EventStoreSubscriber) storeEvent(event controller.WebhookEvent) {
 
 func extractGameserverID(event controller.WebhookEvent) string {
 	switch e := event.(type) {
-	case GameserverActionEvent:
+	case controller.GameserverActionEvent:
 		return e.GameserverID
-	case BackupActionEvent:
+	case controller.BackupActionEvent:
 		return e.GameserverID
-	case ModActionEvent:
+	case controller.ModActionEvent:
 		return e.GameserverID
-	case ScheduleActionEvent:
+	case controller.ScheduleActionEvent:
 		return e.GameserverID
-	case ScheduledTaskEvent:
+	case controller.ScheduledTaskEvent:
 		return e.GameserverID
 	case controller.StatusEvent:
 		return e.GameserverID
-	case ImagePullingEvent:
+	case controller.ImagePullingEvent:
 		return e.GameserverID
-	case ContainerCreatingEvent:
+	case controller.ContainerCreatingEvent:
 		return e.GameserverID
-	case ContainerStartedEvent:
+	case controller.ContainerStartedEvent:
 		return e.GameserverID
-	case GameserverReadyEvent:
+	case controller.GameserverReadyEvent:
 		return e.GameserverID
-	case ContainerStoppingEvent:
+	case controller.ContainerStoppingEvent:
 		return e.GameserverID
-	case ContainerStoppedEvent:
+	case controller.ContainerStoppedEvent:
 		return e.GameserverID
-	case ContainerExitedEvent:
+	case controller.ContainerExitedEvent:
 		return e.GameserverID
-	case GameserverErrorEvent:
+	case controller.GameserverErrorEvent:
 		return e.GameserverID
 	}
 	return ""
 }
 
-func extractActor(event controller.WebhookEvent) Actor {
+func extractActor(event controller.WebhookEvent) controller.Actor {
 	switch e := event.(type) {
-	case GameserverActionEvent:
+	case controller.GameserverActionEvent:
 		return e.Actor
-	case BackupActionEvent:
+	case controller.BackupActionEvent:
 		return e.Actor
-	case WorkerActionEvent:
+	case controller.WorkerActionEvent:
 		return e.Actor
-	case ModActionEvent:
+	case controller.ModActionEvent:
 		return e.Actor
-	case ScheduleActionEvent:
+	case controller.ScheduleActionEvent:
 		return e.Actor
-	case ScheduledTaskEvent:
+	case controller.ScheduledTaskEvent:
 		return e.Actor
 	}
-	return SystemActor
+	return controller.SystemActor
 }
 
 func extractData(event controller.WebhookEvent) any {

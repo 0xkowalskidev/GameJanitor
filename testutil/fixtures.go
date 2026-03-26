@@ -12,7 +12,6 @@ import (
 
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/model"
-	"github.com/warsmite/gamejanitor/service"
 )
 
 // TestGameID is the game ID used by the test game definition in testdata/.
@@ -80,7 +79,7 @@ func TestLogger() *slog.Logger {
 
 // TestContext returns a context with a system actor set (for event publishing).
 func TestContext() context.Context {
-	return service.SetActorInContext(context.Background(), service.SystemActor)
+	return controller.SetActorInContext(context.Background(), controller.SystemActor)
 }
 
 // WaitForEvent subscribes to the event bus and waits for an event of the given type.

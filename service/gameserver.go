@@ -221,10 +221,10 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *model.Game
 
 	gs.PopulateNode(s.db)
 
-	s.broadcaster.Publish(GameserverActionEvent{
-		Type:         EventGameserverCreate,
+	s.broadcaster.Publish(controller.GameserverActionEvent{
+		Type:         controller.EventGameserverCreate,
 		Timestamp:    time.Now(),
-		Actor:        ActorFromContext(ctx),
+		Actor:        controller.ActorFromContext(ctx),
 		GameserverID: gs.ID,
 		Gameserver:   gs,
 	})
@@ -436,7 +436,7 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *model.Game
 
 			if foundNode == "" {
 				reason := fmt.Sprintf("Upgrade to %d MB memory / %.1f CPU failed: no node with sufficient capacity.", existing.MemoryLimitMB, existing.CPULimit)
-				s.broadcaster.Publish(GameserverErrorEvent{GameserverID: existing.ID, Reason: reason, Timestamp: time.Now()})
+				s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: existing.ID, Reason: reason, Timestamp: time.Now()})
 				return false, fmt.Errorf("%s Resource values unchanged.", reason)
 			}
 
@@ -451,7 +451,7 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *model.Game
 			go func() {
 				if err := s.MigrateGameserver(context.Background(), existing.ID, foundNode); err != nil {
 					s.log.Error("auto-migration failed", "id", existing.ID, "target_node", foundNode, "error", err)
-					s.broadcaster.Publish(GameserverErrorEvent{
+					s.broadcaster.Publish(controller.GameserverErrorEvent{
 						GameserverID: existing.ID,
 						Reason:       fmt.Sprintf("Auto-migration failed: %s", err.Error()),
 						Timestamp:    time.Now(),
@@ -478,10 +478,10 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *model.Game
 	}
 
 	existing.PopulateNode(s.db)
-	s.broadcaster.Publish(GameserverActionEvent{
-		Type:         EventGameserverUpdate,
+	s.broadcaster.Publish(controller.GameserverActionEvent{
+		Type:         controller.EventGameserverUpdate,
 		Timestamp:    time.Now(),
-		Actor:        ActorFromContext(ctx),
+		Actor:        controller.ActorFromContext(ctx),
 		GameserverID: existing.ID,
 		Gameserver:   existing,
 	})
@@ -592,10 +592,10 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 	}
 
 	gs.PopulateNode(s.db)
-	s.broadcaster.Publish(GameserverActionEvent{
-		Type:         EventGameserverDelete,
+	s.broadcaster.Publish(controller.GameserverActionEvent{
+		Type:         controller.EventGameserverDelete,
 		Timestamp:    time.Now(),
-		Actor:        ActorFromContext(ctx),
+		Actor:        controller.ActorFromContext(ctx),
 		GameserverID: gs.ID,
 		Gameserver:   gs,
 	})

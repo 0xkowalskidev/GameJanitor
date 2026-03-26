@@ -119,10 +119,10 @@ func (s *WorkerNodeService) Update(ctx context.Context, id string, update *Worke
 	}
 
 	view, _ := s.Get(id)
-	s.broadcaster.Publish(WorkerActionEvent{
-		Type:      EventWorkerUpdated,
+	s.broadcaster.Publish(controller.WorkerActionEvent{
+		Type:      controller.EventWorkerUpdated,
 		Timestamp: time.Now(),
-		Actor:     ActorFromContext(ctx),
+		Actor:     controller.ActorFromContext(ctx),
 		WorkerID:  id,
 		Worker:    view,
 	})

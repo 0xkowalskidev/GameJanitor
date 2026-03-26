@@ -1,13 +1,13 @@
 package service_test
 
 import (
+	"github.com/warsmite/gamejanitor/controller"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/warsmite/gamejanitor/model"
-	"github.com/warsmite/gamejanitor/service"
 	"github.com/warsmite/gamejanitor/testutil"
 )
 
@@ -150,9 +150,9 @@ func TestGameserver_Create_EventPublished(t *testing.T) {
 	for {
 		select {
 		case evt := <-ch:
-			if evt.EventType() == service.EventGameserverCreate {
+			if evt.EventType() == controller.EventGameserverCreate {
 				found = true
-				gsEvt, ok := evt.(service.GameserverActionEvent)
+				gsEvt, ok := evt.(controller.GameserverActionEvent)
 				assert.True(t, ok)
 				assert.Equal(t, gs.ID, gsEvt.GameserverID)
 				assert.NotNil(t, gsEvt.Gameserver)

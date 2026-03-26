@@ -1,8 +1,7 @@
-package service
+package controller
 
 import (
 	"github.com/warsmite/gamejanitor/controller/auth"
-	"github.com/warsmite/gamejanitor/controller"
 	"context"
 	"time"
 
@@ -75,7 +74,7 @@ var AllEventTypes = []string{
 	EventContainerStopping, EventContainerStopped, EventContainerExited,
 	EventGameserverError,
 	// Operation outcomes
-	controller.EventStatusChanged,
+	EventStatusChanged,
 
 	EventBackupCompleted, EventBackupFailed,
 	EventBackupRestoreCompleted, EventBackupRestoreFailed,
@@ -257,7 +256,7 @@ type WorkerActionEvent struct {
 	Timestamp time.Time   `json:"timestamp"`
 	Actor     Actor       `json:"actor"`
 	WorkerID  string      `json:"worker_id"`
-	Worker    *WorkerView `json:"worker,omitempty"`
+	Worker    any `json:"worker,omitempty"`
 }
 
 func (e WorkerActionEvent) EventType() string        { return e.Type }

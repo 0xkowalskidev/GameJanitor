@@ -54,10 +54,10 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 	}
 
 	gs.PopulateNode(s.db)
-	s.broadcaster.Publish(GameserverActionEvent{
-		Type:         EventGameserverStart,
+	s.broadcaster.Publish(controller.GameserverActionEvent{
+		Type:         controller.EventGameserverStart,
 		Timestamp:    time.Now(),
-		Actor:        ActorFromContext(ctx),
+		Actor:        controller.ActorFromContext(ctx),
 		GameserverID: id,
 		Gameserver:   gs,
 	})
@@ -70,17 +70,17 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 	w := s.dispatcher.WorkerFor(id)
 
 	// Pull image
-	s.broadcaster.Publish(ImagePullingEvent{GameserverID: id, Timestamp: time.Now()})
+	s.broadcaster.Publish(controller.ImagePullingEvent{GameserverID: id, Timestamp: time.Now()})
 	if err := w.PullImage(ctx, game.BaseImage); err != nil {
-		s.broadcaster.Publish(GameserverErrorEvent{GameserverID: id, Reason: "Failed to pull game image. Check your internet connection.", Timestamp: time.Now()})
+		s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: id, Reason: "Failed to pull game image. Check your internet connection.", Timestamp: time.Now()})
 		return fmt.Errorf("pulling image for gameserver %s: %w", id, err)
 	}
-	s.broadcaster.Publish(ImagePulledEvent{GameserverID: id, Timestamp: time.Now()})
+	s.broadcaster.Publish(controller.ImagePulledEvent{GameserverID: id, Timestamp: time.Now()})
 
 	// Merge env vars
 	env, err := mergeEnv(game, gs)
 	if err != nil {
-		s.broadcaster.Publish(GameserverErrorEvent{GameserverID: id, Reason: "Failed to configure environment variables.", Timestamp: time.Now()})
+		s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: id, Reason: "Failed to configure environment variables.", Timestamp: time.Now()})
 		return fmt.Errorf("merging env for gameserver %s: %w", id, err)
 	}
 
@@ -91,14 +91,14 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 	// Parse port bindings
 	ports, err := parseGameserverPorts(gs)
 	if err != nil {
-		s.broadcaster.Publish(GameserverErrorEvent{GameserverID: id, Reason: "Invalid port configuration.", Timestamp: time.Now()})
+		s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: id, Reason: "Invalid port configuration.", Timestamp: time.Now()})
 		return fmt.Errorf("parsing ports for gameserver %s: %w", id, err)
 	}
 
 	// Prepare game scripts on the target worker (extracts locally for bind-mounting)
 	scriptDir, defaultsDir, err := w.PrepareGameScripts(ctx, gs.GameID, id)
 	if err != nil {
-		s.broadcaster.Publish(GameserverErrorEvent{GameserverID: id, Reason: "Failed to extract game scripts.", Timestamp: time.Now()})
+		s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: id, Reason: "Failed to extract game scripts.", Timestamp: time.Now()})
 		return fmt.Errorf("preparing scripts for gameserver %s: %w", id, err)
 	}
 
@@ -140,7 +140,7 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 		Binds:         binds,
 	})
 	if err != nil {
-		s.broadcaster.Publish(GameserverErrorEvent{GameserverID: id, Reason: userFriendlyError("Failed to create container", err), Timestamp: time.Now()})
+		s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: id, Reason: userFriendlyError("Failed to create container", err), Timestamp: time.Now()})
 		return fmt.Errorf("creating container for gameserver %s: %w", id, err)
 	}
 
@@ -150,15 +150,15 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 		w.RemoveContainer(ctx, containerID)
 		return err
 	}
-	s.broadcaster.Publish(ContainerCreatingEvent{GameserverID: id, Timestamp: time.Now()})
+	s.broadcaster.Publish(controller.ContainerCreatingEvent{GameserverID: id, Timestamp: time.Now()})
 
 	// Start container
 	if err := w.StartContainer(ctx, containerID); err != nil {
-		s.broadcaster.Publish(GameserverErrorEvent{GameserverID: id, Reason: userFriendlyError("Failed to start container", err), Timestamp: time.Now()})
+		s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: id, Reason: userFriendlyError("Failed to start container", err), Timestamp: time.Now()})
 		return fmt.Errorf("starting container for gameserver %s: %w", id, err)
 	}
 
-	s.broadcaster.Publish(ContainerStartedEvent{GameserverID: id, Timestamp: time.Now()})
+	s.broadcaster.Publish(controller.ContainerStartedEvent{GameserverID: id, Timestamp: time.Now()})
 
 	if s.readyWatcher != nil {
 		s.readyWatcher.Watch(id, w, containerID)
@@ -183,15 +183,15 @@ func (s *GameserverService) Stop(ctx context.Context, id string) error {
 	}
 
 	gs.PopulateNode(s.db)
-	s.broadcaster.Publish(GameserverActionEvent{
-		Type:         EventGameserverStop,
+	s.broadcaster.Publish(controller.GameserverActionEvent{
+		Type:         controller.EventGameserverStop,
 		Timestamp:    time.Now(),
-		Actor:        ActorFromContext(ctx),
+		Actor:        controller.ActorFromContext(ctx),
 		GameserverID: id,
 		Gameserver:   gs,
 	})
 
-	s.broadcaster.Publish(ContainerStoppingEvent{GameserverID: id, Timestamp: time.Now()})
+	s.broadcaster.Publish(controller.ContainerStoppingEvent{GameserverID: id, Timestamp: time.Now()})
 
 	if gs.ContainerID != nil {
 		w := s.dispatcher.WorkerFor(id)
@@ -216,7 +216,7 @@ func (s *GameserverService) Stop(ctx context.Context, id string) error {
 		return err
 	}
 
-	s.broadcaster.Publish(ContainerStoppedEvent{GameserverID: id, Timestamp: time.Now()})
+	s.broadcaster.Publish(controller.ContainerStoppedEvent{GameserverID: id, Timestamp: time.Now()})
 	s.log.Info("gameserver stopped", "id", id)
 	return nil
 }
@@ -231,10 +231,10 @@ func (s *GameserverService) Restart(ctx context.Context, id string) error {
 	}
 
 	gs.PopulateNode(s.db)
-	s.broadcaster.Publish(GameserverActionEvent{
-		Type:         EventGameserverRestart,
+	s.broadcaster.Publish(controller.GameserverActionEvent{
+		Type:         controller.EventGameserverRestart,
 		Timestamp:    time.Now(),
-		Actor:        ActorFromContext(ctx),
+		Actor:        controller.ActorFromContext(ctx),
 		GameserverID: id,
 		Gameserver:   gs,
 	})
@@ -265,18 +265,18 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) (er
 	s.log.Info("updating game for gameserver", "id", id, "game", game.ID)
 
 	gs.PopulateNode(s.db)
-	s.broadcaster.Publish(GameserverActionEvent{
-		Type:         EventGameserverUpdateGame,
+	s.broadcaster.Publish(controller.GameserverActionEvent{
+		Type:         controller.EventGameserverUpdateGame,
 		Timestamp:    time.Now(),
-		Actor:        ActorFromContext(ctx),
+		Actor:        controller.ActorFromContext(ctx),
 		GameserverID: id,
 		Gameserver:   gs,
 	})
 
-	s.broadcaster.Publish(ImagePullingEvent{GameserverID: id, Timestamp: time.Now()})
+	s.broadcaster.Publish(controller.ImagePullingEvent{GameserverID: id, Timestamp: time.Now()})
 	defer func() {
 		if err != nil {
-			s.broadcaster.Publish(GameserverErrorEvent{GameserverID: id, Reason: operationFailedReason("Game update failed", err), Timestamp: time.Now()})
+			s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: id, Reason: operationFailedReason("Game update failed", err), Timestamp: time.Now()})
 		}
 	}()
 
@@ -353,18 +353,18 @@ func (s *GameserverService) Reinstall(ctx context.Context, id string) (err error
 	s.log.Info("reinstalling gameserver (full wipe)", "id", id)
 
 	gs.PopulateNode(s.db)
-	s.broadcaster.Publish(GameserverActionEvent{
-		Type:         EventGameserverReinstall,
+	s.broadcaster.Publish(controller.GameserverActionEvent{
+		Type:         controller.EventGameserverReinstall,
 		Timestamp:    time.Now(),
-		Actor:        ActorFromContext(ctx),
+		Actor:        controller.ActorFromContext(ctx),
 		GameserverID: id,
 		Gameserver:   gs,
 	})
 
-	s.broadcaster.Publish(ImagePullingEvent{GameserverID: id, Timestamp: time.Now()})
+	s.broadcaster.Publish(controller.ImagePullingEvent{GameserverID: id, Timestamp: time.Now()})
 	defer func() {
 		if err != nil {
-			s.broadcaster.Publish(GameserverErrorEvent{GameserverID: id, Reason: operationFailedReason("Reinstall failed", err), Timestamp: time.Now()})
+			s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: id, Reason: operationFailedReason("Reinstall failed", err), Timestamp: time.Now()})
 		}
 	}()
 

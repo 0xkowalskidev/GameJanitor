@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/warsmite/gamejanitor/model"
-	"github.com/warsmite/gamejanitor/service"
 	"github.com/warsmite/gamejanitor/testutil"
 )
 
@@ -77,7 +76,7 @@ func TestPipeline_EventPersistedToDatabase(t *testing.T) {
 	// Should find the gameserver.create event
 	found := false
 	for _, e := range events {
-		if e.EventType == service.EventGameserverCreate {
+		if e.EventType == controller.EventGameserverCreate {
 			found = true
 			break
 		}

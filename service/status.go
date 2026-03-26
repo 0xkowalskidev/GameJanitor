@@ -285,7 +285,7 @@ func (m *StatusManager) handleEvent(event worker.ContainerEvent) {
 			m.log.Debug("container event: expected container stop", "id", gsID, "status", gs.Status)
 		} else if gs.Status == controller.StatusRunning || gs.Status == controller.StatusStarted || gs.Status == controller.StatusInstalling || gs.Status == controller.StatusStarting {
 			m.log.Warn("container event: unexpected container death", "id", gsID, "status", gs.Status, "action", event.Action)
-			m.broadcaster.Publish(ContainerExitedEvent{GameserverID: gsID, Timestamp: time.Now()})
+			m.broadcaster.Publish(controller.ContainerExitedEvent{GameserverID: gsID, Timestamp: time.Now()})
 			m.handleUnexpectedDeath(gs)
 		}
 
@@ -311,10 +311,10 @@ func (m *StatusManager) onWorkerRegistered(nodeID string, w worker.Worker) {
 	m.log.Info("starting event watcher for remote worker", "worker_id", nodeID)
 	m.watchWorkerEvents(ctx, nodeID, w)
 
-	m.broadcaster.Publish(WorkerActionEvent{
-		Type:      EventWorkerConnected,
+	m.broadcaster.Publish(controller.WorkerActionEvent{
+		Type:      controller.EventWorkerConnected,
 		Timestamp: time.Now(),
-		Actor:     SystemActor,
+		Actor:     controller.SystemActor,
 		WorkerID:  nodeID,
 	})
 
@@ -345,10 +345,10 @@ func (m *StatusManager) onWorkerOffline(nodeID string) {
 	}
 	m.workerMu.Unlock()
 
-	m.broadcaster.Publish(WorkerActionEvent{
-		Type:      EventWorkerDisconnected,
+	m.broadcaster.Publish(controller.WorkerActionEvent{
+		Type:      controller.EventWorkerDisconnected,
 		Timestamp: time.Now(),
-		Actor:     SystemActor,
+		Actor:     controller.SystemActor,
 		WorkerID:  nodeID,
 	})
 
@@ -381,7 +381,7 @@ const maxAutoRestartAttempts = 3
 // is enabled and the crash limit hasn't been reached, restarts the gameserver.
 func (m *StatusManager) handleUnexpectedDeath(gs *model.Gameserver) {
 	if !gs.AutoRestart || m.restartFunc == nil {
-		m.broadcaster.Publish(GameserverErrorEvent{GameserverID: gs.ID, Reason: "Gameserver stopped unexpectedly.", Timestamp: time.Now()})
+		m.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gs.ID, Reason: "Gameserver stopped unexpectedly.", Timestamp: time.Now()})
 		return
 	}
 
@@ -392,7 +392,7 @@ func (m *StatusManager) handleUnexpectedDeath(gs *model.Gameserver) {
 
 	if count > maxAutoRestartAttempts {
 		m.log.Error("auto-restart limit reached, giving up", "id", gs.ID, "attempts", maxAutoRestartAttempts)
-		m.broadcaster.Publish(GameserverErrorEvent{GameserverID: gs.ID, Reason: fmt.Sprintf("Crashed %d times, auto-restart disabled. Check logs.", maxAutoRestartAttempts), Timestamp: time.Now()})
+		m.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gs.ID, Reason: fmt.Sprintf("Crashed %d times, auto-restart disabled. Check logs.", maxAutoRestartAttempts), Timestamp: time.Now()})
 		return
 	}
 
@@ -400,7 +400,7 @@ func (m *StatusManager) handleUnexpectedDeath(gs *model.Gameserver) {
 	go func() {
 		if err := m.restartFunc(context.Background(), gs.ID); err != nil {
 			m.log.Error("auto-restart failed", "id", gs.ID, "attempt", count, "error", err)
-			m.broadcaster.Publish(GameserverErrorEvent{GameserverID: gs.ID, Reason: fmt.Sprintf("Auto-restart failed (attempt %d/%d): %s", count, maxAutoRestartAttempts, err.Error()), Timestamp: time.Now()})
+			m.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gs.ID, Reason: fmt.Sprintf("Auto-restart failed (attempt %d/%d): %s", count, maxAutoRestartAttempts, err.Error()), Timestamp: time.Now()})
 		}
 	}()
 }

@@ -15,7 +15,7 @@ import (
 const statsPollInterval = 5 * time.Second
 
 // StatsPoller polls container stats for running gameservers and publishes
-// GameserverStatsEvent via the EventBus. Also caches the latest stats so
+// controller.GameserverStatsEvent via the EventBus. Also caches the latest stats so
 // the GET /stats endpoint can serve them instantly without hitting Docker.
 type StatsPoller struct {
 	db          *sql.DB
@@ -24,7 +24,7 @@ type StatsPoller struct {
 	log         *slog.Logger
 	mu          sync.RWMutex
 	pollers     map[string]context.CancelFunc
-	cache       map[string]*GameserverStatsEvent
+	cache       map[string]*controller.GameserverStatsEvent
 }
 
 func NewStatsPoller(db *sql.DB, dispatcher *orchestrator.Dispatcher, broadcaster *controller.EventBus, log *slog.Logger) *StatsPoller {
@@ -34,12 +34,12 @@ func NewStatsPoller(db *sql.DB, dispatcher *orchestrator.Dispatcher, broadcaster
 		broadcaster: broadcaster,
 		log:         log,
 		pollers:     make(map[string]context.CancelFunc),
-		cache:       make(map[string]*GameserverStatsEvent),
+		cache:       make(map[string]*controller.GameserverStatsEvent),
 	}
 }
 
 // GetCachedStats returns the latest polled stats, or nil if not available.
-func (s *StatsPoller) GetCachedStats(gameserverID string) *GameserverStatsEvent {
+func (s *StatsPoller) GetCachedStats(gameserverID string) *controller.GameserverStatsEvent {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.cache[gameserverID]
@@ -78,7 +78,7 @@ func (s *StatsPoller) StopAll() {
 		cancel()
 		delete(s.pollers, id)
 	}
-	s.cache = make(map[string]*GameserverStatsEvent)
+	s.cache = make(map[string]*controller.GameserverStatsEvent)
 	s.log.Info("all stats pollers stopped")
 }
 
@@ -120,7 +120,7 @@ func (s *StatsPoller) pollOnce(ctx context.Context, gameserverID string) bool {
 		s.log.Debug("worker unavailable, stopping stats poll", "id", gameserverID)
 		return false
 	}
-	event := GameserverStatsEvent{
+	event := controller.GameserverStatsEvent{
 		GameserverID:   gameserverID,
 		StorageLimitMB: gs.StorageLimitMB,
 		Timestamp:      time.Now(),

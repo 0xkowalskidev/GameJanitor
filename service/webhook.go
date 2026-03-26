@@ -127,35 +127,35 @@ func (w *WebhookWorker) enqueueEvent(event controller.WebhookEvent) {
 		}
 
 	// Action events — self-contained with full resource state
-	case GameserverActionEvent:
+	case controller.GameserverActionEvent:
 		payloadData = ev
-	case BackupActionEvent:
+	case controller.BackupActionEvent:
 		payloadData = ev
-	case WorkerActionEvent:
+	case controller.WorkerActionEvent:
 		payloadData = ev
-	case ScheduleActionEvent:
+	case controller.ScheduleActionEvent:
 		payloadData = ev
-	case ScheduledTaskEvent:
+	case controller.ScheduledTaskEvent:
 		payloadData = ev
-	case ModActionEvent:
+	case controller.ModActionEvent:
 		payloadData = ev
 
 	// Lifecycle events — lightweight, just IDs
-	case ImagePullingEvent:
+	case controller.ImagePullingEvent:
 		payloadData = map[string]string{"gameserver_id": ev.GameserverID}
-	case ContainerCreatingEvent:
+	case controller.ContainerCreatingEvent:
 		payloadData = map[string]string{"gameserver_id": ev.GameserverID}
-	case ContainerStartedEvent:
+	case controller.ContainerStartedEvent:
 		payloadData = map[string]string{"gameserver_id": ev.GameserverID}
-	case GameserverReadyEvent:
+	case controller.GameserverReadyEvent:
 		payloadData = map[string]string{"gameserver_id": ev.GameserverID}
-	case ContainerStoppingEvent:
+	case controller.ContainerStoppingEvent:
 		payloadData = map[string]string{"gameserver_id": ev.GameserverID}
-	case ContainerStoppedEvent:
+	case controller.ContainerStoppedEvent:
 		payloadData = map[string]string{"gameserver_id": ev.GameserverID}
-	case ContainerExitedEvent:
+	case controller.ContainerExitedEvent:
 		payloadData = map[string]string{"gameserver_id": ev.GameserverID}
-	case GameserverErrorEvent:
+	case controller.GameserverErrorEvent:
 		payloadData = map[string]any{"gameserver_id": ev.GameserverID, "reason": ev.Reason}
 
 	default:

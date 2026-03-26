@@ -189,7 +189,7 @@ func (w *ReadyWatcher) markInstalled(gameserverID string) {
 }
 
 func (w *ReadyWatcher) promote(gameserverID string) {
-	w.broadcaster.Publish(GameserverReadyEvent{GameserverID: gameserverID, Timestamp: time.Now()})
+	w.broadcaster.Publish(controller.GameserverReadyEvent{GameserverID: gameserverID, Timestamp: time.Now()})
 	if w.querySvc != nil {
 		w.querySvc.StartPolling(gameserverID)
 	}

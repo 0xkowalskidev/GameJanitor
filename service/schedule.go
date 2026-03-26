@@ -69,10 +69,10 @@ func (s *ScheduleService) CreateSchedule(ctx context.Context, schedule *model.Sc
 		}
 	}
 
-	s.broadcaster.Publish(ScheduleActionEvent{
-		Type:         EventScheduleCreate,
+	s.broadcaster.Publish(controller.ScheduleActionEvent{
+		Type:         controller.EventScheduleCreate,
 		Timestamp:    time.Now(),
-		Actor:        ActorFromContext(ctx),
+		Actor:        controller.ActorFromContext(ctx),
 		GameserverID: schedule.GameserverID,
 		Schedule:     schedule,
 	})
@@ -98,10 +98,10 @@ func (s *ScheduleService) UpdateSchedule(ctx context.Context, schedule *model.Sc
 		return fmt.Errorf("updating schedule in cron: %w", err)
 	}
 
-	s.broadcaster.Publish(ScheduleActionEvent{
-		Type:         EventScheduleUpdate,
+	s.broadcaster.Publish(controller.ScheduleActionEvent{
+		Type:         controller.EventScheduleUpdate,
 		Timestamp:    time.Now(),
-		Actor:        ActorFromContext(ctx),
+		Actor:        controller.ActorFromContext(ctx),
 		GameserverID: schedule.GameserverID,
 		Schedule:     schedule,
 	})
@@ -122,10 +122,10 @@ func (s *ScheduleService) DeleteSchedule(ctx context.Context, gameserverID, sche
 		return err
 	}
 
-	s.broadcaster.Publish(ScheduleActionEvent{
-		Type:         EventScheduleDelete,
+	s.broadcaster.Publish(controller.ScheduleActionEvent{
+		Type:         controller.EventScheduleDelete,
 		Timestamp:    time.Now(),
-		Actor:        ActorFromContext(ctx),
+		Actor:        controller.ActorFromContext(ctx),
 		GameserverID: schedule.GameserverID,
 		Schedule:     schedule,
 	})
@@ -151,10 +151,10 @@ func (s *ScheduleService) ToggleSchedule(ctx context.Context, gameserverID, sche
 		return fmt.Errorf("updating schedule in cron after toggle: %w", err)
 	}
 
-	s.broadcaster.Publish(ScheduleActionEvent{
-		Type:         EventScheduleUpdate,
+	s.broadcaster.Publish(controller.ScheduleActionEvent{
+		Type:         controller.EventScheduleUpdate,
 		Timestamp:    time.Now(),
-		Actor:        ActorFromContext(ctx),
+		Actor:        controller.ActorFromContext(ctx),
 		GameserverID: schedule.GameserverID,
 		Schedule:     schedule,
 	})

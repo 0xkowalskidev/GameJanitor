@@ -115,10 +115,10 @@ func (s *Scheduler) catchUpMissed() {
 				s.log.Warn("skipping missed schedule (not catch-up eligible)",
 					"schedule_id", sched.ID, "type", sched.Type,
 					"gameserver_id", sched.GameserverID, "was_due", sched.NextRun)
-				s.broadcaster.Publish(ScheduledTaskEvent{
-					Type:         EventScheduleTaskMissed,
+				s.broadcaster.Publish(controller.ScheduledTaskEvent{
+					Type:         controller.EventScheduleTaskMissed,
 					Timestamp:    now,
-					Actor:        Actor{Type: "schedule", ScheduleID: sched.ID},
+					Actor:        controller.Actor{Type: "schedule", ScheduleID: sched.ID},
 					GameserverID: sched.GameserverID,
 					Schedule:     &sched,
 					TaskType:     sched.Type,
@@ -199,7 +199,7 @@ func (s *Scheduler) executeTask(scheduleID string) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
-	ctx = SetActorInContext(ctx, Actor{Type: "schedule", ScheduleID: scheduleID})
+	ctx = controller.SetActorInContext(ctx, controller.Actor{Type: "schedule", ScheduleID: scheduleID})
 	s.log.Info("executing scheduled task", "schedule_id", scheduleID, "type", schedule.Type, "gameserver_id", schedule.GameserverID)
 
 	var taskErr error
@@ -226,10 +226,10 @@ func (s *Scheduler) executeTask(scheduleID string) {
 
 	if taskErr != nil {
 		s.log.Error("scheduled task failed", "schedule_id", scheduleID, "type", schedule.Type, "error", taskErr)
-		s.broadcaster.Publish(ScheduledTaskEvent{
-			Type:         EventScheduleTaskFailed,
+		s.broadcaster.Publish(controller.ScheduledTaskEvent{
+			Type:         controller.EventScheduleTaskFailed,
 			Timestamp:    time.Now(),
-			Actor:        Actor{Type: "schedule", ScheduleID: scheduleID},
+			Actor:        controller.Actor{Type: "schedule", ScheduleID: scheduleID},
 			GameserverID: schedule.GameserverID,
 			Schedule:     schedule,
 			TaskType:     schedule.Type,
@@ -237,10 +237,10 @@ func (s *Scheduler) executeTask(scheduleID string) {
 		})
 	} else {
 		s.log.Info("scheduled task completed", "schedule_id", scheduleID, "type", schedule.Type)
-		s.broadcaster.Publish(ScheduledTaskEvent{
-			Type:         EventScheduleTaskCompleted,
+		s.broadcaster.Publish(controller.ScheduledTaskEvent{
+			Type:         controller.EventScheduleTaskCompleted,
 			Timestamp:    time.Now(),
-			Actor:        Actor{Type: "schedule", ScheduleID: scheduleID},
+			Actor:        controller.Actor{Type: "schedule", ScheduleID: scheduleID},
 			GameserverID: schedule.GameserverID,
 			Schedule:     schedule,
 			TaskType:     schedule.Type,

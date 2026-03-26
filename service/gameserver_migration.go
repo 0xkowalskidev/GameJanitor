@@ -63,17 +63,17 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 	s.log.Info("migrating gameserver", "id", gameserverID, "from_node", currentNodeID, "to_node", targetNodeID)
 
 	gs.PopulateNode(s.db)
-	s.broadcaster.Publish(GameserverActionEvent{
-		Type:         EventGameserverMigrate,
+	s.broadcaster.Publish(controller.GameserverActionEvent{
+		Type:         controller.EventGameserverMigrate,
 		Timestamp:    time.Now(),
-		Actor:        ActorFromContext(ctx),
+		Actor:        controller.ActorFromContext(ctx),
 		GameserverID: gameserverID,
 		Gameserver:   gs,
 	})
 
 	defer func() {
 		if err != nil {
-			s.broadcaster.Publish(GameserverErrorEvent{GameserverID: gameserverID, Reason: operationFailedReason("Migration failed", err), Timestamp: time.Now()})
+			s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gameserverID, Reason: operationFailedReason("Migration failed", err), Timestamp: time.Now()})
 		}
 	}()
 
@@ -179,7 +179,7 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 		s.log.Warn("failed to remove old volume from source worker", "volume", gs.VolumeName, "error", err)
 	}
 
-	s.broadcaster.Publish(ContainerStoppedEvent{GameserverID: gameserverID, Timestamp: time.Now()})
+	s.broadcaster.Publish(controller.ContainerStoppedEvent{GameserverID: gameserverID, Timestamp: time.Now()})
 	s.log.Info("gameserver migrated", "id", gameserverID, "from_node", currentNodeID, "to_node", targetNodeID)
 	return nil
 }

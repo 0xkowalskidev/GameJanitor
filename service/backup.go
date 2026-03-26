@@ -101,9 +101,9 @@ func (s *BackupService) CreateBackup(ctx context.Context, gameserverID string, n
 		return nil, fmt.Errorf("recording backup in database: %w", err)
 	}
 
-	actor := ActorFromContext(ctx)
-	s.broadcaster.Publish(BackupActionEvent{
-		Type:         EventBackupCreate,
+	actor := controller.ActorFromContext(ctx)
+	s.broadcaster.Publish(controller.BackupActionEvent{
+		Type:         controller.EventBackupCreate,
 		Timestamp:    time.Now(),
 		Actor:        actor,
 		GameserverID: gameserverID,
@@ -118,7 +118,7 @@ func (s *BackupService) CreateBackup(ctx context.Context, gameserverID string, n
 	return backup, nil
 }
 
-func (s *BackupService) runBackup(gameserverID, backupID, name string, gs *model.Gameserver, actor Actor) {
+func (s *BackupService) runBackup(gameserverID, backupID, name string, gs *model.Gameserver, actor controller.Actor) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
@@ -192,8 +192,8 @@ func (s *BackupService) runBackup(gameserverID, backupID, name string, gs *model
 	s.log.Info("backup completed", "gameserver_id", gameserverID, "backup_id", backupID, "size_bytes", sizeBytes)
 
 	completedBackup, _ := model.GetBackup(s.db, backupID)
-	s.broadcaster.Publish(BackupActionEvent{
-		Type:         EventBackupCompleted,
+	s.broadcaster.Publish(controller.BackupActionEvent{
+		Type:         controller.EventBackupCompleted,
 		Timestamp:    time.Now(),
 		Actor:        actor,
 		GameserverID: gameserverID,
@@ -201,7 +201,7 @@ func (s *BackupService) runBackup(gameserverID, backupID, name string, gs *model
 	})
 }
 
-func (s *BackupService) failBackup(ctx context.Context, gameserverID, backupID, name string, actor Actor, reason string) {
+func (s *BackupService) failBackup(ctx context.Context, gameserverID, backupID, name string, actor controller.Actor, reason string) {
 	s.log.Error("backup failed", "gameserver_id", gameserverID, "backup_id", backupID, "error", reason)
 
 	// Clean up partial data
@@ -215,8 +215,8 @@ func (s *BackupService) failBackup(ctx context.Context, gameserverID, backupID, 
 	}
 
 	failedBackup, _ := model.GetBackup(s.db, backupID)
-	s.broadcaster.Publish(BackupActionEvent{
-		Type:         EventBackupFailed,
+	s.broadcaster.Publish(controller.BackupActionEvent{
+		Type:         controller.EventBackupFailed,
 		Timestamp:    time.Now(),
 		Actor:        actor,
 		GameserverID: gameserverID,
@@ -239,13 +239,13 @@ func (s *BackupService) RestoreBackup(ctx context.Context, gameserverID, backupI
 		return controller.ErrNotFoundf("gameserver %s not found", backup.GameserverID)
 	}
 
-	actor := ActorFromContext(ctx)
+	actor := controller.ActorFromContext(ctx)
 	wasRunning := controller.IsRunningStatus(gs.Status)
 
 	s.log.Info("restore initiated", "backup_id", backupID, "gameserver_id", gs.ID, "was_running", wasRunning)
 
-	s.broadcaster.Publish(BackupActionEvent{
-		Type:         EventBackupRestore,
+	s.broadcaster.Publish(controller.BackupActionEvent{
+		Type:         controller.EventBackupRestore,
 		Timestamp:    time.Now(),
 		Actor:        actor,
 		GameserverID: gs.ID,
@@ -257,7 +257,7 @@ func (s *BackupService) RestoreBackup(ctx context.Context, gameserverID, backupI
 	return nil
 }
 
-func (s *BackupService) runRestore(gameserverID, backupID, backupName, volumeName string, wasRunning bool, actor Actor) {
+func (s *BackupService) runRestore(gameserverID, backupID, backupName, volumeName string, wasRunning bool, actor controller.Actor) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
@@ -302,8 +302,8 @@ func (s *BackupService) runRestore(gameserverID, backupID, backupName, volumeNam
 	s.log.Info("backup restored", "backup_id", backupID, "gameserver_id", gameserverID)
 
 	restoredBackup, _ := model.GetBackup(s.db, backupID)
-	s.broadcaster.Publish(BackupActionEvent{
-		Type:         EventBackupRestoreCompleted,
+	s.broadcaster.Publish(controller.BackupActionEvent{
+		Type:         controller.EventBackupRestoreCompleted,
 		Timestamp:    time.Now(),
 		Actor:        actor,
 		GameserverID: gameserverID,
@@ -314,25 +314,25 @@ func (s *BackupService) runRestore(gameserverID, backupID, backupName, volumeNam
 		s.log.Info("restarting gameserver after restore", "gameserver_id", gameserverID)
 		if err := s.gameserverSvc.Start(ctx, gameserverID); err != nil {
 			s.log.Error("failed to restart after restore", "gameserver_id", gameserverID, "error", err)
-			s.broadcaster.Publish(GameserverErrorEvent{GameserverID: gameserverID, Reason: fmt.Sprintf("Restart after restore failed: %v", err), Timestamp: time.Now()})
+			s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gameserverID, Reason: fmt.Sprintf("Restart after restore failed: %v", err), Timestamp: time.Now()})
 		}
 	} else {
-		s.broadcaster.Publish(ContainerStoppedEvent{GameserverID: gameserverID, Timestamp: time.Now()})
+		s.broadcaster.Publish(controller.ContainerStoppedEvent{GameserverID: gameserverID, Timestamp: time.Now()})
 	}
 }
 
-func (s *BackupService) failRestore(gameserverID, backupID, backupName string, actor Actor, reason string) {
+func (s *BackupService) failRestore(gameserverID, backupID, backupName string, actor controller.Actor, reason string) {
 	s.log.Error("backup restore failed", "gameserver_id", gameserverID, "backup_id", backupID, "error", reason)
 	failedRestoreBackup, _ := model.GetBackup(s.db, backupID)
-	s.broadcaster.Publish(BackupActionEvent{
-		Type:         EventBackupRestoreFailed,
+	s.broadcaster.Publish(controller.BackupActionEvent{
+		Type:         controller.EventBackupRestoreFailed,
 		Timestamp:    time.Now(),
 		Actor:        actor,
 		GameserverID: gameserverID,
 		Backup:       failedRestoreBackup,
 		Error:        reason,
 	})
-	s.broadcaster.Publish(GameserverErrorEvent{GameserverID: gameserverID, Reason: operationFailedReason("Backup restore failed", fmt.Errorf("%s", reason)), Timestamp: time.Now()})
+	s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gameserverID, Reason: operationFailedReason("Backup restore failed", fmt.Errorf("%s", reason)), Timestamp: time.Now()})
 }
 
 func (s *BackupService) DeleteBackup(ctx context.Context, gameserverID, backupID string) error {
@@ -351,10 +351,10 @@ func (s *BackupService) DeleteBackup(ctx context.Context, gameserverID, backupID
 		s.log.Warn("backup record deleted but store file removal failed", "backup_id", backupID, "error", err)
 	}
 
-	s.broadcaster.Publish(BackupActionEvent{
-		Type:         EventBackupDelete,
+	s.broadcaster.Publish(controller.BackupActionEvent{
+		Type:         controller.EventBackupDelete,
 		Timestamp:    time.Now(),
-		Actor:        ActorFromContext(ctx),
+		Actor:        controller.ActorFromContext(ctx),
 		GameserverID: backup.GameserverID,
 		Backup:       backup,
 	})

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"github.com/warsmite/gamejanitor/controller"
 	"context"
 	"encoding/json"
 	"log/slog"
@@ -284,8 +285,8 @@ func (h *GameserverHandlers) doAction(w http.ResponseWriter, r *http.Request, ac
 func detachedCtx(r *http.Request) context.Context {
 	ctx := context.Background()
 	// Preserve actor for event publishing
-	if actor := service.ActorFromContext(r.Context()); actor.Type != "" {
-		ctx = service.SetActorInContext(ctx, actor)
+	if actor := controller.ActorFromContext(r.Context()); actor.Type != "" {
+		ctx = controller.SetActorInContext(ctx, actor)
 	}
 	return ctx
 }

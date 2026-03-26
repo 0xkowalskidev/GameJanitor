@@ -8,7 +8,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/warsmite/gamejanitor/service"
 )
 
 func TestEventBus_PublishSubscribe(t *testing.T) {
@@ -18,12 +17,12 @@ func TestEventBus_PublishSubscribe(t *testing.T) {
 	ch, unsub := bus.Subscribe()
 	defer unsub()
 
-	evt := service.ImagePullingEvent{GameserverID: "gs-1", Timestamp: time.Now()}
+	evt := controller.ImagePullingEvent{GameserverID: "gs-1", Timestamp: time.Now()}
 	bus.Publish(evt)
 
 	select {
 	case received := <-ch:
-		assert.Equal(t, service.EventImagePulling, received.EventType())
+		assert.Equal(t, controller.EventImagePulling, received.EventType())
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for event")
 	}
@@ -38,7 +37,7 @@ func TestEventBus_MultipleSubscribers(t *testing.T) {
 	ch2, unsub2 := bus.Subscribe()
 	defer unsub2()
 
-	bus.Publish(service.ImagePullingEvent{GameserverID: "gs-1", Timestamp: time.Now()})
+	bus.Publish(controller.ImagePullingEvent{GameserverID: "gs-1", Timestamp: time.Now()})
 
 	select {
 	case <-ch1:
@@ -59,7 +58,7 @@ func TestEventBus_Unsubscribe(t *testing.T) {
 	ch, unsub := bus.Subscribe()
 	unsub()
 
-	bus.Publish(service.ImagePullingEvent{GameserverID: "gs-1", Timestamp: time.Now()})
+	bus.Publish(controller.ImagePullingEvent{GameserverID: "gs-1", Timestamp: time.Now()})
 
 	select {
 	case _, ok := <-ch:
@@ -80,7 +79,7 @@ func TestEventBus_SlowSubscriber_EventDropped(t *testing.T) {
 
 	// Fill the 64-element buffer
 	for i := 0; i < 70; i++ {
-		bus.Publish(service.ImagePullingEvent{GameserverID: "gs-1", Timestamp: time.Now()})
+		bus.Publish(controller.ImagePullingEvent{GameserverID: "gs-1", Timestamp: time.Now()})
 	}
 
 	// Should have at most 64 events (buffer size)
@@ -102,11 +101,11 @@ func TestEventBus_EventTypes(t *testing.T) {
 	t.Parallel()
 
 	// Verify key event type constants are non-empty
-	require.NotEmpty(t, service.EventGameserverCreate)
-	require.NotEmpty(t, service.EventGameserverStart)
-	require.NotEmpty(t, service.EventGameserverStop)
-	require.NotEmpty(t, service.EventGameserverDelete)
+	require.NotEmpty(t, controller.EventGameserverCreate)
+	require.NotEmpty(t, controller.EventGameserverStart)
+	require.NotEmpty(t, controller.EventGameserverStop)
+	require.NotEmpty(t, controller.EventGameserverDelete)
 	require.NotEmpty(t, controller.EventStatusChanged)
-	require.NotEmpty(t, service.EventBackupCreate)
-	require.NotEmpty(t, service.EventScheduleCreate)
+	require.NotEmpty(t, controller.EventBackupCreate)
+	require.NotEmpty(t, controller.EventScheduleCreate)
 }

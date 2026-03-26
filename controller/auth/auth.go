@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"github.com/warsmite/gamejanitor/controller"
 	"context"
 	"crypto/rand"
 	"database/sql"
@@ -175,13 +174,13 @@ func (s *AuthService) CreateCustomToken(name string, gameserverIDs []string, per
 			return "", nil, fmt.Errorf("validating gameserver ID %s: %w", gsID, err)
 		}
 		if gs == nil {
-			return "", nil, controller.ErrBadRequestf("gameserver %s not found", gsID)
+			return "", nil, fmt.Errorf("gameserver %s not found", gsID)
 		}
 	}
 
 	for _, p := range permissions {
 		if !isValidPermission(p) {
-			return "", nil, controller.ErrBadRequestf("invalid permission: %s", p)
+			return "", nil, fmt.Errorf("invalid permission: %s", p)
 		}
 	}
 
@@ -223,7 +222,7 @@ func (s *AuthService) CreateCustomToken(name string, gameserverIDs []string, per
 
 func (s *AuthService) CreateWorkerToken(name string) (string, *model.Token, error) {
 	if name == "" {
-		return "", nil, controller.ErrBadRequest("token name is required")
+		return "", nil, fmt.Errorf("token name is required")
 	}
 
 	existing, err := model.GetTokenByNameAndScope(s.db, name, ScopeWorker)
@@ -311,7 +310,7 @@ func (s *AuthService) RotateAdminToken(name string) (string, *model.Token, error
 // Always returns a raw token. Used by _local worker and explicit rotation.
 func (s *AuthService) RotateWorkerToken(name string) (string, *model.Token, error) {
 	if name == "" {
-		return "", nil, controller.ErrBadRequest("token name is required")
+		return "", nil, fmt.Errorf("token name is required")
 	}
 
 	if deleted, err := model.DeleteTokenByNameAndScope(s.db, name, ScopeWorker); err != nil {

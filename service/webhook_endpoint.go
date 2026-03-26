@@ -324,7 +324,7 @@ func ValidateEventFilter(events []string) error {
 			continue
 		}
 		matched := false
-		for _, known := range AllEventTypes {
+		for _, known := range controller.AllEventTypes {
 			if e == known {
 				matched = true
 				break

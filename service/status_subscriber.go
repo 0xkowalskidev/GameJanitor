@@ -69,25 +69,25 @@ func (s *StatusSubscriber) Stop() {
 
 func (s *StatusSubscriber) handleEvent(event controller.WebhookEvent) {
 	switch e := event.(type) {
-	case ImagePullingEvent:
+	case controller.ImagePullingEvent:
 		s.setStatus(e.GameserverID, controller.StatusInstalling, "")
-	case ContainerCreatingEvent:
+	case controller.ContainerCreatingEvent:
 		s.setStatus(e.GameserverID, controller.StatusStarting, "")
-	case ContainerStartedEvent:
+	case controller.ContainerStartedEvent:
 		s.setStatus(e.GameserverID, controller.StatusStarted, "")
-	case GameserverReadyEvent:
+	case controller.GameserverReadyEvent:
 		s.setStatus(e.GameserverID, controller.StatusRunning, "")
 		// Reset crash counter on successful run
 		s.crashMu.Lock()
 		delete(s.crashCounts, e.GameserverID)
 		s.crashMu.Unlock()
-	case ContainerStoppingEvent:
+	case controller.ContainerStoppingEvent:
 		s.setStatus(e.GameserverID, controller.StatusStopping, "")
-	case ContainerStoppedEvent:
+	case controller.ContainerStoppedEvent:
 		s.setStatus(e.GameserverID, controller.StatusStopped, "")
-	case ContainerExitedEvent:
+	case controller.ContainerExitedEvent:
 		s.setStatus(e.GameserverID, controller.StatusError, "Container exited unexpectedly")
-	case GameserverErrorEvent:
+	case controller.GameserverErrorEvent:
 		s.setStatus(e.GameserverID, controller.StatusError, e.Reason)
 	}
 }

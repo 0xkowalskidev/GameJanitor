@@ -260,10 +260,10 @@ func (s *ModService) Install(ctx context.Context, gameserverID string, sourceTyp
 		return nil, fmt.Errorf("saving installed mod: %w", err)
 	}
 
-	s.broadcaster.Publish(ModActionEvent{
-		Type:         EventModInstalled,
+	s.broadcaster.Publish(controller.ModActionEvent{
+		Type:         controller.EventModInstalled,
 		Timestamp:    time.Now(),
-		Actor:        ActorFromContext(ctx),
+		Actor:        controller.ActorFromContext(ctx),
 		GameserverID: gameserverID,
 		Mod:          mod,
 	})
@@ -300,10 +300,10 @@ func (s *ModService) Uninstall(ctx context.Context, gameserverID string, modID s
 
 	s.log.Info("mod uninstalled", "gameserver_id", gameserverID, "mod_id", modID, "source", mod.Source, "name", mod.Name)
 
-	s.broadcaster.Publish(ModActionEvent{
-		Type:         EventModUninstalled,
+	s.broadcaster.Publish(controller.ModActionEvent{
+		Type:         controller.EventModUninstalled,
 		Timestamp:    time.Now(),
-		Actor:        ActorFromContext(ctx),
+		Actor:        controller.ActorFromContext(ctx),
 		GameserverID: gameserverID,
 		Mod:          mod,
 	})
@@ -361,10 +361,10 @@ func (s *ModService) installWorkshop(ctx context.Context, gs *model.Gameserver, 
 		s.log.Warn("failed to write workshop manifest", "gameserver_id", gs.ID, "error", err)
 	}
 
-	s.broadcaster.Publish(ModActionEvent{
-		Type:         EventModInstalled,
+	s.broadcaster.Publish(controller.ModActionEvent{
+		Type:         controller.EventModInstalled,
 		Timestamp:    time.Now(),
-		Actor:        ActorFromContext(ctx),
+		Actor:        controller.ActorFromContext(ctx),
 		GameserverID: gs.ID,
 		Mod:          mod,
 	})
