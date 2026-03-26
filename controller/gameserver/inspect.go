@@ -1,17 +1,16 @@
-package service
+package gameserver
 
 import (
-	"github.com/warsmite/gamejanitor/controller"
 	"context"
 	"fmt"
 	"io"
 
-	"github.com/warsmite/gamejanitor/model"
+	"github.com/warsmite/gamejanitor/controller"
 	"github.com/warsmite/gamejanitor/worker"
 )
 
 func (s *GameserverService) GetContainerInfo(ctx context.Context, gameserverID string) (*worker.ContainerInfo, error) {
-	gs, err := model.GetGameserver(s.db, gameserverID)
+	gs, err := s.store.GetGameserver(gameserverID)
 	if err != nil {
 		return nil, err
 	}
@@ -25,7 +24,7 @@ func (s *GameserverService) GetContainerInfo(ctx context.Context, gameserverID s
 }
 
 func (s *GameserverService) GetGameserverStats(ctx context.Context, gameserverID string) (*worker.GameserverStats, error) {
-	gs, err := model.GetGameserver(s.db, gameserverID)
+	gs, err := s.store.GetGameserver(gameserverID)
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +61,7 @@ func (s *GameserverService) GetGameserverStats(ctx context.Context, gameserverID
 }
 
 func (s *GameserverService) GetVolumeSize(ctx context.Context, gameserverID string) (int64, error) {
-	gs, err := model.GetGameserver(s.db, gameserverID)
+	gs, err := s.store.GetGameserver(gameserverID)
 	if err != nil {
 		return 0, err
 	}
@@ -73,7 +72,7 @@ func (s *GameserverService) GetVolumeSize(ctx context.Context, gameserverID stri
 }
 
 func (s *GameserverService) GetContainerLogs(ctx context.Context, gameserverID string, tail int) (io.ReadCloser, error) {
-	gs, err := model.GetGameserver(s.db, gameserverID)
+	gs, err := s.store.GetGameserver(gameserverID)
 	if err != nil {
 		return nil, err
 	}

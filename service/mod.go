@@ -20,9 +20,16 @@ import (
 	"github.com/warsmite/gamejanitor/model"
 )
 
+// fileOperator is a narrow interface for file operations the mod service needs.
+type fileOperator interface {
+	WriteFile(ctx context.Context, gameserverID string, filePath string, content []byte) error
+	DeletePath(ctx context.Context, gameserverID string, targetPath string) error
+	CreateDirectory(ctx context.Context, gameserverID string, dirPath string) error
+}
+
 type ModService struct {
 	db              *sql.DB
-	fileSvc         *FileService
+	fileSvc         fileOperator
 	gameStore       *games.GameStore
 	settingsSvc     *settings.SettingsService
 	optionsRegistry *games.OptionsRegistry
@@ -32,7 +39,7 @@ type ModService struct {
 	broadcaster     *controller.EventBus
 }
 
-func NewModService(db *sql.DB, fileSvc *FileService, gameStore *games.GameStore, settingsSvc *settings.SettingsService, optionsRegistry *games.OptionsRegistry, broadcaster *controller.EventBus, log *slog.Logger) *ModService {
+func NewModService(db *sql.DB, fileSvc fileOperator, gameStore *games.GameStore, settingsSvc *settings.SettingsService, optionsRegistry *games.OptionsRegistry, broadcaster *controller.EventBus, log *slog.Logger) *ModService {
 	sources := map[string]ModSource{
 		"umod":     NewUmodSource(log.With("source", "umod")),
 		"modrinth": NewModrinthSource(log.With("source", "modrinth")),

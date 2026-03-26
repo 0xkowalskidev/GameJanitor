@@ -28,6 +28,7 @@ import (
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/pkg/netinfo"
+	"github.com/warsmite/gamejanitor/controller/gameserver"
 	"github.com/warsmite/gamejanitor/service"
 	"github.com/warsmite/gamejanitor/store"
 	"github.com/warsmite/gamejanitor/controller/webhook"
@@ -117,12 +118,12 @@ func loadConfig(cmd *cobra.Command) (config.Config, error) {
 type services struct {
 	broadcaster   *controller.EventBus
 	settingsSvc   *settings.SettingsService
-	gameserverSvc *service.GameserverService
+	gameserverSvc *gameserver.GameserverService
 	querySvc      *service.QueryService
 	statsPoller   *service.StatsPoller
 	readyWatcher  *service.ReadyWatcher
-	consoleSvc    *service.ConsoleService
-	fileSvc       *service.FileService
+	consoleSvc    *gameserver.ConsoleService
+	fileSvc       *gameserver.FileService
 	backupSvc     *service.BackupService
 	scheduler     *service.Scheduler
 	scheduleSvc   *service.ScheduleService
@@ -141,15 +142,24 @@ func initServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 	// Apply config file runtime settings to DB on every startup
 	settingsSvc.ApplyConfig(cfg.Settings)
 
-	gameserverSvc := service.NewGameserverService(database, dispatcher, broadcaster, settingsSvc, gameStore, cfg.DataDir, logger)
+	gsStore := store.NewGameserverStore(database)
+	wnStore := store.NewWorkerNodeStore(database)
+	backupDBStore := store.NewBackupStore(database)
+	gameserverStore := struct {
+		*store.GameserverStore
+		*store.WorkerNodeStore
+		*store.BackupStore
+	}{gsStore, wnStore, backupDBStore}
+
+	gameserverSvc := gameserver.NewGameserverService(gameserverStore, dispatcher, broadcaster, settingsSvc, gameStore, cfg.DataDir, logger)
 	querySvc := service.NewQueryService(database, broadcaster, gameStore, logger)
 	statsPoller := service.NewStatsPoller(database, dispatcher, broadcaster, logger)
 	readyWatcher := service.NewReadyWatcher(database, broadcaster, gameStore, logger)
 	readyWatcher.SetQueryService(querySvc)
 	readyWatcher.SetStatsPoller(statsPoller)
 	gameserverSvc.SetReadyWatcher(readyWatcher)
-	consoleSvc := service.NewConsoleService(database, dispatcher, gameStore, logger)
-	fileSvc := service.NewFileService(database, dispatcher, logger)
+	consoleSvc := gameserver.NewConsoleService(gsStore, dispatcher, gameStore, logger)
+	fileSvc := gameserver.NewFileService(gsStore, dispatcher, logger)
 
 	backupStore, err := initBackupStore(cfg, logger)
 	if err != nil {

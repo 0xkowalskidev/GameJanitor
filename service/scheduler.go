@@ -14,19 +14,30 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
+// schedulerGameserverOps is a narrow interface for the gameserver operations the scheduler needs.
+type schedulerGameserverOps interface {
+	Restart(ctx context.Context, id string) error
+	UpdateServerGame(ctx context.Context, id string) error
+}
+
+// schedulerConsoleOps is a narrow interface for the console operations the scheduler needs.
+type schedulerConsoleOps interface {
+	SendCommand(ctx context.Context, gameserverID string, command string) (string, error)
+}
+
 type Scheduler struct {
 	cron          *cron.Cron
 	db            *sql.DB
 	backupSvc     *BackupService
-	gameserverSvc *GameserverService
-	consoleSvc    *ConsoleService
+	gameserverSvc schedulerGameserverOps
+	consoleSvc    schedulerConsoleOps
 	broadcaster   *controller.EventBus
 	log           *slog.Logger
 	entries       map[string]cron.EntryID
 	mu            sync.Mutex
 }
 
-func NewScheduler(db *sql.DB, backupSvc *BackupService, gameserverSvc *GameserverService, consoleSvc *ConsoleService, broadcaster *controller.EventBus, log *slog.Logger) *Scheduler {
+func NewScheduler(db *sql.DB, backupSvc *BackupService, gameserverSvc schedulerGameserverOps, consoleSvc schedulerConsoleOps, broadcaster *controller.EventBus, log *slog.Logger) *Scheduler {
 	return &Scheduler{
 		cron:          cron.New(),
 		db:            db,

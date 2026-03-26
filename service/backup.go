@@ -10,17 +10,40 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"strings"
 	"time"
 
+	"github.com/warsmite/gamejanitor/controller/gameserver"
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/google/uuid"
 )
 
+// backupOperationFailedReason builds a user-facing error reason for failed backup operations.
+func backupOperationFailedReason(prefix string, err error) string {
+	msg := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(msg, "pulling image") || strings.Contains(msg, "pull"):
+		return prefix + ". Check your internet connection."
+	case strings.Contains(msg, "volume") || strings.Contains(msg, "disk") || strings.Contains(msg, "no space"):
+		return prefix + ". There may be a storage issue."
+	default:
+		return prefix + "."
+	}
+}
+
+// gameserverOps is a narrow interface for gameserver lifecycle operations
+// needed by BackupService. Temporary until backup gets extracted to its own package.
+type gameserverOps interface {
+	Stop(ctx context.Context, id string) error
+	Start(ctx context.Context, id string) error
+	GetGameserver(id string) (*model.Gameserver, error)
+}
+
 type BackupService struct {
 	db            *sql.DB
 	dispatcher    *orchestrator.Dispatcher
-	gameserverSvc *GameserverService
+	gameserverSvc gameserverOps
 	gameStore     *games.GameStore
 	store         BackupStore
 	settingsSvc   *settings.SettingsService
@@ -28,7 +51,7 @@ type BackupService struct {
 	log           *slog.Logger
 }
 
-func NewBackupService(db *sql.DB, dispatcher *orchestrator.Dispatcher, gameserverSvc *GameserverService, gameStore *games.GameStore, store BackupStore, settingsSvc *settings.SettingsService, broadcaster *controller.EventBus, log *slog.Logger) *BackupService {
+func NewBackupService(db *sql.DB, dispatcher *orchestrator.Dispatcher, gameserverSvc gameserverOps, gameStore *games.GameStore, store BackupStore, settingsSvc *settings.SettingsService, broadcaster *controller.EventBus, log *slog.Logger) *BackupService {
 	return &BackupService{db: db, dispatcher: dispatcher, gameserverSvc: gameserverSvc, gameStore: gameStore, store: store, settingsSvc: settingsSvc, broadcaster: broadcaster, log: log}
 }
 
@@ -130,7 +153,7 @@ func (s *BackupService) runBackup(gameserverID, backupID, name string, gs *model
 	}
 
 	// Run save-server if game is running and supports it
-	if controller.IsRunningStatus(gs.Status) && gs.ContainerID != nil && game != nil && HasCapability(game, "save") {
+	if controller.IsRunningStatus(gs.Status) && gs.ContainerID != nil && game != nil && gameserver.HasCapability(game, "save") {
 		s.log.Info("running save-server before backup", "gameserver_id", gameserverID)
 		exitCode, _, stderr, execErr := w.Exec(ctx, *gs.ContainerID, []string{"/scripts/save-server"})
 		if execErr != nil {
@@ -332,7 +355,7 @@ func (s *BackupService) failRestore(gameserverID, backupID, backupName string, a
 		Backup:       failedRestoreBackup,
 		Error:        reason,
 	})
-	s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gameserverID, Reason: operationFailedReason("Backup restore failed", fmt.Errorf("%s", reason)), Timestamp: time.Now()})
+	s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gameserverID, Reason: backupOperationFailedReason("Backup restore failed", fmt.Errorf("%s", reason)), Timestamp: time.Now()})
 }
 
 func (s *BackupService) DeleteBackup(ctx context.Context, gameserverID, backupID string) error {

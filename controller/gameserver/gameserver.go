@@ -1,16 +1,12 @@
-package service
+package gameserver
 
 import (
-	"github.com/warsmite/gamejanitor/controller/orchestrator"
-	"github.com/warsmite/gamejanitor/controller/settings"
-	"github.com/warsmite/gamejanitor/controller/auth"
-	"github.com/warsmite/gamejanitor/controller"
 	"context"
 	"crypto/rand"
-	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -18,38 +14,75 @@ import (
 	"sync"
 	"time"
 
-	"github.com/warsmite/gamejanitor/games"
-	"github.com/warsmite/gamejanitor/pkg/naming"
-	"github.com/warsmite/gamejanitor/model"
-	"github.com/warsmite/gamejanitor/worker"
 	"github.com/google/uuid"
+	"github.com/warsmite/gamejanitor/controller"
+	"github.com/warsmite/gamejanitor/controller/auth"
+	"github.com/warsmite/gamejanitor/controller/orchestrator"
+	"github.com/warsmite/gamejanitor/controller/settings"
+	"github.com/warsmite/gamejanitor/games"
+	"github.com/warsmite/gamejanitor/model"
+	"github.com/warsmite/gamejanitor/pkg/naming"
+	"github.com/warsmite/gamejanitor/worker"
 	"golang.org/x/crypto/bcrypt"
 )
 
+// Store abstracts all database operations the gameserver service needs.
+type Store interface {
+	ListGameservers(filter model.GameserverFilter) ([]model.Gameserver, error)
+	GetGameserver(id string) (*model.Gameserver, error)
+	CreateGameserver(gs *model.Gameserver) error
+	UpdateGameserver(gs *model.Gameserver) error
+	DeleteGameserver(id string) error
+	PopulateNode(gs *model.Gameserver)
+	PopulateNodes(gameservers []model.Gameserver)
+	GetWorkerNode(id string) (*model.WorkerNode, error)
+	AllocatedMemoryByNode(nodeID string) (int, error)
+	AllocatedCPUByNode(nodeID string) (float64, error)
+	AllocatedStorageByNode(nodeID string) (int, error)
+	AllocatedMemoryByNodeExcluding(nodeID, excludeID string) (int, error)
+	AllocatedCPUByNodeExcluding(nodeID, excludeID string) (float64, error)
+	AllocatedStorageByNodeExcluding(nodeID, excludeID string) (int, error)
+	ListBackups(filter model.BackupFilter) ([]model.Backup, error)
+}
+
+// ReadyWatcher watches for gameserver readiness after start.
+type ReadyWatcher interface {
+	Watch(gameserverID string, wkr worker.Worker, containerID string)
+	Stop(gameserverID string)
+}
+
+// BackupStore abstracts backup file storage (local disk or S3).
+type BackupStore interface {
+	Save(ctx context.Context, gameserverID string, backupID string, reader io.Reader) error
+	Load(ctx context.Context, gameserverID string, backupID string) (io.ReadCloser, error)
+	Delete(ctx context.Context, gameserverID string, backupID string) error
+	Size(ctx context.Context, gameserverID string, backupID string) (int64, error)
+}
+
 type GameserverService struct {
-	db           *sql.DB
+	store        Store
 	dispatcher   *orchestrator.Dispatcher
 	log          *slog.Logger
 	broadcaster  *controller.EventBus
-	readyWatcher *ReadyWatcher
+	readyWatcher ReadyWatcher
 	settingsSvc  *settings.SettingsService
 	gameStore    *games.GameStore
-	store        BackupStore
+	backupStore  BackupStore
 	dataDir      string
 	placementMu  sync.Mutex // serializes port allocation + gameserver creation to prevent races
 }
 
-func NewGameserverService(db *sql.DB, dispatcher *orchestrator.Dispatcher, broadcaster *controller.EventBus, settingsSvc *settings.SettingsService, gameStore *games.GameStore, dataDir string, log *slog.Logger) *GameserverService {
-	return &GameserverService{db: db, dispatcher: dispatcher, broadcaster: broadcaster, settingsSvc: settingsSvc, gameStore: gameStore, dataDir: dataDir, log: log}
+func NewGameserverService(store Store, dispatcher *orchestrator.Dispatcher, broadcaster *controller.EventBus, settingsSvc *settings.SettingsService, gameStore *games.GameStore, dataDir string, log *slog.Logger) *GameserverService {
+	return &GameserverService{store: store, dispatcher: dispatcher, broadcaster: broadcaster, settingsSvc: settingsSvc, gameStore: gameStore, dataDir: dataDir, log: log}
 }
 
 // Called after both services are created to break the circular dependency.
-func (s *GameserverService) SetReadyWatcher(rw *ReadyWatcher) {
+func (s *GameserverService) SetReadyWatcher(rw ReadyWatcher) {
 	s.readyWatcher = rw
 }
 
 func (s *GameserverService) SetBackupStore(store BackupStore) {
-	s.store = store
+	s.backupStore = store
 }
 
 func (s *GameserverService) ListGameservers(ctx context.Context, filter model.GameserverFilter) ([]model.Gameserver, error) {
@@ -65,20 +98,20 @@ func (s *GameserverService) ListGameservers(ctx context.Context, filter model.Ga
 		}
 	}
 
-	gameservers, err := model.ListGameservers(s.db, filter)
+	gameservers, err := s.store.ListGameservers(filter)
 	if err != nil {
 		return nil, err
 	}
-	model.PopulateNodes(s.db, gameservers)
+	s.store.PopulateNodes(gameservers)
 	return gameservers, nil
 }
 
 func (s *GameserverService) GetGameserver(id string) (*model.Gameserver, error) {
-	gs, err := model.GetGameserver(s.db, id)
+	gs, err := s.store.GetGameserver(id)
 	if err != nil || gs == nil {
 		return gs, err
 	}
-	gs.PopulateNode(s.db)
+	s.store.PopulateNode(gs)
 	return gs, nil
 }
 
@@ -212,14 +245,14 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *model.Game
 		return "", fmt.Errorf("creating volume for gameserver %s: %w", gs.ID, err)
 	}
 
-	if err := model.CreateGameserver(s.db, gs); err != nil {
+	if err := s.store.CreateGameserver(gs); err != nil {
 		if rmErr := targetWorker.RemoveVolume(ctx, gs.VolumeName); rmErr != nil {
 			s.log.Error("failed to clean up volume after gameserver creation failure", "volume", gs.VolumeName, "error", rmErr)
 		}
 		return "", err
 	}
 
-	gs.PopulateNode(s.db)
+	s.store.PopulateNode(gs)
 
 	s.broadcaster.Publish(controller.GameserverActionEvent{
 		Type:         controller.EventGameserverCreate,
@@ -233,7 +266,7 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *model.Game
 }
 
 func (s *GameserverService) RegenerateSFTPPassword(ctx context.Context, gameserverID string) (string, error) {
-	gs, err := model.GetGameserver(s.db, gameserverID)
+	gs, err := s.store.GetGameserver(gameserverID)
 	if err != nil {
 		return "", err
 	}
@@ -248,7 +281,7 @@ func (s *GameserverService) RegenerateSFTPPassword(ctx context.Context, gameserv
 	}
 
 	gs.HashedSFTPPassword = string(hashed)
-	if err := model.UpdateGameserver(s.db, gs); err != nil {
+	if err := s.store.UpdateGameserver(gs); err != nil {
 		return "", err
 	}
 
@@ -340,7 +373,7 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *model.Game
 		return false, err
 	}
 
-	existing, err := model.GetGameserver(s.db, gs.ID)
+	existing, err := s.store.GetGameserver(gs.ID)
 	if err != nil {
 		return false, err
 	}
@@ -444,7 +477,7 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *model.Game
 			s.log.Info("auto-migration needed for resource upgrade", "id", existing.ID, "from_node", *existing.NodeID, "to_node", foundNode)
 
 			// Write new values first, then migrate async
-			if err := model.UpdateGameserver(s.db, existing); err != nil {
+			if err := s.store.UpdateGameserver(existing); err != nil {
 				return false, err
 			}
 
@@ -463,21 +496,21 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *model.Game
 
 	if !needsMigration {
 		s.log.Info("updating gameserver", "id", gs.ID)
-		if err := model.UpdateGameserver(s.db, existing); err != nil {
+		if err := s.store.UpdateGameserver(existing); err != nil {
 			return false, err
 		}
 	}
 
 	if installTriggered {
 		existing.Installed = false
-		if err := model.UpdateGameserver(s.db, existing); err != nil {
+		if err := s.store.UpdateGameserver(existing); err != nil {
 			s.log.Error("failed to clear installed flag after env change", "id", gs.ID, "error", err)
 		} else {
 			s.log.Info("install-triggering env var changed, cleared installed flag", "id", gs.ID)
 		}
 	}
 
-	existing.PopulateNode(s.db)
+	s.store.PopulateNode(existing)
 	s.broadcaster.Publish(controller.GameserverActionEvent{
 		Type:         controller.EventGameserverUpdate,
 		Timestamp:    time.Now(),
@@ -527,7 +560,7 @@ func (s *GameserverService) installTriggeringEnvChanged(existing, updated *model
 }
 
 func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) error {
-	gs, err := model.GetGameserver(s.db, id)
+	gs, err := s.store.GetGameserver(id)
 	if err != nil {
 		return err
 	}
@@ -542,7 +575,7 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 			return fmt.Errorf("stopping gameserver before delete: %w", err)
 		}
 		// Re-read after stop — Stop() clears ContainerID in DB
-		gs, err = model.GetGameserver(s.db, id)
+		gs, err = s.store.GetGameserver(id)
 		if err != nil {
 			return fmt.Errorf("re-reading gameserver %s after stop: %w", id, err)
 		}
@@ -575,23 +608,23 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 
 	// List backups before delete — CASCADE will remove DB records,
 	// but we need the IDs to clean up store files afterward.
-	backups, err := model.ListBackups(s.db, model.BackupFilter{GameserverID: id})
+	backups, err := s.store.ListBackups(model.BackupFilter{GameserverID: id})
 	if err != nil {
 		s.log.Warn("failed to list backups for store cleanup", "id", id, "error", err)
 	}
 
-	if err := model.DeleteGameserver(s.db, id); err != nil {
+	if err := s.store.DeleteGameserver(id); err != nil {
 		return err
 	}
 
 	// Clean up backup store files (DB records already cascaded)
 	for _, b := range backups {
-		if err := s.store.Delete(ctx, id, b.ID); err != nil {
+		if err := s.backupStore.Delete(ctx, id, b.ID); err != nil {
 			s.log.Warn("failed to remove backup store file", "backup_id", b.ID, "error", err)
 		}
 	}
 
-	gs.PopulateNode(s.db)
+	s.store.PopulateNode(gs)
 	s.broadcaster.Publish(controller.GameserverActionEvent{
 		Type:         controller.EventGameserverDelete,
 		Timestamp:    time.Now(),

@@ -1,28 +1,32 @@
-package service
+package gameserver
 
 import (
-	"github.com/warsmite/gamejanitor/controller/orchestrator"
-	"github.com/warsmite/gamejanitor/controller"
 	"context"
-	"database/sql"
 	"fmt"
 	"log/slog"
 	"path"
 	"strings"
 
+	"github.com/warsmite/gamejanitor/controller"
+	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/worker"
 )
 
+// FileStore abstracts the database operations the file service needs.
+type FileStore interface {
+	GetGameserver(id string) (*model.Gameserver, error)
+}
+
 type FileService struct {
-	db         *sql.DB
+	store      FileStore
 	dispatcher *orchestrator.Dispatcher
 	log        *slog.Logger
 }
 
-func NewFileService(db *sql.DB, dispatcher *orchestrator.Dispatcher, log *slog.Logger) *FileService {
+func NewFileService(store FileStore, dispatcher *orchestrator.Dispatcher, log *slog.Logger) *FileService {
 	return &FileService{
-		db:         db,
+		store:      store,
 		dispatcher: dispatcher,
 		log:        log,
 	}
@@ -145,7 +149,7 @@ func (s *FileService) UploadFile(ctx context.Context, gameserverID string, fileP
 }
 
 func (s *FileService) getGameserver(gameserverID string) (*model.Gameserver, error) {
-	gs, err := model.GetGameserver(s.db, gameserverID)
+	gs, err := s.store.GetGameserver(gameserverID)
 	if err != nil {
 		return nil, fmt.Errorf("getting gameserver %s: %w", gameserverID, err)
 	}
@@ -163,4 +167,3 @@ func validatePath(p string) (string, error) {
 	}
 	return cleaned, nil
 }
-

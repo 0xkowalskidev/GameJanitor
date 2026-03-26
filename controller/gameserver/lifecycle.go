@@ -1,7 +1,6 @@
-package service
+package gameserver
 
 import (
-	"github.com/warsmite/gamejanitor/controller"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -9,9 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/warsmite/gamejanitor/controller"
 	"github.com/warsmite/gamejanitor/games"
-	"github.com/warsmite/gamejanitor/pkg/naming"
 	"github.com/warsmite/gamejanitor/model"
+	"github.com/warsmite/gamejanitor/pkg/naming"
 	"github.com/warsmite/gamejanitor/worker"
 )
 
@@ -39,7 +39,7 @@ func operationFailedReason(prefix string, err error) string {
 }
 
 func (s *GameserverService) Start(ctx context.Context, id string) error {
-	gs, err := model.GetGameserver(s.db, id)
+	gs, err := s.store.GetGameserver(id)
 	if err != nil {
 		return err
 	}
@@ -53,7 +53,7 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 		return nil
 	}
 
-	gs.PopulateNode(s.db)
+	s.store.PopulateNode(gs)
 	s.broadcaster.Publish(controller.GameserverActionEvent{
 		Type:         controller.EventGameserverStart,
 		Timestamp:    time.Now(),
@@ -116,7 +116,7 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 	if gs.ContainerID != nil {
 		oldID := *gs.ContainerID
 		gs.ContainerID = nil
-		if err := model.UpdateGameserver(s.db, gs); err != nil {
+		if err := s.store.UpdateGameserver(gs); err != nil {
 			s.log.Warn("failed to clear old container ID", "id", id, "error", err)
 		}
 		if err := w.RemoveContainer(ctx, oldID); err != nil {
@@ -146,7 +146,7 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 
 	// Save container ID (direct DB write — must persist immediately)
 	gs.ContainerID = &containerID
-	if err := model.UpdateGameserver(s.db, gs); err != nil {
+	if err := s.store.UpdateGameserver(gs); err != nil {
 		w.RemoveContainer(ctx, containerID)
 		return err
 	}
@@ -169,7 +169,7 @@ func (s *GameserverService) Start(ctx context.Context, id string) error {
 }
 
 func (s *GameserverService) Stop(ctx context.Context, id string) error {
-	gs, err := model.GetGameserver(s.db, id)
+	gs, err := s.store.GetGameserver(id)
 	if err != nil {
 		return err
 	}
@@ -182,7 +182,7 @@ func (s *GameserverService) Stop(ctx context.Context, id string) error {
 		return nil
 	}
 
-	gs.PopulateNode(s.db)
+	s.store.PopulateNode(gs)
 	s.broadcaster.Publish(controller.GameserverActionEvent{
 		Type:         controller.EventGameserverStop,
 		Timestamp:    time.Now(),
@@ -204,7 +204,7 @@ func (s *GameserverService) Stop(ctx context.Context, id string) error {
 	}
 
 	// Clear container ID (direct DB write)
-	gs, err = model.GetGameserver(s.db, id)
+	gs, err = s.store.GetGameserver(id)
 	if err != nil {
 		return fmt.Errorf("re-reading gameserver %s after stop: %w", id, err)
 	}
@@ -212,7 +212,7 @@ func (s *GameserverService) Stop(ctx context.Context, id string) error {
 		return controller.ErrNotFoundf("gameserver %s not found after stop", id)
 	}
 	gs.ContainerID = nil
-	if err := model.UpdateGameserver(s.db, gs); err != nil {
+	if err := s.store.UpdateGameserver(gs); err != nil {
 		return err
 	}
 
@@ -222,7 +222,7 @@ func (s *GameserverService) Stop(ctx context.Context, id string) error {
 }
 
 func (s *GameserverService) Restart(ctx context.Context, id string) error {
-	gs, err := model.GetGameserver(s.db, id)
+	gs, err := s.store.GetGameserver(id)
 	if err != nil {
 		return err
 	}
@@ -230,7 +230,7 @@ func (s *GameserverService) Restart(ctx context.Context, id string) error {
 		return controller.ErrNotFoundf("gameserver %s not found", id)
 	}
 
-	gs.PopulateNode(s.db)
+	s.store.PopulateNode(gs)
 	s.broadcaster.Publish(controller.GameserverActionEvent{
 		Type:         controller.EventGameserverRestart,
 		Timestamp:    time.Now(),
@@ -249,7 +249,7 @@ func (s *GameserverService) Restart(ctx context.Context, id string) error {
 }
 
 func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) (err error) {
-	gs, err := model.GetGameserver(s.db, id)
+	gs, err := s.store.GetGameserver(id)
 	if err != nil {
 		return err
 	}
@@ -264,7 +264,7 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) (er
 
 	s.log.Info("updating game for gameserver", "id", id, "game", game.ID)
 
-	gs.PopulateNode(s.db)
+	s.store.PopulateNode(gs)
 	s.broadcaster.Publish(controller.GameserverActionEvent{
 		Type:         controller.EventGameserverUpdateGame,
 		Timestamp:    time.Now(),
@@ -342,7 +342,7 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) (er
 }
 
 func (s *GameserverService) Reinstall(ctx context.Context, id string) (err error) {
-	gs, err := model.GetGameserver(s.db, id)
+	gs, err := s.store.GetGameserver(id)
 	if err != nil {
 		return err
 	}
@@ -352,7 +352,7 @@ func (s *GameserverService) Reinstall(ctx context.Context, id string) (err error
 
 	s.log.Info("reinstalling gameserver (full wipe)", "id", id)
 
-	gs.PopulateNode(s.db)
+	s.store.PopulateNode(gs)
 	s.broadcaster.Publish(controller.GameserverActionEvent{
 		Type:         controller.EventGameserverReinstall,
 		Timestamp:    time.Now(),
@@ -377,7 +377,7 @@ func (s *GameserverService) Reinstall(ctx context.Context, id string) (err error
 	w := s.dispatcher.WorkerFor(id)
 
 	gs.Installed = false
-	if err := model.UpdateGameserver(s.db, gs); err != nil {
+	if err := s.store.UpdateGameserver(gs); err != nil {
 		return fmt.Errorf("clearing installed flag for reinstall: %w", err)
 	}
 

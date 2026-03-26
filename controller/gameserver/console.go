@@ -1,10 +1,7 @@
-package service
+package gameserver
 
 import (
-	"github.com/warsmite/gamejanitor/controller/orchestrator"
-	"github.com/warsmite/gamejanitor/controller"
 	"context"
-	"database/sql"
 	"fmt"
 	"io"
 	"log/slog"
@@ -13,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/warsmite/gamejanitor/controller"
+	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/model"
 )
@@ -22,20 +21,25 @@ type LogSession struct {
 	ModTime time.Time `json:"mod_time"`
 }
 
+// ConsoleStore abstracts the database operations the console service needs.
+type ConsoleStore interface {
+	GetGameserver(id string) (*model.Gameserver, error)
+}
+
 type ConsoleService struct {
-	db         *sql.DB
+	store      ConsoleStore
 	dispatcher *orchestrator.Dispatcher
 	gameStore  *games.GameStore
 	log        *slog.Logger
 }
 
-func NewConsoleService(db *sql.DB, dispatcher *orchestrator.Dispatcher, gameStore *games.GameStore, log *slog.Logger) *ConsoleService {
-	return &ConsoleService{db: db, dispatcher: dispatcher, gameStore: gameStore, log: log}
+func NewConsoleService(store ConsoleStore, dispatcher *orchestrator.Dispatcher, gameStore *games.GameStore, log *slog.Logger) *ConsoleService {
+	return &ConsoleService{store: store, dispatcher: dispatcher, gameStore: gameStore, log: log}
 }
 
 // StreamLogs returns a follow-mode log stream for a running gameserver's container.
 func (s *ConsoleService) StreamLogs(ctx context.Context, gameserverID string, tail int) (io.ReadCloser, error) {
-	gs, err := model.GetGameserver(s.db, gameserverID)
+	gs, err := s.store.GetGameserver(gameserverID)
 	if err != nil {
 		return nil, fmt.Errorf("getting gameserver %s: %w", gameserverID, err)
 	}
@@ -65,7 +69,7 @@ func (s *ConsoleService) StreamLogs(ctx context.Context, gameserverID string, ta
 // Returns the command output (stdout), which is relevant for RCON-based games where
 // the response comes back on stdout rather than appearing in the container log stream.
 func (s *ConsoleService) SendCommand(ctx context.Context, gameserverID string, command string) (string, error) {
-	gs, err := model.GetGameserver(s.db, gameserverID)
+	gs, err := s.store.GetGameserver(gameserverID)
 	if err != nil {
 		return "", fmt.Errorf("getting gameserver %s: %w", gameserverID, err)
 	}
@@ -103,7 +107,7 @@ func (s *ConsoleService) SendCommand(ctx context.Context, gameserverID string, c
 // ListLogSessions returns available log sessions for a gameserver.
 // Index 0 is the most recent session (console.log), 1 is console.log.0, etc.
 func (s *ConsoleService) ListLogSessions(ctx context.Context, gameserverID string) ([]LogSession, error) {
-	gs, err := model.GetGameserver(s.db, gameserverID)
+	gs, err := s.store.GetGameserver(gameserverID)
 	if err != nil {
 		return nil, fmt.Errorf("getting gameserver %s: %w", gameserverID, err)
 	}
@@ -141,7 +145,7 @@ func (s *ConsoleService) ListLogSessions(ctx context.Context, gameserverID strin
 // ReadHistoricalLogs reads persisted logs from the volume for a stopped gameserver.
 // session=0 reads console.log (latest), session=1 reads console.log.0, etc.
 func (s *ConsoleService) ReadHistoricalLogs(ctx context.Context, gameserverID string, session int, tail int) ([]string, error) {
-	gs, err := model.GetGameserver(s.db, gameserverID)
+	gs, err := s.store.GetGameserver(gameserverID)
 	if err != nil {
 		return nil, fmt.Errorf("getting gameserver %s: %w", gameserverID, err)
 	}

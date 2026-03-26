@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/warsmite/gamejanitor/controller/event"
+	"github.com/warsmite/gamejanitor/controller/gameserver"
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/service"
@@ -23,12 +24,12 @@ type ServiceBundle struct {
 	Dispatcher    *orchestrator.Dispatcher
 	Broadcaster   *controller.EventBus
 	SettingsSvc   *settings.SettingsService
-	GameserverSvc *service.GameserverService
+	GameserverSvc *gameserver.GameserverService
 	QuerySvc      *service.QueryService
 	StatsPoller   *service.StatsPoller
 	ReadyWatcher  *service.ReadyWatcher
-	ConsoleSvc    *service.ConsoleService
-	FileSvc       *service.FileService
+	ConsoleSvc    *gameserver.ConsoleService
+	FileSvc       *gameserver.FileService
 	BackupSvc     *service.BackupService
 	Scheduler     *service.Scheduler
 	ScheduleSvc   *service.ScheduleService
@@ -56,7 +57,16 @@ func NewTestServices(t *testing.T) *ServiceBundle {
 	dataDir := t.TempDir()
 	backupStore := service.NewLocalStore(dataDir)
 
-	gameserverSvc := service.NewGameserverService(db, dispatcher, broadcaster, settingsSvc, gameStore, dataDir, log)
+	gsStore := store.NewGameserverStore(db)
+	wnStore := store.NewWorkerNodeStore(db)
+	backupDBStore := store.NewBackupStore(db)
+	gsCompositeStore := struct {
+		*store.GameserverStore
+		*store.WorkerNodeStore
+		*store.BackupStore
+	}{gsStore, wnStore, backupDBStore}
+
+	gameserverSvc := gameserver.NewGameserverService(gsCompositeStore, dispatcher, broadcaster, settingsSvc, gameStore, dataDir, log)
 	querySvc := service.NewQueryService(db, broadcaster, gameStore, log)
 	statsPoller := service.NewStatsPoller(db, dispatcher, broadcaster, log)
 	readyWatcher := service.NewReadyWatcher(db, broadcaster, gameStore, log)
@@ -65,8 +75,8 @@ func NewTestServices(t *testing.T) *ServiceBundle {
 	gameserverSvc.SetReadyWatcher(readyWatcher)
 	gameserverSvc.SetBackupStore(backupStore)
 
-	consoleSvc := service.NewConsoleService(db, dispatcher, gameStore, log)
-	fileSvc := service.NewFileService(db, dispatcher, log)
+	consoleSvc := gameserver.NewConsoleService(gsStore, dispatcher, gameStore, log)
+	fileSvc := gameserver.NewFileService(gsStore, dispatcher, log)
 	backupSvc := service.NewBackupService(db, dispatcher, gameserverSvc, gameStore, backupStore, settingsSvc, broadcaster, log)
 	scheduler := service.NewScheduler(db, backupSvc, gameserverSvc, consoleSvc, broadcaster, log)
 	scheduleSvc := service.NewScheduleService(db, scheduler, broadcaster, log)

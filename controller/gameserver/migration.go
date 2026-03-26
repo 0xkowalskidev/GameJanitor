@@ -1,22 +1,21 @@
-package service
+package gameserver
 
 import (
-	"github.com/warsmite/gamejanitor/controller/settings"
-	"github.com/warsmite/gamejanitor/controller"
 	"compress/gzip"
 	"context"
 	"fmt"
 	"io"
 	"time"
 
-	"github.com/warsmite/gamejanitor/model"
 	"github.com/google/uuid"
+	"github.com/warsmite/gamejanitor/controller"
+	"github.com/warsmite/gamejanitor/controller/settings"
 )
 
 // MigrateGameserver moves a gameserver from its current node to a different node.
 // Requires both source and target workers to be online.
 func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID string, targetNodeID string) (err error) {
-	gs, err := model.GetGameserver(s.db, gameserverID)
+	gs, err := s.store.GetGameserver(gameserverID)
 	if err != nil {
 		return err
 	}
@@ -40,7 +39,7 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 
 	// Validate target node labels
 	if !gs.NodeTags.IsEmpty() {
-		targetNode, err := model.GetWorkerNode(s.db, targetNodeID)
+		targetNode, err := s.store.GetWorkerNode(targetNodeID)
 		if err != nil || targetNode == nil {
 			return controller.ErrNotFoundf("target node %s not found", targetNodeID)
 		}
@@ -62,7 +61,7 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 
 	s.log.Info("migrating gameserver", "id", gameserverID, "from_node", currentNodeID, "to_node", targetNodeID)
 
-	gs.PopulateNode(s.db)
+	s.store.PopulateNode(gs)
 	s.broadcaster.Publish(controller.GameserverActionEvent{
 		Type:         controller.EventGameserverMigrate,
 		Timestamp:    time.Now(),
@@ -110,7 +109,7 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 		pw.Close()
 	}()
 
-	if err := s.store.Save(ctx, "migrations", migrationID, pr); err != nil {
+	if err := s.backupStore.Save(ctx, "migrations", migrationID, pr); err != nil {
 		return fmt.Errorf("saving migration data to store: %w", err)
 	}
 	if compressErr != nil {
@@ -123,7 +122,7 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 		return fmt.Errorf("creating volume on target worker: %w", err)
 	}
 
-	reader, err := s.store.Load(ctx, "migrations", migrationID)
+	reader, err := s.backupStore.Load(ctx, "migrations", migrationID)
 	if err != nil {
 		return fmt.Errorf("loading migration data from store: %w", err)
 	}
@@ -147,7 +146,7 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 	reader.Close()
 
 	// Cleanup migration data on success
-	if err := s.store.Delete(ctx, "migrations", migrationID); err != nil {
+	if err := s.backupStore.Delete(ctx, "migrations", migrationID); err != nil {
 		s.log.Warn("failed to clean up migration data from store", "migration_id", migrationID, "error", err)
 	}
 
@@ -170,7 +169,7 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 		s.placementMu.Unlock()
 	}
 
-	if err := model.UpdateGameserver(s.db, gs); err != nil {
+	if err := s.store.UpdateGameserver(gs); err != nil {
 		return fmt.Errorf("updating gameserver node assignment: %w", err)
 	}
 
