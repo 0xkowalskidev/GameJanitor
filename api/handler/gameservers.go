@@ -4,6 +4,7 @@ import (
 	"github.com/warsmite/gamejanitor/controller"
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -440,6 +441,50 @@ func (h *GameserverHandlers) Logs(w http.ResponseWriter, r *http.Request) {
 
 	lines := logparse.ParseLogLines(reader)
 	respondOK(w, map[string]any{"lines": lines})
+}
+
+func (h *GameserverHandlers) StreamLogs(w http.ResponseWriter, r *http.Request) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		respondError(w, http.StatusInternalServerError, "streaming not supported")
+		return
+	}
+
+	id := chi.URLParam(r, "id")
+	tail := PaginationDefaultLogTail
+	if v := r.URL.Query().Get("tail"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			tail = n
+		}
+	}
+
+	reader, err := h.consoleSvc.StreamLogs(r.Context(), id, tail)
+	if err != nil {
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
+		return
+	}
+	defer reader.Close()
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	flusher.Flush()
+
+	lines := make(chan string, 64)
+	go logparse.ParseLogStream(reader, lines)
+
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case line, ok := <-lines:
+			if !ok {
+				return
+			}
+			fmt.Fprintf(w, "data: %s\n\n", line)
+			flusher.Flush()
+		}
+	}
 }
 
 func (h *GameserverHandlers) SendCommand(w http.ResponseWriter, r *http.Request) {

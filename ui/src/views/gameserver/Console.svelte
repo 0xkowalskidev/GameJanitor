@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy, tick } from 'svelte';
   import { api } from '$lib/api';
+  import { basePath } from '$lib/base';
   import { toast } from '$lib/stores';
 
   let { id }: { id: string } = $props();
@@ -13,43 +14,39 @@
   let commandHistory = $state<string[]>([]);
   let historyIndex = $state(-1);
 
-  let pollInterval: ReturnType<typeof setInterval>;
+  let eventSource: EventSource | null = null;
 
-  onMount(async () => {
-    // Load initial logs
-    try {
-      const result = await api.gameservers.logs(id, 200);
-      lines = result.lines || [];
-      await tick();
-      scrollToBottom();
-    } catch (e) { console.warn('Console: failed to load initial logs', e); }
-
-    // Poll for new logs (SSE doesn't stream log lines, only events)
-    pollInterval = setInterval(fetchLogs, 2000);
-
-    // Focus the input
+  onMount(() => {
+    connectStream();
     inputEl?.focus();
   });
 
   onDestroy(() => {
-    if (pollInterval) clearInterval(pollInterval);
+    if (eventSource) {
+      eventSource.close();
+      eventSource = null;
+    }
   });
 
-  async function fetchLogs() {
-    try {
-      const result = await api.gameservers.logs(id, 200);
-      if (result.lines && result.lines.length > 0) {
-        const newLines = result.lines;
-        // Only update if content changed
-        if (newLines.length !== lines.length || newLines[newLines.length - 1] !== lines[lines.length - 1]) {
-          lines = newLines;
-          if (autoScroll) {
-            await tick();
-            scrollToBottom();
-          }
-        }
+  function connectStream() {
+    const url = basePath + `/api/gameservers/${id}/logs/stream?tail=200`;
+    eventSource = new EventSource(url);
+
+    eventSource.onmessage = async (e) => {
+      lines = [...lines, e.data];
+      // Prevent unbounded memory growth
+      if (lines.length > 2000) lines = lines.slice(-1500);
+      if (autoScroll) {
+        await tick();
+        scrollToBottom();
       }
-    } catch (e) { console.warn('Console: failed to fetch logs', e); }
+    };
+
+    eventSource.onerror = () => {
+      // Stream ended (server stopped, container gone, or network issue)
+      eventSource?.close();
+      eventSource = null;
+    };
   }
 
   function scrollToBottom() {
