@@ -1,6 +1,7 @@
 package api
 
 import (
+	"github.com/warsmite/gamejanitor/controller/auth"
 	"encoding/json"
 	"log/slog"
 	"net"
@@ -104,7 +105,7 @@ func (s *RateLimitStore) PerTokenMiddleware() func(http.Handler) http.Handler {
 				return
 			}
 
-			token := service.TokenFromContext(r.Context())
+			token := auth.TokenFromContext(r.Context())
 			if token == nil {
 				next.ServeHTTP(w, r)
 				return

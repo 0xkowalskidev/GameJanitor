@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"github.com/warsmite/gamejanitor/controller/auth"
 	"context"
 	"crypto/ecdsa"
 	"crypto/tls"
@@ -18,7 +19,6 @@ import (
 	"github.com/warsmite/gamejanitor/docker"
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/pkg/netinfo"
-	"github.com/warsmite/gamejanitor/service"
 	gjsftp "github.com/warsmite/gamejanitor/sftp"
 	"github.com/warsmite/gamejanitor/pkg/tlsutil"
 	"github.com/warsmite/gamejanitor/worker"
@@ -418,7 +418,7 @@ func buildHeartbeatRequest(workerID string, netInfo *netinfo.Info) *pb.Heartbeat
 	return req
 }
 
-func startGRPCServer(w worker.Worker, gameStore *games.GameStore, dataDir string, registry *worker.Registry, authSvc *service.AuthService, database *sql.DB, bindAddress string, port int, tlsConfig *tls.Config, dialBackTLS *tls.Config, caCert *x509.Certificate, caKey *ecdsa.PrivateKey, logger *slog.Logger) error {
+func startGRPCServer(w worker.Worker, gameStore *games.GameStore, dataDir string, registry *worker.Registry, authSvc *auth.AuthService, database *sql.DB, bindAddress string, port int, tlsConfig *tls.Config, dialBackTLS *tls.Config, caCert *x509.Certificate, caKey *ecdsa.PrivateKey, logger *slog.Logger) error {
 	addr := fmt.Sprintf("%s:%d", bindAddress, port)
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {

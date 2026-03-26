@@ -1,6 +1,7 @@
 package handler_test
 
 import (
+	"github.com/warsmite/gamejanitor/controller/auth"
 	"bytes"
 	"encoding/json"
 	"net/http"
@@ -9,7 +10,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/warsmite/gamejanitor/service"
 	"github.com/warsmite/gamejanitor/testutil"
 )
 
@@ -132,7 +132,7 @@ func TestAPIScenario_Business_AuthEnforced(t *testing.T) {
 
 	// 5. Create a limited operator token
 	operatorToken := testutil.MustCreateCustomToken(t, api.Services,
-		[]string{service.PermGameserverStart, service.PermGameserverStop}, nil)
+		[]string{auth.PermGameserverStart, auth.PermGameserverStop}, nil)
 
 	// 6. Operator can start
 	req, _ = http.NewRequest("POST", api.Server.URL+"/api/gameservers/"+gsID+"/start", nil)

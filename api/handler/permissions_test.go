@@ -1,6 +1,7 @@
 package handler_test
 
 import (
+	"github.com/warsmite/gamejanitor/controller/auth"
 	"bytes"
 	"encoding/json"
 	"net/http"
@@ -9,7 +10,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/warsmite/gamejanitor/service"
 	"github.com/warsmite/gamejanitor/testutil"
 )
 
@@ -39,7 +39,7 @@ func TestAPI_AdminRequired_CreateGameserver_RejectsCustomToken(t *testing.T) {
 
 	// Custom token with gameserver.start but NOT admin
 	customToken := testutil.MustCreateCustomToken(t, api.Services,
-		[]string{service.PermGameserverStart}, nil)
+		[]string{auth.PermGameserverStart}, nil)
 
 	body, _ := json.Marshal(map[string]any{
 		"name": "Denied", "game_id": testutil.TestGameID,
@@ -100,7 +100,7 @@ func TestAPI_GameserverScoping_CustomTokenCannotAccessOtherGameserver(t *testing
 
 	// Custom token scoped to gs A only, with access permission
 	scopedToken := testutil.MustCreateCustomToken(t, api.Services,
-		[]string{service.PermGameserverFilesRead}, []string{gsIDs[0]})
+		[]string{auth.PermGameserverFilesRead}, []string{gsIDs[0]})
 
 	// Access gs A — should work
 	req := authRequest("GET", api.Server.URL+"/api/gameservers/"+gsIDs[0], scopedToken, nil)
@@ -124,7 +124,7 @@ func TestAPI_TokensEndpoint_RequiresTokensManage(t *testing.T) {
 
 	// Custom token without tokens.manage
 	customToken := testutil.MustCreateCustomToken(t, api.Services,
-		[]string{service.PermGameserverStart}, nil)
+		[]string{auth.PermGameserverStart}, nil)
 
 	req := authRequest("GET", api.Server.URL+"/api/tokens", customToken, nil)
 	resp, err := http.DefaultClient.Do(req)
@@ -140,7 +140,7 @@ func TestAPI_SettingsEndpoint_RequiresSettingsView(t *testing.T) {
 	enableAuth(api)
 
 	customToken := testutil.MustCreateCustomToken(t, api.Services,
-		[]string{service.PermGameserverStart}, nil)
+		[]string{auth.PermGameserverStart}, nil)
 
 	req := authRequest("GET", api.Server.URL+"/api/settings", customToken, nil)
 	resp, err := http.DefaultClient.Do(req)
@@ -156,7 +156,7 @@ func TestAPI_WorkersEndpoint_RequiresNodesManage(t *testing.T) {
 	enableAuth(api)
 
 	customToken := testutil.MustCreateCustomToken(t, api.Services,
-		[]string{service.PermGameserverStart}, nil)
+		[]string{auth.PermGameserverStart}, nil)
 
 	req := authRequest("GET", api.Server.URL+"/api/workers", customToken, nil)
 	resp, err := http.DefaultClient.Do(req)

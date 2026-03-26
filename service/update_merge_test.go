@@ -1,6 +1,7 @@
 package service_test
 
 import (
+	"github.com/warsmite/gamejanitor/controller/auth"
 	"encoding/json"
 	"testing"
 
@@ -8,7 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/warsmite/gamejanitor/model"
-	"github.com/warsmite/gamejanitor/service"
 	"github.com/warsmite/gamejanitor/testutil"
 )
 
@@ -176,7 +176,7 @@ func TestUpdateMerge_AutoMigrationTriggered(t *testing.T) {
 	// Increase memory beyond worker-1's capacity — should trigger auto-migration
 	adminToken := testutil.MustCreateAdminToken(t, svc)
 	token := svc.AuthSvc.ValidateToken(adminToken)
-	adminCtx := service.SetTokenInContext(ctx, token)
+	adminCtx := auth.SetTokenInContext(ctx, token)
 
 	update := &model.Gameserver{ID: gs.ID, MemoryLimitMB: 4096}
 	migrationTriggered, err := svc.GameserverSvc.UpdateGameserver(adminCtx, update)

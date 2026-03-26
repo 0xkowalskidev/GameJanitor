@@ -1,6 +1,7 @@
 package api
 
 import (
+	"github.com/warsmite/gamejanitor/controller/auth"
 	"encoding/json"
 	"net"
 	"net/http"
@@ -11,12 +12,12 @@ import (
 )
 
 // TokenFromContext returns the authenticated token from the request context, or nil.
-// Delegates to service.TokenFromContext.
-var TokenFromContext = service.TokenFromContext
+// Delegates to auth.TokenFromContext.
+var TokenFromContext = auth.TokenFromContext
 
 // AuthMiddleware checks for a valid token on every request when auth is enabled.
 // Extracts from Bearer header or _token cookie.
-func AuthMiddleware(authSvc *service.AuthService, settingsSvc *service.SettingsService) func(http.Handler) http.Handler {
+func AuthMiddleware(authSvc *auth.AuthService, settingsSvc *service.SettingsService) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if !settingsSvc.GetBool(service.SettingAuthEnabled) {
@@ -41,7 +42,7 @@ func AuthMiddleware(authSvc *service.AuthService, settingsSvc *service.SettingsS
 				return
 			}
 
-			ctx := service.SetTokenInContext(r.Context(), token)
+			ctx := auth.SetTokenInContext(r.Context(), token)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
@@ -86,7 +87,7 @@ func RequireAdmin(settingsSvc *service.SettingsService) func(http.Handler) http.
 				next.ServeHTTP(w, r)
 				return
 			}
-			if !service.IsAdmin(token) {
+			if !auth.IsAdmin(token) {
 				handleForbidden(w, r)
 				return
 			}
@@ -105,7 +106,7 @@ func RequireClusterPermission(settingsSvc *service.SettingsService, permission s
 				next.ServeHTTP(w, r)
 				return
 			}
-			if service.IsAdmin(token) {
+			if auth.IsAdmin(token) {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -137,12 +138,12 @@ func RequirePermission(settingsSvc *service.SettingsService, permission string) 
 				next.ServeHTTP(w, r)
 				return
 			}
-			if service.IsAdmin(token) {
+			if auth.IsAdmin(token) {
 				next.ServeHTTP(w, r)
 				return
 			}
 			gsID := chi.URLParam(r, "id")
-			if gsID == "" || !service.HasPermission(token, gsID, permission) {
+			if gsID == "" || !auth.HasPermission(token, gsID, permission) {
 				handleForbidden(w, r)
 				return
 			}
@@ -161,7 +162,7 @@ func RequireGameserverAccess(settingsSvc *service.SettingsService) func(http.Han
 				next.ServeHTTP(w, r)
 				return
 			}
-			if service.IsAdmin(token) {
+			if auth.IsAdmin(token) {
 				next.ServeHTTP(w, r)
 				return
 			}

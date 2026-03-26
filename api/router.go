@@ -1,6 +1,7 @@
 package api
 
 import (
+	"github.com/warsmite/gamejanitor/controller/auth"
 	"github.com/warsmite/gamejanitor/controller"
 	"database/sql"
 	"fmt"
@@ -30,7 +31,7 @@ type RouterOptions struct {
 	QuerySvc      *service.QueryService
 	StatsPoller   *service.StatsPoller
 	SettingsSvc   *service.SettingsService
-	AuthSvc       *service.AuthService
+	AuthSvc       *auth.AuthService
 	ModSvc        *service.ModService
 	Broadcaster   *controller.EventBus
 	Registry      *worker.Registry
@@ -79,26 +80,26 @@ func NewRouter(opts RouterOptions) http.Handler {
 
 	requireAdmin := RequireAdmin(opts.SettingsSvc)
 	requireAccess := RequireGameserverAccess(opts.SettingsSvc)
-	requireStart := RequirePermission(opts.SettingsSvc, service.PermGameserverStart)
-	requireStop := RequirePermission(opts.SettingsSvc, service.PermGameserverStop)
-	requireRestart := RequirePermission(opts.SettingsSvc, service.PermGameserverRestart)
-	requireLogs := RequirePermission(opts.SettingsSvc, service.PermGameserverLogs)
-	requireCommands := RequirePermission(opts.SettingsSvc, service.PermGameserverCommand)
-	requireFilesRead := RequirePermission(opts.SettingsSvc, service.PermGameserverFilesRead)
-	requireFilesWrite := RequirePermission(opts.SettingsSvc, service.PermGameserverFilesWrite)
-	requireBackupRead := RequirePermission(opts.SettingsSvc, service.PermBackupRead)
-	requireBackupCreate := RequirePermission(opts.SettingsSvc, service.PermBackupCreate)
-	requireBackupDelete := RequirePermission(opts.SettingsSvc, service.PermBackupDelete)
-	requireBackupRestore := RequirePermission(opts.SettingsSvc, service.PermBackupRestore)
-	requireBackupDownload := RequirePermission(opts.SettingsSvc, service.PermBackupDownload)
-	requireScheduleRead := RequirePermission(opts.SettingsSvc, service.PermScheduleRead)
-	requireScheduleCreate := RequirePermission(opts.SettingsSvc, service.PermScheduleCreate)
-	requireScheduleUpdate := RequirePermission(opts.SettingsSvc, service.PermScheduleUpdate)
-	requireScheduleDelete := RequirePermission(opts.SettingsSvc, service.PermScheduleDelete)
-	requireConfigure := RequirePermission(opts.SettingsSvc, service.PermGameserverEditEnv)
-	requireDelete := RequirePermission(opts.SettingsSvc, service.PermGameserverDelete)
-	requireModsRead := RequirePermission(opts.SettingsSvc, service.PermGameserverModsRead)
-	requireModsWrite := RequirePermission(opts.SettingsSvc, service.PermGameserverModsWrite)
+	requireStart := RequirePermission(opts.SettingsSvc, auth.PermGameserverStart)
+	requireStop := RequirePermission(opts.SettingsSvc, auth.PermGameserverStop)
+	requireRestart := RequirePermission(opts.SettingsSvc, auth.PermGameserverRestart)
+	requireLogs := RequirePermission(opts.SettingsSvc, auth.PermGameserverLogs)
+	requireCommands := RequirePermission(opts.SettingsSvc, auth.PermGameserverCommand)
+	requireFilesRead := RequirePermission(opts.SettingsSvc, auth.PermGameserverFilesRead)
+	requireFilesWrite := RequirePermission(opts.SettingsSvc, auth.PermGameserverFilesWrite)
+	requireBackupRead := RequirePermission(opts.SettingsSvc, auth.PermBackupRead)
+	requireBackupCreate := RequirePermission(opts.SettingsSvc, auth.PermBackupCreate)
+	requireBackupDelete := RequirePermission(opts.SettingsSvc, auth.PermBackupDelete)
+	requireBackupRestore := RequirePermission(opts.SettingsSvc, auth.PermBackupRestore)
+	requireBackupDownload := RequirePermission(opts.SettingsSvc, auth.PermBackupDownload)
+	requireScheduleRead := RequirePermission(opts.SettingsSvc, auth.PermScheduleRead)
+	requireScheduleCreate := RequirePermission(opts.SettingsSvc, auth.PermScheduleCreate)
+	requireScheduleUpdate := RequirePermission(opts.SettingsSvc, auth.PermScheduleUpdate)
+	requireScheduleDelete := RequirePermission(opts.SettingsSvc, auth.PermScheduleDelete)
+	requireConfigure := RequirePermission(opts.SettingsSvc, auth.PermGameserverEditEnv)
+	requireDelete := RequirePermission(opts.SettingsSvc, auth.PermGameserverDelete)
+	requireModsRead := RequirePermission(opts.SettingsSvc, auth.PermGameserverModsRead)
+	requireModsWrite := RequirePermission(opts.SettingsSvc, auth.PermGameserverModsWrite)
 
 	r.Route("/api", func(r chi.Router) {
 		r.Use(jsonContentType)
@@ -181,7 +182,7 @@ func NewRouter(opts RouterOptions) http.Handler {
 		r.Get("/events/history", eventHandlers.History)
 
 		r.Route("/workers", func(r chi.Router) {
-			r.Use(RequireClusterPermission(opts.SettingsSvc, service.PermNodesManage))
+			r.Use(RequireClusterPermission(opts.SettingsSvc, auth.PermNodesManage))
 			r.Get("/", workerHandlers.List)
 			r.Route("/{workerID}", func(r chi.Router) {
 				r.Get("/", workerHandlers.Get)
@@ -190,12 +191,12 @@ func NewRouter(opts RouterOptions) http.Handler {
 		})
 
 		r.Route("/settings", func(r chi.Router) {
-			r.With(RequireClusterPermission(opts.SettingsSvc, service.PermSettingsView)).Get("/", settingsAPIHandlers.Get)
-			r.With(RequireClusterPermission(opts.SettingsSvc, service.PermSettingsEdit)).Patch("/", settingsAPIHandlers.Update)
+			r.With(RequireClusterPermission(opts.SettingsSvc, auth.PermSettingsView)).Get("/", settingsAPIHandlers.Get)
+			r.With(RequireClusterPermission(opts.SettingsSvc, auth.PermSettingsEdit)).Patch("/", settingsAPIHandlers.Update)
 		})
 
 		r.Route("/webhooks", func(r chi.Router) {
-			r.Use(RequireClusterPermission(opts.SettingsSvc, service.PermWebhooksManage))
+			r.Use(RequireClusterPermission(opts.SettingsSvc, auth.PermWebhooksManage))
 			r.Get("/", webhookHandlers.List)
 			r.Post("/", webhookHandlers.Create)
 			r.Get("/{webhookId}", webhookHandlers.Get)
@@ -206,14 +207,14 @@ func NewRouter(opts RouterOptions) http.Handler {
 		})
 
 		r.Route("/tokens", func(r chi.Router) {
-			r.Use(RequireClusterPermission(opts.SettingsSvc, service.PermTokensManage))
+			r.Use(RequireClusterPermission(opts.SettingsSvc, auth.PermTokensManage))
 			r.Get("/", authHandlers.ListTokens)
 			r.Post("/", authHandlers.CreateToken)
 			r.Delete("/{tokenId}", authHandlers.DeleteToken)
 		})
 
 		r.Route("/worker-tokens", func(r chi.Router) {
-			r.Use(RequireClusterPermission(opts.SettingsSvc, service.PermTokensManage))
+			r.Use(RequireClusterPermission(opts.SettingsSvc, auth.PermTokensManage))
 			r.Get("/", authHandlers.ListWorkerTokens)
 			r.Post("/", authHandlers.CreateWorkerToken)
 			r.Post("/rotate", authHandlers.RotateWorkerToken)

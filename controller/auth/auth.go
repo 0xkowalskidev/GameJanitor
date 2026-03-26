@@ -1,4 +1,4 @@
-package service
+package auth
 
 import (
 	"github.com/warsmite/gamejanitor/controller"
@@ -438,7 +438,7 @@ func AllowedGameserverIDs(token *model.Token) []string {
 // intersectIDs returns the intersection of requested and allowed ID sets.
 // nil allowed means all-access (returns requested as-is).
 // nil requested means no filter (returns allowed as-is).
-func intersectIDs(requested, allowed []string) []string {
+func IntersectIDs(requested, allowed []string) []string {
 	if len(allowed) == 0 {
 		return requested
 	}

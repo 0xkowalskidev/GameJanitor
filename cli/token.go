@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"github.com/warsmite/gamejanitor/controller/auth"
 	"fmt"
 	"io"
 	"log/slog"
@@ -8,7 +9,6 @@ import (
 	"path/filepath"
 
 	"github.com/warsmite/gamejanitor/db"
-	"github.com/warsmite/gamejanitor/service"
 	"github.com/spf13/cobra"
 )
 
@@ -43,7 +43,7 @@ var tokenRotateCmd = &cobra.Command{
 	RunE:  runTokenRotate,
 }
 
-func openAuthService(cmd *cobra.Command) (*service.AuthService, func(), error) {
+func openAuthService(cmd *cobra.Command) (*auth.AuthService, func(), error) {
 	dataDir, _ := cmd.Flags().GetString("data-dir")
 	dbPath := filepath.Join(dataDir, "gamejanitor.db")
 
@@ -62,7 +62,7 @@ func openAuthService(cmd *cobra.Command) (*service.AuthService, func(), error) {
 	}
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	authSvc := service.NewAuthService(database, logger)
+	authSvc := auth.NewAuthService(database, logger)
 	return authSvc, func() { database.Close() }, nil
 }
 

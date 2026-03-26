@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/warsmite/gamejanitor/controller/auth"
 	"github.com/warsmite/gamejanitor/controller"
 	"context"
 	"crypto/rand"
@@ -51,10 +52,10 @@ func (s *GameserverService) SetBackupStore(store BackupStore) {
 
 func (s *GameserverService) ListGameservers(ctx context.Context, filter model.GameserverFilter) ([]model.Gameserver, error) {
 	// Apply token scoping — intersect requested IDs with token's allowed IDs
-	if token := TokenFromContext(ctx); token != nil && !IsAdmin(token) {
-		tokenIDs := AllowedGameserverIDs(token)
+	if token := auth.TokenFromContext(ctx); token != nil && !auth.IsAdmin(token) {
+		tokenIDs := auth.AllowedGameserverIDs(token)
 		if len(tokenIDs) > 0 {
-			filter.IDs = intersectIDs(filter.IDs, tokenIDs)
+			filter.IDs = auth.IntersectIDs(filter.IDs, tokenIDs)
 			// Empty intersection means the token has no access to the requested IDs
 			if len(filter.IDs) == 0 {
 				return []model.Gameserver{}, nil
@@ -351,8 +352,8 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *model.Game
 	oldStorage := ptrIntOr0(existing.StorageLimitMB)
 
 	// Field-level permission guard: non-admin tokens can only change name and env
-	token := TokenFromContext(ctx)
-	if token != nil && !IsAdmin(token) {
+	token := auth.TokenFromContext(ctx)
+	if token != nil && !auth.IsAdmin(token) {
 		if gs.MemoryLimitMB != 0 || gs.CPULimit != 0 || gs.StorageLimitMB != nil || gs.BackupLimit != nil || gs.Ports != nil || !gs.NodeTags.IsEmpty() {
 			return false, controller.ErrBadRequestf("insufficient permissions to modify resource/placement fields")
 		}

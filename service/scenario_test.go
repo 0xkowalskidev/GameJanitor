@@ -1,6 +1,7 @@
 package service_test
 
 import (
+	"github.com/warsmite/gamejanitor/controller/auth"
 	"encoding/json"
 	"testing"
 	"time"
@@ -164,7 +165,7 @@ func TestScenario_PowerUser_ScopedTokenWorkflow(t *testing.T) {
 	// Create a token scoped to gs1 with start/stop only
 	rawToken, _, err := svc.AuthSvc.CreateCustomToken("mc-operator",
 		[]string{gs1.ID},
-		[]string{service.PermGameserverStart, service.PermGameserverStop},
+		[]string{auth.PermGameserverStart, auth.PermGameserverStop},
 		nil)
 	require.NoError(t, err)
 
@@ -172,11 +173,11 @@ func TestScenario_PowerUser_ScopedTokenWorkflow(t *testing.T) {
 	require.NotNil(t, token)
 
 	// Can start gs1
-	assert.True(t, service.HasPermission(token, gs1.ID, service.PermGameserverStart))
+	assert.True(t, auth.HasPermission(token, gs1.ID, auth.PermGameserverStart))
 	// Cannot start gs2
-	assert.False(t, service.HasPermission(token, gs2.ID, service.PermGameserverStart))
+	assert.False(t, auth.HasPermission(token, gs2.ID, auth.PermGameserverStart))
 	// Cannot delete gs1 (wrong permission)
-	assert.False(t, service.HasPermission(token, gs1.ID, service.PermGameserverDelete))
+	assert.False(t, auth.HasPermission(token, gs1.ID, auth.PermGameserverDelete))
 }
 
 func TestScenario_PowerUser_BackupAndSchedule(t *testing.T) {

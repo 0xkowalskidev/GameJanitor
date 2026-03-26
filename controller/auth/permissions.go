@@ -1,4 +1,4 @@
-package service
+package auth
 
 const (
 	// Gameserver lifecycle

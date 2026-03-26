@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/warsmite/gamejanitor/controller/auth"
 	"github.com/warsmite/gamejanitor/controller"
 	"context"
 	"time"
@@ -218,7 +219,7 @@ func ActorFromContext(ctx context.Context) Actor {
 		return a
 	}
 	// Fall back to token-based actor for backward compatibility with auth middleware
-	if token := TokenFromContext(ctx); token != nil {
+	if token := auth.TokenFromContext(ctx); token != nil {
 		return Actor{Type: "token", TokenID: token.ID}
 	}
 	return Actor{Type: "anonymous"}

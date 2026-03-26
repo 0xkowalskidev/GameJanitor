@@ -1,6 +1,7 @@
 package service_test
 
 import (
+	"github.com/warsmite/gamejanitor/controller/auth"
 	"testing"
 	"time"
 
@@ -8,7 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/warsmite/gamejanitor/model"
-	"github.com/warsmite/gamejanitor/service"
 	"github.com/warsmite/gamejanitor/testutil"
 )
 
@@ -64,17 +64,17 @@ func TestAuth_CustomToken_GameserverScoping(t *testing.T) {
 	require.NoError(t, err)
 
 	// Token scoped to gs1 only
-	rawToken, _, err := svc.AuthSvc.CreateCustomToken("scoped", []string{gs1.ID}, []string{service.PermGameserverStart}, nil)
+	rawToken, _, err := svc.AuthSvc.CreateCustomToken("scoped", []string{gs1.ID}, []string{auth.PermGameserverStart}, nil)
 	require.NoError(t, err)
 
 	validated := svc.AuthSvc.ValidateToken(rawToken)
 	require.NotNil(t, validated)
 
 	// Check permission for gs1 — should pass
-	assert.True(t, service.HasPermission(validated, gs1.ID, service.PermGameserverStart))
+	assert.True(t, auth.HasPermission(validated, gs1.ID, auth.PermGameserverStart))
 
 	// Check permission for gs2 — should fail (not in scoped list)
-	assert.False(t, service.HasPermission(validated, gs2.ID, service.PermGameserverStart))
+	assert.False(t, auth.HasPermission(validated, gs2.ID, auth.PermGameserverStart))
 }
 
 func TestAuth_AdminToken_BypassesAllChecks(t *testing.T) {
@@ -92,10 +92,10 @@ func TestAuth_AdminToken_BypassesAllChecks(t *testing.T) {
 	require.NotNil(t, validated)
 
 	// Admin should have permission for everything
-	assert.True(t, service.HasPermission(validated, gs.ID, service.PermGameserverStart))
-	assert.True(t, service.HasPermission(validated, gs.ID, service.PermGameserverDelete))
-	assert.True(t, service.HasPermission(validated, "nonexistent-id", service.PermGameserverStart))
-	assert.True(t, service.IsAdmin(validated))
+	assert.True(t, auth.HasPermission(validated, gs.ID, auth.PermGameserverStart))
+	assert.True(t, auth.HasPermission(validated, gs.ID, auth.PermGameserverDelete))
+	assert.True(t, auth.HasPermission(validated, "nonexistent-id", auth.PermGameserverStart))
+	assert.True(t, auth.IsAdmin(validated))
 }
 
 func TestAuth_CustomToken_EmptyGameserverIDs_AllAccess(t *testing.T) {
@@ -109,20 +109,20 @@ func TestAuth_CustomToken_EmptyGameserverIDs_AllAccess(t *testing.T) {
 	require.NoError(t, err)
 
 	// Empty gameserver_ids = all gameservers
-	rawToken, _, err := svc.AuthSvc.CreateCustomToken("all-access", nil, []string{service.PermGameserverStart}, nil)
+	rawToken, _, err := svc.AuthSvc.CreateCustomToken("all-access", nil, []string{auth.PermGameserverStart}, nil)
 	require.NoError(t, err)
 
 	validated := svc.AuthSvc.ValidateToken(rawToken)
 	require.NotNil(t, validated)
 
-	assert.True(t, service.HasPermission(validated, gs.ID, service.PermGameserverStart))
+	assert.True(t, auth.HasPermission(validated, gs.ID, auth.PermGameserverStart))
 }
 
 func TestAuth_CustomToken_InvalidGameserverID(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
 
-	_, _, err := svc.AuthSvc.CreateCustomToken("bad-scope", []string{"nonexistent-gs"}, []string{service.PermGameserverStart}, nil)
+	_, _, err := svc.AuthSvc.CreateCustomToken("bad-scope", []string{"nonexistent-gs"}, []string{auth.PermGameserverStart}, nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 }
@@ -222,13 +222,13 @@ func TestAuth_CustomToken_WrongPermission(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
 
-	rawToken, _, err := svc.AuthSvc.CreateCustomToken("limited", nil, []string{service.PermGameserverStart}, nil)
+	rawToken, _, err := svc.AuthSvc.CreateCustomToken("limited", nil, []string{auth.PermGameserverStart}, nil)
 	require.NoError(t, err)
 
 	validated := svc.AuthSvc.ValidateToken(rawToken)
 	require.NotNil(t, validated)
 
 	// Has start but not delete
-	assert.True(t, service.HasPermission(validated, "any-id", service.PermGameserverStart))
-	assert.False(t, service.HasPermission(validated, "any-id", service.PermGameserverDelete))
+	assert.True(t, auth.HasPermission(validated, "any-id", auth.PermGameserverStart))
+	assert.False(t, auth.HasPermission(validated, "any-id", auth.PermGameserverDelete))
 }

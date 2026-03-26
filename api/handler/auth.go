@@ -1,22 +1,22 @@
 package handler
 
 import (
+	"github.com/warsmite/gamejanitor/controller/auth"
 	"encoding/json"
 	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/warsmite/gamejanitor/model"
-	"github.com/warsmite/gamejanitor/service"
 	"github.com/go-chi/chi/v5"
 )
 
 type AuthHandlers struct {
-	authSvc *service.AuthService
+	authSvc *auth.AuthService
 	log     *slog.Logger
 }
 
-func NewAuthHandlers(authSvc *service.AuthService, log *slog.Logger) *AuthHandlers {
+func NewAuthHandlers(authSvc *auth.AuthService, log *slog.Logger) *AuthHandlers {
 	return &AuthHandlers{authSvc: authSvc, log: log}
 }
 

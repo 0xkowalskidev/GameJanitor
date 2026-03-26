@@ -1,6 +1,7 @@
 package service_test
 
 import (
+	"github.com/warsmite/gamejanitor/controller/auth"
 	"context"
 	"testing"
 
@@ -8,7 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/warsmite/gamejanitor/model"
-	"github.com/warsmite/gamejanitor/service"
 	"github.com/warsmite/gamejanitor/testutil"
 )
 
@@ -18,7 +18,7 @@ func scopedContext(t *testing.T, svc *testutil.ServiceBundle, perms []string, gs
 	rawToken := testutil.MustCreateCustomToken(t, svc, perms, gsIDs)
 	token := svc.AuthSvc.ValidateToken(rawToken)
 	require.NotNil(t, token)
-	return service.SetTokenInContext(testutil.TestContext(), token)
+	return auth.SetTokenInContext(testutil.TestContext(), token)
 }
 
 func TestScoping_Backup_CrossAccess_Blocked(t *testing.T) {
@@ -162,22 +162,22 @@ func TestScoping_ListGameservers_IDsIntersectsTokenScope(t *testing.T) {
 
 func TestScoping_IntersectIDs(t *testing.T) {
 	// nil allowed = all-access, returns requested
-	result := service.ExportIntersectIDs(nil, nil)
+	result := auth.IntersectIDs(nil, nil)
 	assert.Nil(t, result)
 
-	result = service.ExportIntersectIDs([]string{"a", "b"}, nil)
+	result = auth.IntersectIDs([]string{"a", "b"}, nil)
 	assert.Equal(t, []string{"a", "b"}, result)
 
 	// nil requested = no filter, returns allowed
-	result = service.ExportIntersectIDs(nil, []string{"x", "y"})
+	result = auth.IntersectIDs(nil, []string{"x", "y"})
 	assert.Equal(t, []string{"x", "y"}, result)
 
 	// Intersection
-	result = service.ExportIntersectIDs([]string{"a", "b", "c"}, []string{"b", "c", "d"})
+	result = auth.IntersectIDs([]string{"a", "b", "c"}, []string{"b", "c", "d"})
 	assert.Equal(t, []string{"b", "c"}, result)
 
 	// Disjoint — returns empty slice (not nil), meaning "no results"
-	result = service.ExportIntersectIDs([]string{"a"}, []string{"b"})
+	result = auth.IntersectIDs([]string{"a"}, []string{"b"})
 	assert.Empty(t, result)
 	assert.NotNil(t, result)
 }

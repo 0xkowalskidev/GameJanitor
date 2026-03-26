@@ -1,6 +1,7 @@
 package service_test
 
 import (
+	"github.com/warsmite/gamejanitor/controller/auth"
 	"encoding/json"
 	"testing"
 
@@ -8,7 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/warsmite/gamejanitor/model"
-	"github.com/warsmite/gamejanitor/service"
 	"github.com/warsmite/gamejanitor/testutil"
 )
 
@@ -55,11 +55,11 @@ func TestUpdate_NonAdminBlockedFromResources(t *testing.T) {
 	gs := testutil.CreateTestGameserver(t, svc)
 
 	// Create a non-admin token and put it in context
-	rawToken, _, err := svc.AuthSvc.CreateCustomToken("limited", nil, []string{service.PermGameserverEditEnv}, nil)
+	rawToken, _, err := svc.AuthSvc.CreateCustomToken("limited", nil, []string{auth.PermGameserverEditEnv}, nil)
 	require.NoError(t, err)
 	token := svc.AuthSvc.ValidateToken(rawToken)
 	require.NotNil(t, token)
-	ctx := service.SetTokenInContext(testutil.TestContext(), token)
+	ctx := auth.SetTokenInContext(testutil.TestContext(), token)
 
 	// Try to change memory — should be blocked
 	update := &model.Gameserver{ID: gs.ID, MemoryLimitMB: 4096}
@@ -78,7 +78,7 @@ func TestUpdate_AdminCanChangeResources(t *testing.T) {
 	// Admin token in context
 	rawToken := testutil.MustCreateAdminToken(t, svc)
 	token := svc.AuthSvc.ValidateToken(rawToken)
-	ctx := service.SetTokenInContext(testutil.TestContext(), token)
+	ctx := auth.SetTokenInContext(testutil.TestContext(), token)
 
 	update := &model.Gameserver{ID: gs.ID, MemoryLimitMB: 4096}
 	_, err := svc.GameserverSvc.UpdateGameserver(ctx, update)

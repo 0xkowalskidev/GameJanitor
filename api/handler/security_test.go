@@ -1,6 +1,7 @@
 package handler_test
 
 import (
+	"github.com/warsmite/gamejanitor/controller/auth"
 	"bytes"
 	"encoding/json"
 	"net/http"
@@ -9,7 +10,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/warsmite/gamejanitor/service"
 	"github.com/warsmite/gamejanitor/testutil"
 )
 
@@ -79,7 +79,7 @@ func TestSecurity_TokenScopedToGameserver_CannotListOthers(t *testing.T) {
 
 	// Token scoped to first gameserver only
 	scopedToken := testutil.MustCreateCustomToken(t, api.Services,
-		[]string{service.PermGameserverFilesRead}, []string{gsIDs[0]})
+		[]string{auth.PermGameserverFilesRead}, []string{gsIDs[0]})
 
 	// List gameservers — should only see the scoped one
 	req := authRequest("GET", api.Server.URL+"/api/gameservers", scopedToken, nil)
@@ -103,7 +103,7 @@ func TestSecurity_ExpiredToken_Rejected(t *testing.T) {
 	// Create and use an expired token
 	past := testutil.PastTime(1) // 1 hour ago
 	rawToken, _, err := api.Services.AuthSvc.CreateCustomToken("expired", nil,
-		[]string{service.PermGameserverStart}, &past)
+		[]string{auth.PermGameserverStart}, &past)
 	require.NoError(t, err)
 
 	req := authRequest("GET", api.Server.URL+"/api/gameservers", rawToken, nil)
@@ -135,7 +135,7 @@ func TestSecurity_StartEndpoint_RequiresCorrectPermission(t *testing.T) {
 
 	// Token with files.read but NOT gameserver.start
 	wrongPermToken := testutil.MustCreateCustomToken(t, api.Services,
-		[]string{service.PermGameserverFilesRead}, nil)
+		[]string{auth.PermGameserverFilesRead}, nil)
 
 	// Try to start — should be forbidden
 	req = authRequest("POST", api.Server.URL+"/api/gameservers/"+gsID+"/start", wrongPermToken, nil)
@@ -167,7 +167,7 @@ func TestSecurity_DeleteEndpoint_RequiresDeletePermission(t *testing.T) {
 
 	// Token with start but NOT delete
 	startOnlyToken := testutil.MustCreateCustomToken(t, api.Services,
-		[]string{service.PermGameserverStart}, nil)
+		[]string{auth.PermGameserverStart}, nil)
 
 	req = authRequest("DELETE", api.Server.URL+"/api/gameservers/"+gsID, startOnlyToken, nil)
 	resp, err := http.DefaultClient.Do(req)

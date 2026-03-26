@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"github.com/warsmite/gamejanitor/controller/auth"
 	"github.com/warsmite/gamejanitor/controller"
 	"context"
 	"crypto/ecdsa"
@@ -121,7 +122,7 @@ type services struct {
 	backupSvc     *service.BackupService
 	scheduler     *service.Scheduler
 	scheduleSvc   *service.ScheduleService
-	authSvc       *service.AuthService
+	authSvc       *auth.AuthService
 	statusMgr     *service.StatusManager
 	statusSub     *service.StatusSubscriber
 	eventStore    *service.EventStoreSubscriber
@@ -155,7 +156,7 @@ func initServices(database *sql.DB, dispatcher *worker.Dispatcher, registry *wor
 	backupSvc := service.NewBackupService(database, dispatcher, gameserverSvc, gameStore, backupStore, settingsSvc, broadcaster, logger)
 	scheduler := service.NewScheduler(database, backupSvc, gameserverSvc, consoleSvc, broadcaster, logger)
 	scheduleSvc := service.NewScheduleService(database, scheduler, broadcaster, logger)
-	authSvc := service.NewAuthService(database, logger)
+	authSvc := auth.NewAuthService(database, logger)
 	statusMgr := service.NewStatusManager(database, broadcaster, querySvc, statsPoller, readyWatcher, dispatcher, registry, gameserverSvc.Start, logger)
 	statusSub := service.NewStatusSubscriber(database, broadcaster, logger)
 	eventStore := service.NewEventStoreSubscriber(database, broadcaster, logger)
