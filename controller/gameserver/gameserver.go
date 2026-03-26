@@ -139,6 +139,9 @@ func (s *GameserverService) ListGameservers(ctx context.Context, filter model.Ga
 		return nil, err
 	}
 	s.store.PopulateNodes(gameservers)
+	for i := range gameservers {
+		gameservers[i].ComputeRestartRequired()
+	}
 	return gameservers, nil
 }
 
@@ -148,6 +151,7 @@ func (s *GameserverService) GetGameserver(id string) (*model.Gameserver, error) 
 		return gs, err
 	}
 	s.store.PopulateNode(gs)
+	gs.ComputeRestartRequired()
 	return gs, nil
 }
 

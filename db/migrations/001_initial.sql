@@ -21,6 +21,7 @@ CREATE TABLE gameservers (
     node_tags TEXT NOT NULL DEFAULT '{}',
     auto_restart BOOLEAN NOT NULL DEFAULT 0,
     connection_address TEXT,
+    applied_config JSON,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

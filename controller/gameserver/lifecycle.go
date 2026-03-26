@@ -165,8 +165,9 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 		return fmt.Errorf("creating container for gameserver %s: %w", id, err)
 	}
 
-	// Save container ID (direct DB write — must persist immediately)
+	// Save container ID and snapshot the applied config for restart-required detection
 	gs.ContainerID = &containerID
+	gs.AppliedConfig = gs.SnapshotConfig()
 	if err := s.store.UpdateGameserver(gs); err != nil {
 		w.RemoveContainer(ctx, containerID)
 		return err

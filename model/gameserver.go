@@ -44,8 +44,63 @@ type Gameserver struct {
 	NodeTags       Labels          `json:"node_tags"`
 	AutoRestart        *bool           `json:"auto_restart"`
 	ConnectionAddress  *string         `json:"connection_address"`
+	AppliedConfig      *AppliedConfig  `json:"applied_config,omitempty"`
+	RestartRequired    bool            `json:"restart_required"` // derived, not stored
 	CreatedAt          time.Time       `json:"created_at"`
-	UpdatedAt     time.Time       `json:"updated_at"`
+	UpdatedAt          time.Time       `json:"updated_at"`
+}
+
+// AppliedConfig captures the configuration that was used when the container was
+// last created. Compared against current DB state to detect pending changes.
+type AppliedConfig struct {
+	Env           Env     `json:"env"`
+	MemoryLimitMB int     `json:"memory_limit_mb"`
+	CPULimit      float64 `json:"cpu_limit"`
+	CPUEnforced   bool    `json:"cpu_enforced"`
+}
+
+func (ac *AppliedConfig) Scan(src any) error {
+	if src == nil {
+		return nil
+	}
+	var data []byte
+	switch v := src.(type) {
+	case string:
+		data = []byte(v)
+	case []byte:
+		data = v
+	default:
+		return fmt.Errorf("applied_config: unsupported scan type %T", src)
+	}
+	return json.Unmarshal(data, ac)
+}
+
+func (ac AppliedConfig) Value() (driver.Value, error) {
+	return json.Marshal(ac)
+}
+
+// SnapshotConfig creates an AppliedConfig from the current gameserver state.
+func (gs *Gameserver) SnapshotConfig() *AppliedConfig {
+	return &AppliedConfig{
+		Env:           gs.Env,
+		MemoryLimitMB: gs.MemoryLimitMB,
+		CPULimit:      gs.CPULimit,
+		CPUEnforced:   gs.CPUEnforced,
+	}
+}
+
+// ComputeRestartRequired sets RestartRequired by comparing the applied config
+// against the current desired state. Only meaningful when the gameserver is running.
+func (gs *Gameserver) ComputeRestartRequired() {
+	if gs.AppliedConfig == nil || gs.ContainerID == nil {
+		gs.RestartRequired = false
+		return
+	}
+	ac := gs.AppliedConfig
+	gs.RestartRequired = ac.MemoryLimitMB != gs.MemoryLimitMB ||
+		ac.CPULimit != gs.CPULimit ||
+		ac.CPUEnforced != gs.CPUEnforced ||
+		!ac.Env.Equal(gs.Env)
 }
 
 // FlexInt handles JSON values that may be a number or a string containing a number.
@@ -120,6 +175,18 @@ func (p Ports) Value() (driver.Value, error) {
 
 // Env is a key-value map of environment variables stored as JSON in the database.
 type Env map[string]string
+
+func (e Env) Equal(other Env) bool {
+	if len(e) != len(other) {
+		return false
+	}
+	for k, v := range e {
+		if other[k] != v {
+			return false
+		}
+	}
+	return true
+}
 
 func (e *Env) Scan(src any) error {
 	if src == nil {
