@@ -6,7 +6,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/tls"
 	"crypto/x509"
-	"database/sql"
 	"fmt"
 	"log/slog"
 	"net"
@@ -20,6 +19,15 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+// GRPCStore defines the persistence methods the gRPC controller service needs.
+type GRPCStore interface {
+	UpsertWorkerNode(node *model.WorkerNode) error
+	GetWorkerNode(id string) (*model.WorkerNode, error)
+	SetWorkerNodeSFTPPort(id string, sftpPort int) error
+	SetWorkerNodeLimits(id string, maxMemoryMB *int, maxCPU *float64, maxStorageMB *int) error
+	GetGameserverBySFTPUsername(username string) (*model.Gameserver, error)
+}
+
 // TokenValidator provides token validation for gRPC auth without importing the service package.
 type TokenValidator interface {
 	ValidateToken(rawToken string) *model.Token
@@ -32,15 +40,15 @@ type ControllerGRPC struct {
 	pb.UnimplementedControllerServiceServer
 	registry    *Registry
 	tokenAuth   TokenValidator
-	db          *sql.DB
+	store       GRPCStore
 	dialBackTLS *tls.Config
 	caCert      *x509.Certificate
 	caKey       *ecdsa.PrivateKey
 	log         *slog.Logger
 }
 
-func NewControllerGRPC(registry *Registry, tokenAuth TokenValidator, db *sql.DB, dialBackTLS *tls.Config, caCert *x509.Certificate, caKey *ecdsa.PrivateKey, log *slog.Logger) *ControllerGRPC {
-	return &ControllerGRPC{registry: registry, tokenAuth: tokenAuth, db: db, dialBackTLS: dialBackTLS, caCert: caCert, caKey: caKey, log: log}
+func NewControllerGRPC(registry *Registry, tokenAuth TokenValidator, store GRPCStore, dialBackTLS *tls.Config, caCert *x509.Certificate, caKey *ecdsa.PrivateKey, log *slog.Logger) *ControllerGRPC {
+	return &ControllerGRPC{registry: registry, tokenAuth: tokenAuth, store: store, dialBackTLS: dialBackTLS, caCert: caCert, caKey: caKey, log: log}
 }
 
 func (c *ControllerGRPC) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.RegisterResponse, error) {
@@ -76,7 +84,7 @@ func (c *ControllerGRPC) Register(ctx context.Context, req *pb.RegisterRequest) 
 	}
 
 	// Persist worker node (dial-back happens on first heartbeat after worker has certs)
-	if err := model.UpsertWorkerNode(c.db, &model.WorkerNode{
+	if err := c.store.UpsertWorkerNode(&model.WorkerNode{
 		ID: req.WorkerId, GRPCAddress: req.GrpcAddress, LanIP: req.LanIp, ExternalIP: req.ExternalIp,
 	}); err != nil {
 		c.log.Error("failed to persist worker node on register", "worker_id", req.WorkerId, "error", err)
@@ -84,7 +92,7 @@ func (c *ControllerGRPC) Register(ctx context.Context, req *pb.RegisterRequest) 
 
 	// Persist worker-reported SFTP port if provided
 	if req.SftpPort > 0 {
-		if err := model.SetWorkerNodeSFTPPort(c.db, req.WorkerId, int(req.SftpPort)); err != nil {
+		if err := c.store.SetWorkerNodeSFTPPort(req.WorkerId, int(req.SftpPort)); err != nil {
 			c.log.Error("failed to set worker sftp port on register", "worker_id", req.WorkerId, "error", err)
 		}
 	}
@@ -107,7 +115,7 @@ func (c *ControllerGRPC) Register(ctx context.Context, req *pb.RegisterRequest) 
 			maxStorage = &v
 		}
 		// Only update fields the worker explicitly set — read existing first to preserve API-configured values
-		if existing, err := model.GetWorkerNode(c.db, req.WorkerId); err == nil && existing != nil {
+		if existing, err := c.store.GetWorkerNode(req.WorkerId); err == nil && existing != nil {
 			if maxMem == nil {
 				maxMem = existing.MaxMemoryMB
 			}
@@ -118,7 +126,7 @@ func (c *ControllerGRPC) Register(ctx context.Context, req *pb.RegisterRequest) 
 				maxStorage = existing.MaxStorageMB
 			}
 		}
-		if err := model.SetWorkerNodeLimits(c.db, req.WorkerId, maxMem, maxCPU, maxStorage); err != nil {
+		if err := c.store.SetWorkerNodeLimits(req.WorkerId, maxMem, maxCPU, maxStorage); err != nil {
 			c.log.Error("failed to set worker resource limits on register", "worker_id", req.WorkerId, "error", err)
 		}
 	}
@@ -153,7 +161,7 @@ func (c *ControllerGRPC) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest
 			return &pb.HeartbeatResponse{Accepted: false}, nil
 		}
 
-		node, err := model.GetWorkerNode(c.db, req.WorkerId)
+		node, err := c.store.GetWorkerNode(req.WorkerId)
 		if err != nil || node == nil {
 			c.log.Warn("heartbeat from unknown worker", "worker_id", req.WorkerId)
 			return &pb.HeartbeatResponse{Accepted: false}, nil
@@ -199,7 +207,7 @@ func (c *ControllerGRPC) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest
 		return &pb.HeartbeatResponse{Accepted: false}, nil
 	}
 
-	if err := model.UpsertWorkerNode(c.db, &model.WorkerNode{
+	if err := c.store.UpsertWorkerNode(&model.WorkerNode{
 		ID: req.WorkerId, LanIP: req.LanIp, ExternalIP: req.ExternalIp,
 	}); err != nil {
 		c.log.Error("failed to persist worker node on heartbeat", "worker_id", req.WorkerId, "error", err)
@@ -210,7 +218,7 @@ func (c *ControllerGRPC) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest
 }
 
 func (c *ControllerGRPC) ValidateSFTPLogin(ctx context.Context, req *pb.SFTPLoginRequest) (*pb.SFTPLoginResponse, error) {
-	gs, err := model.GetGameserverBySFTPUsername(c.db, req.Username)
+	gs, err := c.store.GetGameserverBySFTPUsername(req.Username)
 	if err != nil {
 		c.log.Error("sftp login lookup failed", "username", req.Username, "error", err)
 		return &pb.SFTPLoginResponse{Valid: false}, nil

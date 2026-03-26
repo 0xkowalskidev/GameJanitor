@@ -7,7 +7,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/tls"
 	"crypto/x509"
-	"database/sql"
 	"fmt"
 	"log/slog"
 	"net"
@@ -419,7 +418,7 @@ func buildHeartbeatRequest(workerID string, netInfo *netinfo.Info) *pb.Heartbeat
 	return req
 }
 
-func startGRPCServer(w worker.Worker, gameStore *games.GameStore, dataDir string, registry *orchestrator.Registry, authSvc *auth.AuthService, database *sql.DB, bindAddress string, port int, tlsConfig *tls.Config, dialBackTLS *tls.Config, caCert *x509.Certificate, caKey *ecdsa.PrivateKey, logger *slog.Logger) error {
+func startGRPCServer(w worker.Worker, gameStore *games.GameStore, dataDir string, registry *orchestrator.Registry, authSvc *auth.AuthService, grpcStore orchestrator.GRPCStore, bindAddress string, port int, tlsConfig *tls.Config, dialBackTLS *tls.Config, caCert *x509.Certificate, caKey *ecdsa.PrivateKey, logger *slog.Logger) error {
 	addr := fmt.Sprintf("%s:%d", bindAddress, port)
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -445,7 +444,7 @@ func startGRPCServer(w worker.Worker, gameStore *games.GameStore, dataDir string
 
 	// Register ControllerService if we have a registry (controller or controller+worker mode)
 	if registry != nil {
-		controllerSvc := orchestrator.NewControllerGRPC(registry, authSvc, database, dialBackTLS, caCert, caKey, logger)
+		controllerSvc := orchestrator.NewControllerGRPC(registry, authSvc, grpcStore, dialBackTLS, caCert, caKey, logger)
 		pb.RegisterControllerServiceServer(grpcServer, controllerSvc)
 	}
 

@@ -3,7 +3,6 @@ package orchestrator
 import (
 	"github.com/warsmite/gamejanitor/worker"
 	"context"
-	"database/sql"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -11,6 +10,14 @@ import (
 
 	"github.com/warsmite/gamejanitor/model"
 )
+
+// RegistryStore defines the persistence methods the registry needs for
+// worker node lifecycle tracking.
+type RegistryStore interface {
+	ResetAllWorkerStatus(status string) error
+	ListWorkerNodes() ([]model.WorkerNode, error)
+	SetWorkerNodeStatus(id string, status string) error
+}
 
 // WorkerInfo tracks a connected worker's metadata and status.
 type WorkerInfo struct {
@@ -34,7 +41,7 @@ type WorkerInfo struct {
 type Registry struct {
 	workers map[string]*registeredWorker
 	mu      sync.RWMutex
-	db      *sql.DB
+	store   RegistryStore
 	log     *slog.Logger
 
 	// Callbacks fired on state transitions
@@ -47,10 +54,10 @@ type registeredWorker struct {
 	info   WorkerInfo
 }
 
-func NewRegistry(db *sql.DB, log *slog.Logger) *Registry {
+func NewRegistry(store RegistryStore, log *slog.Logger) *Registry {
 	return &Registry{
 		workers: make(map[string]*registeredWorker),
-		db:      db,
+		store:   store,
 		log:     log,
 	}
 }
@@ -59,16 +66,16 @@ func NewRegistry(db *sql.DB, log *slog.Logger) *Registry {
 // setting them all to offline. Called on controller startup so the controller
 // immediately knows about all workers before they reconnect.
 func (r *Registry) LoadFromDB() error {
-	if r.db == nil {
+	if r.store == nil {
 		return nil
 	}
 
 	// Reset all workers to offline — they must heartbeat to prove they're alive
-	if err := model.ResetAllWorkerStatus(r.db, model.WorkerStatusOffline); err != nil {
+	if err := r.store.ResetAllWorkerStatus(model.WorkerStatusOffline); err != nil {
 		return fmt.Errorf("resetting worker status on startup: %w", err)
 	}
 
-	nodes, err := model.ListWorkerNodes(r.db)
+	nodes, err := r.store.ListWorkerNodes()
 	if err != nil {
 		return fmt.Errorf("loading workers from database: %w", err)
 	}
@@ -118,8 +125,8 @@ func (r *Registry) Register(nodeID string, w worker.Worker, info WorkerInfo) {
 	r.mu.Unlock()
 
 	// Persist status to DB
-	if r.db != nil {
-		if err := model.SetWorkerNodeStatus(r.db, nodeID, model.WorkerStatusOnline); err != nil {
+	if r.store != nil {
+		if err := r.store.SetWorkerNodeStatus(nodeID, model.WorkerStatusOnline); err != nil {
 			r.log.Warn("failed to persist worker online status", "worker_id", nodeID, "error", err)
 		}
 	}
@@ -151,8 +158,8 @@ func (r *Registry) SetOffline(nodeID string) {
 	r.mu.Unlock()
 
 	// Persist status to DB
-	if r.db != nil {
-		if err := model.SetWorkerNodeStatus(r.db, nodeID, model.WorkerStatusOffline); err != nil {
+	if r.store != nil {
+		if err := r.store.SetWorkerNodeStatus(nodeID, model.WorkerStatusOffline); err != nil {
 			r.log.Warn("failed to persist worker offline status", "worker_id", nodeID, "error", err)
 		}
 	}

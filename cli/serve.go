@@ -302,11 +302,16 @@ func runServe(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to initialize game store: %w", err)
 	}
 
-	registry := orchestrator.NewRegistry(database, logger)
+	wnStoreForOrchestrator := store.NewWorkerNodeStore(database)
+	registry := orchestrator.NewRegistry(wnStoreForOrchestrator, logger)
 	if err := registry.LoadFromDB(); err != nil {
 		return fmt.Errorf("failed to load workers from database: %w", err)
 	}
-	dispatcher := orchestrator.NewDispatcher(registry, database, logger)
+	dispatcherStore := struct {
+		*store.GameserverStore
+		*store.WorkerNodeStore
+	}{store.NewGameserverStore(database), wnStoreForOrchestrator}
+	dispatcher := orchestrator.NewDispatcher(registry, dispatcherStore, logger)
 
 	svcs, err := initServices(database, dispatcher, registry, gameStore, cfg, logger)
 	if err != nil {
@@ -381,8 +386,12 @@ func runServe(cmd *cobra.Command, args []string) error {
 			}
 		}
 	}
+	grpcStore := struct {
+		*store.WorkerNodeStore
+		*store.GameserverStore
+	}{wnStoreForOrchestrator, store.NewGameserverStore(database)}
 	go func() {
-		if err := startGRPCServer(nil, gameStore, cfg.DataDir, registry, svcs.authSvc, database, cfg.Bind, cfg.GRPCPort, serverTLS, dialBackTLS, caCert, caKey, logger); err != nil {
+		if err := startGRPCServer(nil, gameStore, cfg.DataDir, registry, svcs.authSvc, grpcStore, cfg.Bind, cfg.GRPCPort, serverTLS, dialBackTLS, caCert, caKey, logger); err != nil {
 			logger.Error("grpc server stopped", "error", err)
 		}
 	}()

@@ -52,12 +52,16 @@ func NewTestServices(t *testing.T) *ServiceBundle {
 	log := TestLogger()
 	gameStore := NewTestGameStore(t)
 
-	registry := orchestrator.NewRegistry(db, log)
-	dispatcher := orchestrator.NewDispatcher(registry, db, log)
-	broadcaster := controller.NewEventBus()
-
 	gsStore := store.NewGameserverStore(db)
 	wnStore := store.NewWorkerNodeStore(db)
+
+	registry := orchestrator.NewRegistry(wnStore, log)
+	dispatcherStore := struct {
+		*store.GameserverStore
+		*store.WorkerNodeStore
+	}{gsStore, wnStore}
+	dispatcher := orchestrator.NewDispatcher(registry, dispatcherStore, log)
+	broadcaster := controller.NewEventBus()
 
 	settingsStore := struct {
 		*store.SettingStore

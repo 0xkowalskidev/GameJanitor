@@ -2,7 +2,6 @@ package orchestrator
 
 import (
 	"github.com/warsmite/gamejanitor/worker"
-	"database/sql"
 	"fmt"
 	"log/slog"
 	"math"
@@ -10,6 +9,16 @@ import (
 
 	"github.com/warsmite/gamejanitor/model"
 )
+
+// DispatcherStore defines the persistence methods the dispatcher needs for
+// gameserver placement and node-to-worker routing.
+type DispatcherStore interface {
+	GetGameserver(id string) (*model.Gameserver, error)
+	GetWorkerNode(id string) (*model.WorkerNode, error)
+	AllocatedMemoryByNode(nodeID string) (int, error)
+	AllocatedCPUByNode(nodeID string) (float64, error)
+	AllocatedStorageByNode(nodeID string) (int, error)
+}
 
 // PlacementCandidate is a worker ranked for gameserver placement.
 type PlacementCandidate struct {
@@ -22,14 +31,14 @@ type PlacementCandidate struct {
 // All workers (local and remote) are accessed through the registry.
 type Dispatcher struct {
 	registry *Registry
-	db       *sql.DB
+	store    DispatcherStore
 	log      *slog.Logger
 }
 
-func NewDispatcher(registry *Registry, db *sql.DB, log *slog.Logger) *Dispatcher {
+func NewDispatcher(registry *Registry, store DispatcherStore, log *slog.Logger) *Dispatcher {
 	return &Dispatcher{
 		registry: registry,
-		db:       db,
+		store:    store,
 		log:      log,
 	}
 }
@@ -71,8 +80,8 @@ func (d *Dispatcher) RankWorkersForPlacement(requiredLabels model.Labels) []Plac
 
 	for _, info := range workers {
 		// Label filtering: skip workers that don't have all required labels
-		if !requiredLabels.IsEmpty() && d.db != nil {
-			node, err := model.GetWorkerNode(d.db, info.ID)
+		if !requiredLabels.IsEmpty() && d.store != nil {
+			node, err := d.store.GetWorkerNode(info.ID)
 			if err != nil || node == nil {
 				continue
 			}
@@ -81,23 +90,23 @@ func (d *Dispatcher) RankWorkersForPlacement(requiredLabels model.Labels) []Plac
 				continue
 			}
 		}
-		allocMem, err := model.AllocatedMemoryByNode(d.db, info.ID)
+		allocMem, err := d.store.AllocatedMemoryByNode(info.ID)
 		if err != nil {
 			d.log.Warn("failed to query allocated memory for worker", "worker_id", info.ID, "error", err)
 			continue
 		}
-		allocCPU, err := model.AllocatedCPUByNode(d.db, info.ID)
+		allocCPU, err := d.store.AllocatedCPUByNode(info.ID)
 		if err != nil {
 			d.log.Warn("failed to query allocated CPU for worker", "worker_id", info.ID, "error", err)
 			continue
 		}
-		allocStorage, err := model.AllocatedStorageByNode(d.db, info.ID)
+		allocStorage, err := d.store.AllocatedStorageByNode(info.ID)
 		if err != nil {
 			d.log.Warn("failed to query allocated storage for worker", "worker_id", info.ID, "error", err)
 			continue
 		}
 
-		node, _ := model.GetWorkerNode(d.db, info.ID)
+		node, _ := d.store.GetWorkerNode(info.ID)
 
 		if node != nil && node.Cordoned {
 			d.log.Debug("skipping cordoned worker for placement", "worker_id", info.ID)
@@ -167,10 +176,10 @@ func (d *Dispatcher) ListWorkers() []WorkerInfo {
 }
 
 func (d *Dispatcher) lookupNodeID(gameserverID string) (string, error) {
-	if d.db == nil {
+	if d.store == nil {
 		return "", nil
 	}
-	gs, err := model.GetGameserver(d.db, gameserverID)
+	gs, err := d.store.GetGameserver(gameserverID)
 	if err != nil {
 		return "", fmt.Errorf("looking up node_id for gameserver %s: %w", gameserverID, err)
 	}
