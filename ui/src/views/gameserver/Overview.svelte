@@ -25,20 +25,6 @@
     stats?.storage_limit_mb ? Math.round((storageMB / stats.storage_limit_mb) * 100) : (stats ? 100 : 0)
   );
 
-  function connectionAddress(): string {
-    if (!gameserver) return '';
-    if (gameserver.connection_address) return gameserver.connection_address;
-    try {
-      const ports = typeof gameserver.ports === 'string' ? JSON.parse(gameserver.ports) : gameserver.ports;
-      if (ports && ports.length > 0) {
-        const port = ports[0].host_port || ports[0].container_port;
-        const ip = gameserver.node?.lan_ip || gameserver.node?.external_ip || '';
-        return ip ? `${ip}:${port}` : `${port}`;
-      }
-    } catch (e) { console.warn('Overview: failed to parse ports', e); }
-    return '';
-  }
-
   // Activity feed — page-specific state
   let events = $state<Event[]>([]);
   let unsub: (() => void) | null = null;
@@ -133,7 +119,7 @@
     <!-- Connection info — full width -->
     <div class="panel full-width" style="padding: 0;">
       <div class="connect-row">
-        <CopyBlock label="Connect" value={connectionAddress()} primary={true} />
+        <CopyBlock label="Connect" value={gameserverStore.connectionAddress(id)} primary={true} />
         <CopyBlock label="SFTP" value={`sftp://${gameserver.sftp_username}@localhost:2222`} />
       </div>
     </div>

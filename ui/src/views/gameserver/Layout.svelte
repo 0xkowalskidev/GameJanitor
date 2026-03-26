@@ -6,6 +6,8 @@
   import { getRoute, navigate, isActive } from '$lib/router';
   import { embedded } from '$lib/base';
 
+  const connAddr = $derived(gameserverStore.connectionAddress(id));
+
   const can = (p: string) => gameserverStore.can(p);
   import type { Snippet } from 'svelte';
 
@@ -126,7 +128,13 @@
           <GameIcon src={game?.icon_path || ''} name={game?.name || gameserver.game_id} size={50} />
           <div>
             <div class="srv-name">{gameserver.name}</div>
-            <div class="srv-game">{game?.name || gameserver.game_id}</div>
+            <div class="srv-meta">
+              <span class="srv-game">{game?.name || gameserver.game_id}</span>
+              {#if connAddr}
+                <span class="srv-meta-sep">·</span>
+                <span class="srv-addr">{connAddr}</span>
+              {/if}
+            </div>
           </div>
         </div>
         <div class="srv-id-right">
@@ -248,7 +256,10 @@
   }
   .srv-id-left { display: flex; align-items: center; gap: 14px; }
   .srv-name { font-weight: 600; font-size: 1.2rem; letter-spacing: -0.02em; }
-  .srv-game { font-size: 0.8rem; color: var(--text-tertiary); margin-top: 2px; }
+  .srv-meta { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+  .srv-meta-sep { color: var(--text-tertiary); opacity: 0.3; font-size: 0.78rem; }
+  .srv-game { font-size: 0.8rem; color: var(--text-tertiary); }
+  .srv-addr { font-size: 0.78rem; font-family: var(--font-mono); color: var(--text-tertiary); }
   .srv-id-right { display: flex; align-items: center; gap: 8px; }
 
   .op-badge {

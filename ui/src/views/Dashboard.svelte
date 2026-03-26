@@ -23,21 +23,6 @@
     return counts;
   });
 
-  function connectionAddress(gsId: string): string {
-    const gs = gameserverStore.get(gsId);
-    if (!gs) return '';
-    if (gs.connection_address) return gs.connection_address;
-    try {
-      const ports = typeof gs.ports === 'string' ? JSON.parse(gs.ports) : gs.ports;
-      if (ports && ports.length > 0) {
-        const port = ports[0].host_port || ports[0].container_port;
-        const ip = gs.node?.lan_ip || gs.node?.external_ip || '';
-        return ip ? `${ip}:${port}` : `${port}`;
-      }
-    } catch (e) { console.warn('Dashboard: failed to parse ports', e); }
-    return '';
-  }
-
   async function handleAction(gsId: string, action: 'start' | 'stop' | 'restart') {
     try {
       const fn = api.gameservers[action];
@@ -106,7 +91,7 @@
           gameserver={gs}
           stats={state?.stats ?? null}
           query={state?.query ?? null}
-          connectionAddress={connectionAddress(gs.id)}
+          connectionAddress={gameserverStore.connectionAddress(gs.id)}
           iconPath={game?.icon_path || ''}
           gameName={game?.name || gs.game_id}
           logLines={state?.logLines?.slice(-4) ?? []}

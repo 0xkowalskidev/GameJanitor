@@ -112,6 +112,11 @@ async function uploadFile(path: string, filePath: string, file: File): Promise<v
 
 // ── Types ──
 
+export interface GameserverNode {
+  external_ip: string;
+  lan_ip: string;
+}
+
 export interface Gameserver {
   id: string;
   name: string;
@@ -129,10 +134,12 @@ export interface Gameserver {
   volume_name: string;
   port_mode: string;
   node_id?: string;
+  node?: GameserverNode;
   node_tags: Record<string, string>;
   sftp_username: string;
   installed: boolean;
   auto_restart: boolean;
+  connection_address?: string;
   created_at: string;
   updated_at: string;
 }

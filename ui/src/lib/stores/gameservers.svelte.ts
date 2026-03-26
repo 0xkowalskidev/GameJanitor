@@ -69,6 +69,18 @@ class GameserverStore {
     return this.gameservers[id]?.gameserver.status === 'stopped';
   }
 
+  connectionAddress(id: string): string {
+    const gs = this.gameservers[id]?.gameserver;
+    if (!gs) return '';
+    if (gs.connection_address) return gs.connection_address;
+
+    const ip = gs.node?.external_ip || gs.node?.lan_ip || '';
+    const ports = gs.ports || [];
+    const gamePort = ports.find((p: any) => p.name === 'game') || ports[0];
+    if (!ip || !gamePort) return '';
+    return `${ip}:${gamePort.host_port}`;
+  }
+
   can(permission: string): boolean {
     return this.permissions.includes(permission);
   }
