@@ -18,18 +18,13 @@ type StatusSubscriber struct {
 	bus    *controller.EventBus
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
-
-	// Auto-restart crash counter: reset when gameserver reaches "running"
-	crashCounts map[string]int
-	crashMu     sync.Mutex
 }
 
 func NewStatusSubscriber(store Store, bus *controller.EventBus, log *slog.Logger) *StatusSubscriber {
 	return &StatusSubscriber{
-		store:       store,
-		bus:         bus,
-		log:         log,
-		crashCounts: make(map[string]int),
+		store: store,
+		bus:   bus,
+		log:   log,
 	}
 }
 
@@ -75,10 +70,6 @@ func (s *StatusSubscriber) handleEvent(event controller.WebhookEvent) {
 		s.setStatus(e.GameserverID, controller.StatusStarted, "")
 	case controller.GameserverReadyEvent:
 		s.setStatus(e.GameserverID, controller.StatusRunning, "")
-		// Reset crash counter on successful run
-		s.crashMu.Lock()
-		delete(s.crashCounts, e.GameserverID)
-		s.crashMu.Unlock()
 	case controller.ContainerStoppingEvent:
 		s.setStatus(e.GameserverID, controller.StatusStopping, "")
 	case controller.ContainerStoppedEvent:
@@ -126,10 +117,3 @@ func (s *StatusSubscriber) setStatus(gameserverID string, newStatus string, erro
 	})
 }
 
-// IncrementCrashCount increments and returns the crash count for a gameserver.
-func (s *StatusSubscriber) IncrementCrashCount(gameserverID string) int {
-	s.crashMu.Lock()
-	defer s.crashMu.Unlock()
-	s.crashCounts[gameserverID]++
-	return s.crashCounts[gameserverID]
-}
