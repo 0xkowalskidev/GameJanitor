@@ -73,7 +73,9 @@
       </a>
       <div class="n-links">
         <a href="/">Dashboard</a>
-        <a href="/settings">Settings</a>
+        {#if gameserverStore.can('settings.view')}
+          <a href="/settings">Settings</a>
+        {/if}
       </div>
     </div>
     <div class="n-right">
