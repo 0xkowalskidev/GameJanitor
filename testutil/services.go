@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"testing"
 
+	"github.com/warsmite/gamejanitor/controller/backup"
 	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/controller/gameserver"
 	"github.com/warsmite/gamejanitor/games"
@@ -30,12 +31,12 @@ type ServiceBundle struct {
 	ReadyWatcher  *service.ReadyWatcher
 	ConsoleSvc    *gameserver.ConsoleService
 	FileSvc       *gameserver.FileService
-	BackupSvc     *service.BackupService
+	BackupSvc     *backup.BackupService
 	Scheduler     *service.Scheduler
 	ScheduleSvc   *service.ScheduleService
 	AuthSvc       *auth.AuthService
 	ModSvc        *service.ModService
-	BackupStore   service.BackupStore
+	BackupStorage backup.Storage
 	StatusSub     *service.StatusSubscriber
 	EventStore    *event.EventStoreSubscriber
 }
@@ -55,7 +56,7 @@ func NewTestServices(t *testing.T) *ServiceBundle {
 	settingsSvc := settings.NewSettingsService(db, log)
 
 	dataDir := t.TempDir()
-	backupStore := service.NewLocalStore(dataDir)
+	backupStorage := backup.NewLocalStorage(dataDir)
 
 	gsStore := store.NewGameserverStore(db)
 	wnStore := store.NewWorkerNodeStore(db)
@@ -73,11 +74,15 @@ func NewTestServices(t *testing.T) *ServiceBundle {
 	readyWatcher.SetQueryService(querySvc)
 	readyWatcher.SetStatsPoller(statsPoller)
 	gameserverSvc.SetReadyWatcher(readyWatcher)
-	gameserverSvc.SetBackupStore(backupStore)
+	gameserverSvc.SetBackupStore(backupStorage)
 
 	consoleSvc := gameserver.NewConsoleService(gsStore, dispatcher, gameStore, log)
 	fileSvc := gameserver.NewFileService(gsStore, dispatcher, log)
-	backupSvc := service.NewBackupService(db, dispatcher, gameserverSvc, gameStore, backupStore, settingsSvc, broadcaster, log)
+	backupCompositeStore := struct {
+		*store.BackupStore
+		*store.GameserverStore
+	}{backupDBStore, gsStore}
+	backupSvc := backup.NewBackupService(backupCompositeStore, dispatcher, gameserverSvc, gameStore, backupStorage, settingsSvc, broadcaster, log)
 	scheduler := service.NewScheduler(db, backupSvc, gameserverSvc, consoleSvc, broadcaster, log)
 	scheduleSvc := service.NewScheduleService(db, scheduler, broadcaster, log)
 	authSvc := auth.NewAuthService(db, log)
@@ -103,7 +108,7 @@ func NewTestServices(t *testing.T) *ServiceBundle {
 		ScheduleSvc:   scheduleSvc,
 		AuthSvc:       authSvc,
 		ModSvc:        modSvc,
-		BackupStore:   backupStore,
+		BackupStorage: backupStorage,
 	}
 
 	t.Cleanup(func() {

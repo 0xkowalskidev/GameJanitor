@@ -28,6 +28,7 @@ import (
 	"github.com/warsmite/gamejanitor/games"
 	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/pkg/netinfo"
+	"github.com/warsmite/gamejanitor/controller/backup"
 	"github.com/warsmite/gamejanitor/controller/gameserver"
 	"github.com/warsmite/gamejanitor/service"
 	"github.com/warsmite/gamejanitor/store"
@@ -124,7 +125,7 @@ type services struct {
 	readyWatcher  *service.ReadyWatcher
 	consoleSvc    *gameserver.ConsoleService
 	fileSvc       *gameserver.FileService
-	backupSvc     *service.BackupService
+	backupSvc     *backup.BackupService
 	scheduler     *service.Scheduler
 	scheduleSvc   *service.ScheduleService
 	authSvc       *auth.AuthService
@@ -161,13 +162,17 @@ func initServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 	consoleSvc := gameserver.NewConsoleService(gsStore, dispatcher, gameStore, logger)
 	fileSvc := gameserver.NewFileService(gsStore, dispatcher, logger)
 
-	backupStore, err := initBackupStore(cfg, logger)
+	backupStorage, err := initBackupStorage(cfg, logger)
 	if err != nil {
 		return nil, err
 	}
 
-	gameserverSvc.SetBackupStore(backupStore)
-	backupSvc := service.NewBackupService(database, dispatcher, gameserverSvc, gameStore, backupStore, settingsSvc, broadcaster, logger)
+	gameserverSvc.SetBackupStore(backupStorage)
+	backupCompositeStore := struct {
+		*store.BackupStore
+		*store.GameserverStore
+	}{backupDBStore, gsStore}
+	backupSvc := backup.NewBackupService(backupCompositeStore, dispatcher, gameserverSvc, gameStore, backupStorage, settingsSvc, broadcaster, logger)
 	scheduler := service.NewScheduler(database, backupSvc, gameserverSvc, consoleSvc, broadcaster, logger)
 	scheduleSvc := service.NewScheduleService(database, scheduler, broadcaster, logger)
 	authSvc := auth.NewAuthService(database, logger)
@@ -205,19 +210,19 @@ func initServices(database *sql.DB, dispatcher *orchestrator.Dispatcher, registr
 	}, nil
 }
 
-func initBackupStore(cfg config.Config, logger *slog.Logger) (service.BackupStore, error) {
+func initBackupStorage(cfg config.Config, logger *slog.Logger) (backup.Storage, error) {
 	bs := cfg.BackupStore
 	if bs == nil || bs.Type == "" || bs.Type == "local" {
 		logger.Info("backup store: local", "path", cfg.DataDir)
-		return service.NewLocalStore(cfg.DataDir), nil
+		return backup.NewLocalStorage(cfg.DataDir), nil
 	}
 
 	if bs.Type == "s3" {
-		s3Store, err := service.NewS3Store(bs, logger)
+		s3Storage, err := backup.NewS3Storage(bs, logger)
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize backup store: %w", err)
 		}
-		return s3Store, nil
+		return s3Storage, nil
 	}
 
 	return nil, fmt.Errorf("unknown backup_store type: %q (must be \"local\" or \"s3\")", bs.Type)

@@ -25,10 +25,15 @@ type schedulerConsoleOps interface {
 	SendCommand(ctx context.Context, gameserverID string, command string) (string, error)
 }
 
+// schedulerBackupOps is a narrow interface for the backup operations the scheduler needs.
+type schedulerBackupOps interface {
+	CreateBackup(ctx context.Context, gameserverID string, name string) (*model.Backup, error)
+}
+
 type Scheduler struct {
 	cron          *cron.Cron
 	db            *sql.DB
-	backupSvc     *BackupService
+	backupSvc     schedulerBackupOps
 	gameserverSvc schedulerGameserverOps
 	consoleSvc    schedulerConsoleOps
 	broadcaster   *controller.EventBus
@@ -37,7 +42,7 @@ type Scheduler struct {
 	mu            sync.Mutex
 }
 
-func NewScheduler(db *sql.DB, backupSvc *BackupService, gameserverSvc schedulerGameserverOps, consoleSvc schedulerConsoleOps, broadcaster *controller.EventBus, log *slog.Logger) *Scheduler {
+func NewScheduler(db *sql.DB, backupSvc schedulerBackupOps, gameserverSvc schedulerGameserverOps, consoleSvc schedulerConsoleOps, broadcaster *controller.EventBus, log *slog.Logger) *Scheduler {
 	return &Scheduler{
 		cron:          cron.New(),
 		db:            db,

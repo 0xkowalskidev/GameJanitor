@@ -7,17 +7,17 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/warsmite/gamejanitor/controller/backup"
 	"github.com/warsmite/gamejanitor/model"
-	"github.com/warsmite/gamejanitor/service"
 	"github.com/go-chi/chi/v5"
 )
 
 type BackupHandlers struct {
-	svc *service.BackupService
+	svc *backup.BackupService
 	log *slog.Logger
 }
 
-func NewBackupHandlers(svc *service.BackupService, log *slog.Logger) *BackupHandlers {
+func NewBackupHandlers(svc *backup.BackupService, log *slog.Logger) *BackupHandlers {
 	return &BackupHandlers{svc: svc, log: log}
 }
 

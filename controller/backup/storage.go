@@ -1,4 +1,4 @@
-package service
+package backup
 
 import (
 	"context"
@@ -8,34 +8,34 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/warsmite/gamejanitor/config"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/warsmite/gamejanitor/config"
 )
 
-// BackupStore abstracts backup file storage.
-// LocalStore for single-node (default), S3Store for multi-node/power users.
-type BackupStore interface {
+// Storage abstracts backup file storage.
+// LocalStorage for single-node (default), S3Storage for multi-node/power users.
+type Storage interface {
 	Save(ctx context.Context, gameserverID string, backupID string, reader io.Reader) error
 	Load(ctx context.Context, gameserverID string, backupID string) (io.ReadCloser, error)
 	Delete(ctx context.Context, gameserverID string, backupID string) error
 	Size(ctx context.Context, gameserverID string, backupID string) (int64, error)
 }
 
-// LocalStore stores backups as files on local disk.
-type LocalStore struct {
+// LocalStorage stores backups as files on local disk.
+type LocalStorage struct {
 	dataDir string
 }
 
-func NewLocalStore(dataDir string) *LocalStore {
-	return &LocalStore{dataDir: dataDir}
+func NewLocalStorage(dataDir string) *LocalStorage {
+	return &LocalStorage{dataDir: dataDir}
 }
 
-func (s *LocalStore) backupPath(gameserverID, backupID string) string {
+func (s *LocalStorage) backupPath(gameserverID, backupID string) string {
 	return filepath.Join(s.dataDir, "backups", gameserverID, backupID+".tar.gz")
 }
 
-func (s *LocalStore) Save(ctx context.Context, gameserverID string, backupID string, reader io.Reader) error {
+func (s *LocalStorage) Save(ctx context.Context, gameserverID string, backupID string, reader io.Reader) error {
 	path := s.backupPath(gameserverID, backupID)
 
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
@@ -61,7 +61,7 @@ func (s *LocalStore) Save(ctx context.Context, gameserverID string, backupID str
 	return nil
 }
 
-func (s *LocalStore) Load(ctx context.Context, gameserverID string, backupID string) (io.ReadCloser, error) {
+func (s *LocalStorage) Load(ctx context.Context, gameserverID string, backupID string) (io.ReadCloser, error) {
 	path := s.backupPath(gameserverID, backupID)
 	f, err := os.Open(path)
 	if err != nil {
@@ -70,7 +70,7 @@ func (s *LocalStore) Load(ctx context.Context, gameserverID string, backupID str
 	return f, nil
 }
 
-func (s *LocalStore) Delete(ctx context.Context, gameserverID string, backupID string) error {
+func (s *LocalStorage) Delete(ctx context.Context, gameserverID string, backupID string) error {
 	path := s.backupPath(gameserverID, backupID)
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("removing backup file: %w", err)
@@ -78,7 +78,7 @@ func (s *LocalStore) Delete(ctx context.Context, gameserverID string, backupID s
 	return nil
 }
 
-func (s *LocalStore) Size(ctx context.Context, gameserverID string, backupID string) (int64, error) {
+func (s *LocalStorage) Size(ctx context.Context, gameserverID string, backupID string) (int64, error) {
 	path := s.backupPath(gameserverID, backupID)
 	fi, err := os.Stat(path)
 	if err != nil {
@@ -87,14 +87,14 @@ func (s *LocalStore) Size(ctx context.Context, gameserverID string, backupID str
 	return fi.Size(), nil
 }
 
-// S3Store stores backups in an S3-compatible bucket.
-type S3Store struct {
+// S3Storage stores backups in an S3-compatible bucket.
+type S3Storage struct {
 	client *minio.Client
 	bucket string
 	log    *slog.Logger
 }
 
-func NewS3Store(cfg *config.BackupStoreConfig, log *slog.Logger) (*S3Store, error) {
+func NewS3Storage(cfg *config.BackupStoreConfig, log *slog.Logger) (*S3Storage, error) {
 	bucketLookup := minio.BucketLookupAuto
 	if cfg.PathStyle {
 		bucketLookup = minio.BucketLookupPath
@@ -119,14 +119,14 @@ func NewS3Store(cfg *config.BackupStoreConfig, log *slog.Logger) (*S3Store, erro
 	}
 
 	log.Info("backup store connected", "type", "s3", "bucket", cfg.Bucket, "endpoint", cfg.Endpoint)
-	return &S3Store{client: client, bucket: cfg.Bucket, log: log}, nil
+	return &S3Storage{client: client, bucket: cfg.Bucket, log: log}, nil
 }
 
-func (s *S3Store) objectKey(gameserverID, backupID string) string {
+func (s *S3Storage) objectKey(gameserverID, backupID string) string {
 	return "backups/" + gameserverID + "/" + backupID + ".tar.gz"
 }
 
-func (s *S3Store) Save(ctx context.Context, gameserverID string, backupID string, reader io.Reader) error {
+func (s *S3Storage) Save(ctx context.Context, gameserverID string, backupID string, reader io.Reader) error {
 	key := s.objectKey(gameserverID, backupID)
 	info, err := s.client.PutObject(ctx, s.bucket, key, reader, -1, minio.PutObjectOptions{
 		ContentType: "application/gzip",
@@ -138,7 +138,7 @@ func (s *S3Store) Save(ctx context.Context, gameserverID string, backupID string
 	return nil
 }
 
-func (s *S3Store) Load(ctx context.Context, gameserverID string, backupID string) (io.ReadCloser, error) {
+func (s *S3Storage) Load(ctx context.Context, gameserverID string, backupID string) (io.ReadCloser, error) {
 	key := s.objectKey(gameserverID, backupID)
 	obj, err := s.client.GetObject(ctx, s.bucket, key, minio.GetObjectOptions{})
 	if err != nil {
@@ -147,7 +147,7 @@ func (s *S3Store) Load(ctx context.Context, gameserverID string, backupID string
 	return obj, nil
 }
 
-func (s *S3Store) Delete(ctx context.Context, gameserverID string, backupID string) error {
+func (s *S3Storage) Delete(ctx context.Context, gameserverID string, backupID string) error {
 	key := s.objectKey(gameserverID, backupID)
 	if err := s.client.RemoveObject(ctx, s.bucket, key, minio.RemoveObjectOptions{}); err != nil {
 		return fmt.Errorf("deleting backup from S3: %w", err)
@@ -155,7 +155,7 @@ func (s *S3Store) Delete(ctx context.Context, gameserverID string, backupID stri
 	return nil
 }
 
-func (s *S3Store) Size(ctx context.Context, gameserverID string, backupID string) (int64, error) {
+func (s *S3Storage) Size(ctx context.Context, gameserverID string, backupID string) (int64, error) {
 	key := s.objectKey(gameserverID, backupID)
 	info, err := s.client.StatObject(ctx, s.bucket, key, minio.StatObjectOptions{})
 	if err != nil {
