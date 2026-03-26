@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/controller"
 	"context"
 	"database/sql"
@@ -23,7 +24,7 @@ type ModService struct {
 	db              *sql.DB
 	fileSvc         *FileService
 	gameStore       *games.GameStore
-	settingsSvc     *SettingsService
+	settingsSvc     *settings.SettingsService
 	optionsRegistry *games.OptionsRegistry
 	sources         map[string]ModSource
 	httpClient      *http.Client
@@ -31,7 +32,7 @@ type ModService struct {
 	broadcaster     *controller.EventBus
 }
 
-func NewModService(db *sql.DB, fileSvc *FileService, gameStore *games.GameStore, settingsSvc *SettingsService, optionsRegistry *games.OptionsRegistry, broadcaster *controller.EventBus, log *slog.Logger) *ModService {
+func NewModService(db *sql.DB, fileSvc *FileService, gameStore *games.GameStore, settingsSvc *settings.SettingsService, optionsRegistry *games.OptionsRegistry, broadcaster *controller.EventBus, log *slog.Logger) *ModService {
 	sources := map[string]ModSource{
 		"umod":     NewUmodSource(log.With("source", "umod")),
 		"modrinth": NewModrinthSource(log.With("source", "modrinth")),

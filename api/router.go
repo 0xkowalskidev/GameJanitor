@@ -1,6 +1,7 @@
 package api
 
 import (
+	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/controller/auth"
 	"github.com/warsmite/gamejanitor/controller"
 	"database/sql"
@@ -30,7 +31,7 @@ type RouterOptions struct {
 	BackupSvc     *service.BackupService
 	QuerySvc      *service.QueryService
 	StatsPoller   *service.StatsPoller
-	SettingsSvc   *service.SettingsService
+	SettingsSvc   *settings.SettingsService
 	AuthSvc       *auth.AuthService
 	ModSvc        *service.ModService
 	Broadcaster   *controller.EventBus

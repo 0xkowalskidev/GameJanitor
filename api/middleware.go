@@ -1,13 +1,13 @@
 package api
 
 import (
+	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/controller/auth"
 	"encoding/json"
 	"net"
 	"net/http"
 	"strings"
 
-	"github.com/warsmite/gamejanitor/service"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -17,15 +17,15 @@ var TokenFromContext = auth.TokenFromContext
 
 // AuthMiddleware checks for a valid token on every request when auth is enabled.
 // Extracts from Bearer header or _token cookie.
-func AuthMiddleware(authSvc *auth.AuthService, settingsSvc *service.SettingsService) func(http.Handler) http.Handler {
+func AuthMiddleware(authSvc *auth.AuthService, settingsSvc *settings.SettingsService) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if !settingsSvc.GetBool(service.SettingAuthEnabled) {
+			if !settingsSvc.GetBool(settings.SettingAuthEnabled) {
 				next.ServeHTTP(w, r)
 				return
 			}
 
-			if settingsSvc.GetBool(service.SettingLocalhostBypass) && isLocalhost(r) {
+			if settingsSvc.GetBool(settings.SettingLocalhostBypass) && isLocalhost(r) {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -78,7 +78,7 @@ func isLocalhost(r *http.Request) bool {
 
 // RequireAdmin returns 403 if the token is not an admin token.
 // No-op when auth is disabled or localhost bypass is active (no token in context).
-func RequireAdmin(settingsSvc *service.SettingsService) func(http.Handler) http.Handler {
+func RequireAdmin(settingsSvc *settings.SettingsService) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			token := TokenFromContext(r.Context())
@@ -98,7 +98,7 @@ func RequireAdmin(settingsSvc *service.SettingsService) func(http.Handler) http.
 
 // RequireClusterPermission returns 403 if the token doesn't have the given cluster permission.
 // Unlike RequirePermission, this doesn't check gameserver IDs — it's for cluster-level routes.
-func RequireClusterPermission(settingsSvc *service.SettingsService, permission string) func(http.Handler) http.Handler {
+func RequireClusterPermission(settingsSvc *settings.SettingsService, permission string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			token := TokenFromContext(r.Context())
@@ -130,7 +130,7 @@ func RequireClusterPermission(settingsSvc *service.SettingsService, permission s
 // RequirePermission returns 403 if the token doesn't have the given permission
 // on the gameserver identified by the {id} URL parameter.
 // No-op when auth is disabled or localhost bypass is active.
-func RequirePermission(settingsSvc *service.SettingsService, permission string) func(http.Handler) http.Handler {
+func RequirePermission(settingsSvc *settings.SettingsService, permission string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			token := TokenFromContext(r.Context())
@@ -154,7 +154,7 @@ func RequirePermission(settingsSvc *service.SettingsService, permission string) 
 
 // RequireGameserverAccess returns 403 if the token doesn't have any permission
 // on the gameserver identified by the {id} URL parameter. Used for view-only routes.
-func RequireGameserverAccess(settingsSvc *service.SettingsService) func(http.Handler) http.Handler {
+func RequireGameserverAccess(settingsSvc *settings.SettingsService) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			token := TokenFromContext(r.Context())

@@ -1,6 +1,7 @@
 package service_test
 
 import (
+	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/controller/auth"
 	"encoding/json"
 	"testing"
@@ -60,18 +61,18 @@ func TestScenario_Newbie_DefaultSettings_Safe(t *testing.T) {
 	svc := testutil.NewTestServices(t)
 
 	// Auth disabled by default — newbie doesn't need to set up tokens
-	assert.False(t, svc.SettingsSvc.GetBool(service.SettingAuthEnabled))
+	assert.False(t, svc.SettingsSvc.GetBool(settings.SettingAuthEnabled))
 
 	// Localhost bypass on — web UI works without tokens from the same machine
-	assert.True(t, svc.SettingsSvc.GetBool(service.SettingLocalhostBypass))
+	assert.True(t, svc.SettingsSvc.GetBool(settings.SettingLocalhostBypass))
 
 	// Rate limiting off by default — no surprises for single user
-	assert.False(t, svc.SettingsSvc.GetBool(service.SettingRateLimitEnabled))
+	assert.False(t, svc.SettingsSvc.GetBool(settings.SettingRateLimitEnabled))
 
 	// Resource limits not required — newbie shouldn't need to know about memory limits
-	assert.False(t, svc.SettingsSvc.GetBool(service.SettingRequireMemoryLimit))
-	assert.False(t, svc.SettingsSvc.GetBool(service.SettingRequireCPULimit))
-	assert.False(t, svc.SettingsSvc.GetBool(service.SettingRequireStorageLimit))
+	assert.False(t, svc.SettingsSvc.GetBool(settings.SettingRequireMemoryLimit))
+	assert.False(t, svc.SettingsSvc.GetBool(settings.SettingRequireCPULimit))
+	assert.False(t, svc.SettingsSvc.GetBool(settings.SettingRequireStorageLimit))
 }
 
 func TestScenario_Newbie_SFTPLogin(t *testing.T) {
@@ -263,15 +264,15 @@ func TestScenario_Business_ModeEnforcesSecureDefaults(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	log := testutil.TestLogger()
 
-	svc := service.NewSettingsServiceWithMode(db, log, service.ModeBusiness)
+	svc := settings.NewSettingsServiceWithMode(db, log, settings.ModeBusiness)
 
 	// Business mode should enforce secure-by-default
-	assert.True(t, svc.GetBool(service.SettingAuthEnabled), "business mode must enable auth")
-	assert.False(t, svc.GetBool(service.SettingLocalhostBypass), "business mode must disable localhost bypass")
-	assert.True(t, svc.GetBool(service.SettingRateLimitEnabled), "business mode must enable rate limiting")
-	assert.True(t, svc.GetBool(service.SettingRequireMemoryLimit), "business mode must require memory limits")
-	assert.True(t, svc.GetBool(service.SettingRequireCPULimit), "business mode must require CPU limits")
-	assert.True(t, svc.GetBool(service.SettingRequireStorageLimit), "business mode must require storage limits")
+	assert.True(t, svc.GetBool(settings.SettingAuthEnabled), "business mode must enable auth")
+	assert.False(t, svc.GetBool(settings.SettingLocalhostBypass), "business mode must disable localhost bypass")
+	assert.True(t, svc.GetBool(settings.SettingRateLimitEnabled), "business mode must enable rate limiting")
+	assert.True(t, svc.GetBool(settings.SettingRequireMemoryLimit), "business mode must require memory limits")
+	assert.True(t, svc.GetBool(settings.SettingRequireCPULimit), "business mode must require CPU limits")
+	assert.True(t, svc.GetBool(settings.SettingRequireStorageLimit), "business mode must require storage limits")
 }
 
 func TestScenario_Business_ResourceLimitsRequired(t *testing.T) {
@@ -281,9 +282,9 @@ func TestScenario_Business_ResourceLimitsRequired(t *testing.T) {
 	ctx := testutil.TestContext()
 
 	// Enable business-style requirements
-	svc.SettingsSvc.Set(service.SettingRequireMemoryLimit, true)
-	svc.SettingsSvc.Set(service.SettingRequireCPULimit, true)
-	svc.SettingsSvc.Set(service.SettingRequireStorageLimit, true)
+	svc.SettingsSvc.Set(settings.SettingRequireMemoryLimit, true)
+	svc.SettingsSvc.Set(settings.SettingRequireCPULimit, true)
+	svc.SettingsSvc.Set(settings.SettingRequireStorageLimit, true)
 
 	// Create without limits — should fail
 	gs := &model.Gameserver{

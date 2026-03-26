@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/controller"
 	"compress/gzip"
 	"context"
@@ -22,12 +23,12 @@ type BackupService struct {
 	gameserverSvc *GameserverService
 	gameStore     *games.GameStore
 	store         BackupStore
-	settingsSvc   *SettingsService
+	settingsSvc   *settings.SettingsService
 	broadcaster   *controller.EventBus
 	log           *slog.Logger
 }
 
-func NewBackupService(db *sql.DB, dispatcher *worker.Dispatcher, gameserverSvc *GameserverService, gameStore *games.GameStore, store BackupStore, settingsSvc *SettingsService, broadcaster *controller.EventBus, log *slog.Logger) *BackupService {
+func NewBackupService(db *sql.DB, dispatcher *worker.Dispatcher, gameserverSvc *GameserverService, gameStore *games.GameStore, store BackupStore, settingsSvc *settings.SettingsService, broadcaster *controller.EventBus, log *slog.Logger) *BackupService {
 	return &BackupService{db: db, dispatcher: dispatcher, gameserverSvc: gameserverSvc, gameStore: gameStore, store: store, settingsSvc: settingsSvc, broadcaster: broadcaster, log: log}
 }
 
@@ -383,7 +384,7 @@ func (s *BackupService) DeleteBackupsByGameserver(ctx context.Context, gameserve
 
 // enforceRetention deletes the oldest backups if the gameserver has reached its retention limit.
 func (s *BackupService) enforceRetention(ctx context.Context, gameserverID string) error {
-	maxBackups := s.settingsSvc.GetInt(SettingMaxBackups)
+	maxBackups := s.settingsSvc.GetInt(settings.SettingMaxBackups)
 
 	// Per-gameserver override takes precedence over global setting
 	if gs, err := model.GetGameserver(s.db, gameserverID); err == nil && gs != nil && gs.BackupLimit != nil {

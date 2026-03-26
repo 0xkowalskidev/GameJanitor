@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/controller/auth"
 	"github.com/warsmite/gamejanitor/controller"
 	"database/sql"
@@ -19,7 +20,7 @@ type ServiceBundle struct {
 	Registry      *worker.Registry
 	Dispatcher    *worker.Dispatcher
 	Broadcaster   *controller.EventBus
-	SettingsSvc   *service.SettingsService
+	SettingsSvc   *settings.SettingsService
 	GameserverSvc *service.GameserverService
 	QuerySvc      *service.QueryService
 	StatsPoller   *service.StatsPoller
@@ -48,7 +49,7 @@ func NewTestServices(t *testing.T) *ServiceBundle {
 	registry := worker.NewRegistry(db, log)
 	dispatcher := worker.NewDispatcher(registry, db, log)
 	broadcaster := controller.NewEventBus()
-	settingsSvc := service.NewSettingsService(db, log)
+	settingsSvc := settings.NewSettingsService(db, log)
 
 	dataDir := t.TempDir()
 	backupStore := service.NewLocalStore(dataDir)

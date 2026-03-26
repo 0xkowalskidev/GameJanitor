@@ -1,13 +1,13 @@
 package service_test
 
 import (
+	"github.com/warsmite/gamejanitor/controller/settings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/warsmite/gamejanitor/model"
-	"github.com/warsmite/gamejanitor/service"
 	"github.com/warsmite/gamejanitor/testutil"
 )
 
@@ -79,7 +79,7 @@ func TestResourceEnforcement_RequireMemoryLimitSetting(t *testing.T) {
 	ctx := testutil.TestContext()
 
 	// Enable the require_memory_limit setting
-	require.NoError(t, svc.SettingsSvc.Set(service.SettingRequireMemoryLimit, true))
+	require.NoError(t, svc.SettingsSvc.Set(settings.SettingRequireMemoryLimit, true))
 
 	gs := &model.Gameserver{
 		Name:          "No Memory Set",
@@ -98,7 +98,7 @@ func TestResourceEnforcement_RequireCPULimitSetting(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	ctx := testutil.TestContext()
 
-	require.NoError(t, svc.SettingsSvc.Set(service.SettingRequireCPULimit, true))
+	require.NoError(t, svc.SettingsSvc.Set(settings.SettingRequireCPULimit, true))
 
 	// CPU has no game default, so zero stays zero
 	gs := &model.Gameserver{
@@ -118,7 +118,7 @@ func TestResourceEnforcement_RequireStorageLimitSetting(t *testing.T) {
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	ctx := testutil.TestContext()
 
-	require.NoError(t, svc.SettingsSvc.Set(service.SettingRequireStorageLimit, true))
+	require.NoError(t, svc.SettingsSvc.Set(settings.SettingRequireStorageLimit, true))
 
 	gs := &model.Gameserver{
 		Name:   "No Storage Set",

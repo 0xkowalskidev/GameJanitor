@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/controller/auth"
 	"github.com/warsmite/gamejanitor/controller"
 	"context"
@@ -30,14 +31,14 @@ type GameserverService struct {
 	log          *slog.Logger
 	broadcaster  *controller.EventBus
 	readyWatcher *ReadyWatcher
-	settingsSvc  *SettingsService
+	settingsSvc  *settings.SettingsService
 	gameStore    *games.GameStore
 	store        BackupStore
 	dataDir      string
 	placementMu  sync.Mutex // serializes port allocation + gameserver creation to prevent races
 }
 
-func NewGameserverService(db *sql.DB, dispatcher *worker.Dispatcher, broadcaster *controller.EventBus, settingsSvc *SettingsService, gameStore *games.GameStore, dataDir string, log *slog.Logger) *GameserverService {
+func NewGameserverService(db *sql.DB, dispatcher *worker.Dispatcher, broadcaster *controller.EventBus, settingsSvc *settings.SettingsService, gameStore *games.GameStore, dataDir string, log *slog.Logger) *GameserverService {
 	return &GameserverService{db: db, dispatcher: dispatcher, broadcaster: broadcaster, settingsSvc: settingsSvc, gameStore: gameStore, dataDir: dataDir, log: log}
 }
 
@@ -181,13 +182,13 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *model.Game
 	}
 
 	// Enforce require_* settings
-	if s.settingsSvc.GetBool(SettingRequireMemoryLimit) && gs.MemoryLimitMB <= 0 {
+	if s.settingsSvc.GetBool(settings.SettingRequireMemoryLimit) && gs.MemoryLimitMB <= 0 {
 		return "", controller.ErrBadRequest("memory_limit_mb must be > 0 (require_memory_limit is enabled)")
 	}
-	if s.settingsSvc.GetBool(SettingRequireCPULimit) && gs.CPULimit <= 0 {
+	if s.settingsSvc.GetBool(settings.SettingRequireCPULimit) && gs.CPULimit <= 0 {
 		return "", controller.ErrBadRequest("cpu_limit must be > 0 (require_cpu_limit is enabled)")
 	}
-	if s.settingsSvc.GetBool(SettingRequireStorageLimit) && (gs.StorageLimitMB == nil || *gs.StorageLimitMB <= 0) {
+	if s.settingsSvc.GetBool(settings.SettingRequireStorageLimit) && (gs.StorageLimitMB == nil || *gs.StorageLimitMB <= 0) {
 		return "", controller.ErrBadRequest("storage_limit_mb must be > 0 (require_storage_limit is enabled)")
 	}
 
@@ -401,13 +402,13 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *model.Game
 	}
 
 	// Enforce require_* settings
-	if s.settingsSvc.GetBool(SettingRequireMemoryLimit) && existing.MemoryLimitMB <= 0 {
+	if s.settingsSvc.GetBool(settings.SettingRequireMemoryLimit) && existing.MemoryLimitMB <= 0 {
 		return false, controller.ErrBadRequest("memory_limit_mb must be > 0 (require_memory_limit is enabled)")
 	}
-	if s.settingsSvc.GetBool(SettingRequireCPULimit) && existing.CPULimit <= 0 {
+	if s.settingsSvc.GetBool(settings.SettingRequireCPULimit) && existing.CPULimit <= 0 {
 		return false, controller.ErrBadRequest("cpu_limit must be > 0 (require_cpu_limit is enabled)")
 	}
-	if s.settingsSvc.GetBool(SettingRequireStorageLimit) && (existing.StorageLimitMB == nil || *existing.StorageLimitMB <= 0) {
+	if s.settingsSvc.GetBool(settings.SettingRequireStorageLimit) && (existing.StorageLimitMB == nil || *existing.StorageLimitMB <= 0) {
 		return false, controller.ErrBadRequest("storage_limit_mb must be > 0 (require_storage_limit is enabled)")
 	}
 

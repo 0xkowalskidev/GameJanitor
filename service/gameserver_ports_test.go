@@ -1,6 +1,7 @@
 package service_test
 
 import (
+	"github.com/warsmite/gamejanitor/controller/settings"
 	"encoding/json"
 	"sync"
 	"testing"
@@ -9,7 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/warsmite/gamejanitor/model"
-	"github.com/warsmite/gamejanitor/service"
 	"github.com/warsmite/gamejanitor/testutil"
 )
 
@@ -96,8 +96,8 @@ func TestPortAllocation_ContiguousBlock(t *testing.T) {
 	ctx := testutil.TestContext()
 
 	// Small port range: 27000-27010, test game needs 2 ports
-		svc.SettingsSvc.Set(service.SettingPortRangeStart, 27000)
-	svc.SettingsSvc.Set(service.SettingPortRangeEnd, 27010)
+		svc.SettingsSvc.Set(settings.SettingPortRangeStart, 27000)
+	svc.SettingsSvc.Set(settings.SettingPortRangeEnd, 27010)
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 
 	gs := &model.Gameserver{
@@ -129,8 +129,8 @@ func TestPortAllocation_Exhaustion(t *testing.T) {
 	ctx := testutil.TestContext()
 
 	// Tiny range: only 2 ports, test game needs 2 — first create succeeds, second fails
-		svc.SettingsSvc.Set(service.SettingPortRangeStart, 27000)
-	svc.SettingsSvc.Set(service.SettingPortRangeEnd, 27001)
+		svc.SettingsSvc.Set(settings.SettingPortRangeStart, 27000)
+	svc.SettingsSvc.Set(settings.SettingPortRangeEnd, 27001)
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 
 	gs1 := &model.Gameserver{
@@ -176,8 +176,8 @@ func TestPortAllocation_PortsFreedOnDelete(t *testing.T) {
 	ctx := testutil.TestContext()
 
 	// Only 2 ports available — test game needs exactly 2
-		svc.SettingsSvc.Set(service.SettingPortRangeStart, 27000)
-	svc.SettingsSvc.Set(service.SettingPortRangeEnd, 27001)
+		svc.SettingsSvc.Set(settings.SettingPortRangeStart, 27000)
+	svc.SettingsSvc.Set(settings.SettingPortRangeEnd, 27001)
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 
 	gs1 := &model.Gameserver{
@@ -213,8 +213,8 @@ func TestPortAllocation_MultipleGameserversFillRange(t *testing.T) {
 	ctx := testutil.TestContext()
 
 	// Range of 10 ports, test game needs 2 each — should fit 5 gameservers
-		svc.SettingsSvc.Set(service.SettingPortRangeStart, 27000)
-	svc.SettingsSvc.Set(service.SettingPortRangeEnd, 27009)
+		svc.SettingsSvc.Set(settings.SettingPortRangeStart, 27000)
+	svc.SettingsSvc.Set(settings.SettingPortRangeEnd, 27009)
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 
 	allPorts := make(map[int]bool)
@@ -254,8 +254,8 @@ func TestPortAllocation_ConcurrentCreates(t *testing.T) {
 	ctx := testutil.TestContext()
 
 	// 20 ports, 2 per gameserver = room for 10. Launch 10 goroutines.
-		svc.SettingsSvc.Set(service.SettingPortRangeStart, 27000)
-	svc.SettingsSvc.Set(service.SettingPortRangeEnd, 27019)
+		svc.SettingsSvc.Set(settings.SettingPortRangeStart, 27000)
+	svc.SettingsSvc.Set(settings.SettingPortRangeEnd, 27019)
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 
 	const n = 10

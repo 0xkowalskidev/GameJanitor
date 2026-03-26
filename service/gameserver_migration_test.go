@@ -1,13 +1,13 @@
 package service_test
 
 import (
+	"github.com/warsmite/gamejanitor/controller/settings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/warsmite/gamejanitor/model"
-	"github.com/warsmite/gamejanitor/service"
 	"github.com/warsmite/gamejanitor/testutil"
 )
 
@@ -162,7 +162,7 @@ func TestMigration_PortsPreservedInClusterScope(t *testing.T) {
 func TestMigration_PortsReallocatedInNodeScope(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
-	svc.SettingsSvc.Set(service.SettingPortUniqueness, "node")
+	svc.SettingsSvc.Set(settings.SettingPortUniqueness, "node")
 	testutil.RegisterFakeWorker(t, svc, "worker-1")
 	testutil.RegisterFakeWorker(t, svc, "worker-2")
 	ctx := testutil.TestContext()

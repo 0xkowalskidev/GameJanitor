@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/controller"
 	"context"
 	"encoding/json"
@@ -13,12 +14,12 @@ import (
 )
 
 type WorkshopSource struct {
-	settingsSvc *SettingsService
+	settingsSvc *settings.SettingsService
 	client      *http.Client
 	log         *slog.Logger
 }
 
-func NewWorkshopSource(settingsSvc *SettingsService, log *slog.Logger) *WorkshopSource {
+func NewWorkshopSource(settingsSvc *settings.SettingsService, log *slog.Logger) *WorkshopSource {
 	return &WorkshopSource{
 		settingsSvc: settingsSvc,
 		client:      &http.Client{Timeout: 15 * time.Second},

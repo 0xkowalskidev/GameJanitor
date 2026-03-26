@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/controller"
 	"encoding/json"
 	"fmt"
@@ -15,7 +16,7 @@ import (
 // In node scope: checks only the given node.
 func (s *GameserverService) UsedHostPorts(nodeID string, excludeID string) (map[int]bool, error) {
 	var filter model.GameserverFilter
-	if s.settingsSvc.GetString(SettingPortUniqueness) == "node" {
+	if s.settingsSvc.GetString(settings.SettingPortUniqueness) == "node" {
 		filter.NodeID = &nodeID
 	}
 
@@ -43,7 +44,7 @@ func (s *GameserverService) UsedHostPorts(nodeID string, excludeID string) (map[
 }
 
 func (s *GameserverService) portRange() (int, int) {
-	return s.settingsSvc.GetInt(SettingPortRangeStart), s.settingsSvc.GetInt(SettingPortRangeEnd)
+	return s.settingsSvc.GetInt(settings.SettingPortRangeStart), s.settingsSvc.GetInt(settings.SettingPortRangeEnd)
 }
 
 // checkWorkerLimits returns an error if the worker has exceeded its configured resource limits.

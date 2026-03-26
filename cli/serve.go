@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/controller/auth"
 	"github.com/warsmite/gamejanitor/controller"
 	"context"
@@ -112,7 +113,7 @@ func loadConfig(cmd *cobra.Command) (config.Config, error) {
 
 type services struct {
 	broadcaster   *controller.EventBus
-	settingsSvc   *service.SettingsService
+	settingsSvc   *settings.SettingsService
 	gameserverSvc *service.GameserverService
 	querySvc      *service.QueryService
 	statsPoller   *service.StatsPoller
@@ -132,7 +133,7 @@ type services struct {
 
 func initServices(database *sql.DB, dispatcher *worker.Dispatcher, registry *worker.Registry, gameStore *games.GameStore, cfg config.Config, logger *slog.Logger) (*services, error) {
 	broadcaster := controller.NewEventBus()
-	settingsSvc := service.NewSettingsServiceWithMode(database, logger, cfg.Mode)
+	settingsSvc := settings.NewSettingsServiceWithMode(database, logger, cfg.Mode)
 
 	// Apply config file runtime settings to DB on every startup
 	settingsSvc.ApplyConfig(cfg.Settings)
@@ -286,7 +287,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 	// Prune old events on startup, then hourly
 	go func() {
-		retDays := svcs.settingsSvc.GetInt(service.SettingEventRetention)
+		retDays := svcs.settingsSvc.GetInt(settings.SettingEventRetention)
 		if retDays > 0 {
 			if pruned, err := model.PruneEvents(database, retDays); err != nil {
 				logger.Error("failed to prune events on startup", "error", err)
@@ -297,7 +298,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		ticker := time.NewTicker(time.Hour)
 		defer ticker.Stop()
 		for range ticker.C {
-			days := svcs.settingsSvc.GetInt(service.SettingEventRetention)
+			days := svcs.settingsSvc.GetInt(settings.SettingEventRetention)
 			if days > 0 {
 				if pruned, err := model.PruneEvents(database, days); err != nil {
 					logger.Error("failed to prune events", "error", err)
@@ -436,7 +437,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		}()
 	}
 
-	if !isLoopback(cfg.Bind) && !svcs.settingsSvc.GetBool(service.SettingAuthEnabled) {
+	if !isLoopback(cfg.Bind) && !svcs.settingsSvc.GetBool(settings.SettingAuthEnabled) {
 		logger.Warn("listening on public address with auth disabled — anyone on your network can manage your gameservers",
 			"bind_address", cfg.Bind, "port", cfg.Port)
 	}

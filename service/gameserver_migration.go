@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/controller"
 	"compress/gzip"
 	"context"
@@ -153,7 +154,7 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 	// Update node assignment (and reallocate ports if using per-node port scope)
 	gs.NodeID = &targetNodeID
 
-	if s.settingsSvc.GetString(SettingPortUniqueness) == "node" {
+	if s.settingsSvc.GetString(settings.SettingPortUniqueness) == "node" {
 		s.placementMu.Lock()
 		game := s.gameStore.GetGame(gs.GameID)
 		if game == nil {

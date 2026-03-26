@@ -1,19 +1,19 @@
 package handler
 
 import (
+	"github.com/warsmite/gamejanitor/controller/settings"
 	"encoding/json"
 	"log/slog"
 	"net/http"
 
-	"github.com/warsmite/gamejanitor/service"
 )
 
 type SettingsAPIHandlers struct {
-	settingsSvc *service.SettingsService
+	settingsSvc *settings.SettingsService
 	log         *slog.Logger
 }
 
-func NewSettingsAPIHandlers(settingsSvc *service.SettingsService, log *slog.Logger) *SettingsAPIHandlers {
+func NewSettingsAPIHandlers(settingsSvc *settings.SettingsService, log *slog.Logger) *SettingsAPIHandlers {
 	return &SettingsAPIHandlers{settingsSvc: settingsSvc, log: log}
 }
 
