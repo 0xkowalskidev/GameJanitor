@@ -31,8 +31,8 @@ func GameserverIDFromContainerName(name string) (string, bool) {
 		return "", false
 	}
 	id := strings.TrimPrefix(name, ContainerPrefix)
-	if strings.Contains(id, "-update-") || strings.Contains(id, "-reinstall-") ||
-		strings.Contains(id, "-backup-") || strings.Contains(id, "-fileops-") {
+	if strings.HasPrefix(id, "update-") || strings.HasPrefix(id, "reinstall-") ||
+		strings.HasPrefix(id, "backup-") || strings.HasPrefix(id, "fileops-") {
 		return "", false
 	}
 	return id, true

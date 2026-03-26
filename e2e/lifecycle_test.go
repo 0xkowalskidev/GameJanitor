@@ -104,8 +104,6 @@ func TestE2E_Lifecycle_SecondStart_SkipsInstall(t *testing.T) {
 }
 
 func TestE2E_Ports_TwoDifferentPorts(t *testing.T) {
-	t.Skip("BUG: PortMode defaults to empty string, both gameservers get the same default ports (27015) and Docker reports port conflict. See TESTING_BUGS.md — PortMode bug.")
-
 	h := Start(t)
 
 	var gsIDs []string

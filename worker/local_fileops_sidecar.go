@@ -100,8 +100,21 @@ func (w *LocalWorker) sidecarExec(ctx context.Context, volumeName string, cmd []
 	return w.docker.Exec(ctx, containerID, cmd)
 }
 
+// sidecarPath resolves a relative path to an absolute container path within /data.
+// Returns an error if the resolved path escapes /data (traversal attack).
+func sidecarPath(relPath string) (string, error) {
+	resolved := filepath.Join("/data", filepath.Clean(relPath))
+	if !strings.HasPrefix(resolved, "/data") {
+		return "", fmt.Errorf("path %q escapes /data", relPath)
+	}
+	return resolved, nil
+}
+
 func (w *LocalWorker) listFilesSidecar(ctx context.Context, volumeName string, path string) ([]FileEntry, error) {
-	containerPath := filepath.Join("/data", path)
+	containerPath, err := sidecarPath(path)
+	if err != nil {
+		return nil, err
+	}
 	// Use stat with pipe-delimited format for reliable parsing (no locale/year issues)
 	// sh -c is needed for the glob expansion
 	cmd := []string{"sh", "-c", fmt.Sprintf(`stat -c '%%n|%%s|%%f|%%Y|%%F' %s/* %s/.* 2>/dev/null || true`, containerPath, containerPath)}
@@ -120,7 +133,10 @@ func (w *LocalWorker) readFileSidecar(ctx context.Context, volumeName string, pa
 	if err != nil {
 		return nil, err
 	}
-	containerPath := filepath.Join("/data", path)
+	containerPath, err := sidecarPath(path)
+	if err != nil {
+		return nil, err
+	}
 	return w.docker.CopyFromContainer(ctx, containerID, containerPath)
 }
 
@@ -129,7 +145,10 @@ func (w *LocalWorker) writeFileSidecar(ctx context.Context, volumeName string, p
 	if err != nil {
 		return err
 	}
-	containerPath := filepath.Join("/data", path)
+	containerPath, err := sidecarPath(path)
+	if err != nil {
+		return err
+	}
 	if err := w.docker.CopyToContainer(ctx, containerID, containerPath, content); err != nil {
 		return err
 	}
@@ -139,7 +158,10 @@ func (w *LocalWorker) writeFileSidecar(ctx context.Context, volumeName string, p
 }
 
 func (w *LocalWorker) deletePathSidecar(ctx context.Context, volumeName string, path string) error {
-	containerPath := filepath.Join("/data", path)
+	containerPath, err := sidecarPath(path)
+	if err != nil {
+		return err
+	}
 	exitCode, _, stderr, err := w.sidecarExec(ctx, volumeName, []string{"rm", "-rf", containerPath})
 	if err != nil {
 		return fmt.Errorf("deleting %s: %w", path, err)
@@ -151,7 +173,10 @@ func (w *LocalWorker) deletePathSidecar(ctx context.Context, volumeName string, 
 }
 
 func (w *LocalWorker) createDirectorySidecar(ctx context.Context, volumeName string, path string) error {
-	containerPath := filepath.Join("/data", path)
+	containerPath, err := sidecarPath(path)
+	if err != nil {
+		return err
+	}
 	exitCode, _, stderr, err := w.sidecarExec(ctx, volumeName, []string{"mkdir", "-p", containerPath})
 	if err != nil {
 		return fmt.Errorf("creating directory %s: %w", path, err)

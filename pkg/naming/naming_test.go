@@ -64,31 +64,22 @@ func TestNaming_GameserverIDFromContainerName_RejectsNonGameserver(t *testing.T)
 		assert.False(t, ok)
 	})
 
-	// BUG: update/fileops/backup/reinstall containers are not rejected because
-	// GameserverIDFromContainerName checks for "-update-" (with leading dash) in the
-	// trimmed ID, but after trimming the "gamejanitor-" prefix the remainder starts
-	// with "update-" (no leading dash). The Contains check never matches.
-	// e.g. "gamejanitor-update-abc" -> trimmed id = "update-abc" -> Contains("update-abc", "-update-") = false
-	t.Run("update container (known bug)", func(t *testing.T) {
-		t.Skip("BUG: update containers not rejected — checks for '-update-' but remainder is 'update-...' without leading dash")
+	t.Run("update container", func(t *testing.T) {
 		_, ok := GameserverIDFromContainerName("gamejanitor-update-abc-123")
 		assert.False(t, ok)
 	})
 
-	t.Run("fileops container (known bug)", func(t *testing.T) {
-		t.Skip("BUG: fileops containers not rejected — same leading-dash issue")
+	t.Run("fileops container", func(t *testing.T) {
 		_, ok := GameserverIDFromContainerName("gamejanitor-fileops-vol-123")
 		assert.False(t, ok)
 	})
 
-	t.Run("backup container (known bug)", func(t *testing.T) {
-		t.Skip("BUG: backup containers not rejected — same leading-dash issue")
+	t.Run("backup container", func(t *testing.T) {
 		_, ok := GameserverIDFromContainerName("gamejanitor-backup-abc-123")
 		assert.False(t, ok)
 	})
 
-	t.Run("reinstall container (known bug)", func(t *testing.T) {
-		t.Skip("BUG: reinstall containers not rejected — same leading-dash issue")
+	t.Run("reinstall container", func(t *testing.T) {
 		_, ok := GameserverIDFromContainerName("gamejanitor-reinstall-abc-123")
 		assert.False(t, ok)
 	})

@@ -14,6 +14,7 @@ import (
 	"io"
 	"io/fs"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -381,6 +382,19 @@ func runServe(cmd *cobra.Command, args []string) error {
 			}
 		}
 
+		// Generate TLS cert for the local worker directly from the in-memory CA.
+		// This avoids the enrollment RPC round-trip and eliminates stale cert issues
+		// when the CA is regenerated — the cert always matches the current CA.
+		if caCert != nil && caKey != nil {
+			var workerIPs []net.IP
+			if ip := net.ParseIP(advertiseHost); ip != nil {
+				workerIPs = append(workerIPs, ip)
+			}
+			if err := generateLocalWorkerCert(cfg.DataDir, caCert, caKey, workerIPs, logger); err != nil {
+				return fmt.Errorf("failed to generate local worker TLS cert: %w", err)
+			}
+		}
+
 		workerCfg := config.Config{
 			Bind:              cfg.Bind,
 			Controller:        false,
@@ -532,6 +546,34 @@ func openBrowser(url string) {
 		return
 	}
 	cmd.Start()
+}
+
+// generateLocalWorkerCert generates a TLS cert for the local worker from the
+// controller's in-memory CA and writes it to {dataDir}/certs/. This is picked
+// up by loadWorkerTLS via auto-discovery, so the local worker skips enrollment.
+// Regenerated every startup to guarantee the cert matches the current CA.
+func generateLocalWorkerCert(dataDir string, caCert *x509.Certificate, caKey *ecdsa.PrivateKey, workerIPs []net.IP, logger *slog.Logger) error {
+	caPEM, certPEM, keyPEM, err := tlsutil.GenerateWorkerCertPEM("_local", caCert, caKey, workerIPs)
+	if err != nil {
+		return fmt.Errorf("generating cert: %w", err)
+	}
+
+	certsDir := filepath.Join(dataDir, "certs")
+	if err := os.MkdirAll(certsDir, 0700); err != nil {
+		return fmt.Errorf("creating certs directory: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(certsDir, "ca.pem"), caPEM, 0644); err != nil {
+		return fmt.Errorf("writing CA cert: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(certsDir, "cert.pem"), certPEM, 0644); err != nil {
+		return fmt.Errorf("writing cert: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(certsDir, "key.pem"), keyPEM, 0600); err != nil {
+		return fmt.Errorf("writing key: %w", err)
+	}
+
+	logger.Info("generated local worker TLS cert from controller CA")
+	return nil
 }
 
 func webUIFS(cfg config.Config) fs.FS {
