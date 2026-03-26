@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/warsmite/gamejanitor/pkg/naming"
 	"github.com/warsmite/gamejanitor/worker"
 )
 
@@ -58,6 +59,21 @@ func NewFakeWorker(t *testing.T) *FakeWorker {
 	}
 
 	return fw
+}
+
+// AddFakeContainer injects a running container into the FakeWorker without going
+// through the full Start lifecycle. Used in tests that need a container to exist
+// without triggering lifecycle events.
+func (w *FakeWorker) AddFakeContainer(gameserverID string) string {
+	id := fmt.Sprintf("fake-%s-%d", gameserverID, time.Now().UnixNano())
+	w.mu.Lock()
+	w.containers[id] = &fakeContainer{
+		id:    id,
+		name:  naming.ContainerName(gameserverID),
+		state: "running",
+	}
+	w.mu.Unlock()
+	return id
 }
 
 // FailNext causes the next call to the named method to return the given error.

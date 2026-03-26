@@ -81,16 +81,16 @@ func TestRecovery_StoppedInDB_NoAction(t *testing.T) {
 func TestRecovery_RunningInDB_ContainerRunning(t *testing.T) {
 	t.Parallel()
 	svc := testutil.NewTestServices(t)
-	testutil.RegisterFakeWorker(t, svc, "worker-1")
+	fw := testutil.RegisterFakeWorker(t, svc, "worker-1")
 	gs := testutil.CreateTestGameserver(t, svc)
 
-	// Start the gameserver so it gets a container
-	require.NoError(t, svc.GameserverSvc.Start(testutil.TestContext(), gs.ID))
-
-	// Set status to "running" in DB
+	// Set up state directly to avoid race with StatusSubscriber processing
+	// lifecycle events from a real Start() call.
+	containerID := fw.AddFakeContainer(gs.ID)
 	s := store.New(svc.DB)
 	fetched, _ := svc.GameserverSvc.GetGameserver(gs.ID)
 	fetched.Status = controller.StatusRunning
+	fetched.ContainerID = &containerID
 	require.NoError(t, s.UpdateGameserver(fetched))
 
 	// Container is "running" in fake worker — recovery should re-attach (set to "started")
