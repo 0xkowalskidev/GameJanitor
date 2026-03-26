@@ -7,6 +7,7 @@ export default defineConfig({
     alias: {
       '$lib': '/src/lib',
     },
+    extensions: ['.mjs', '.js', '.ts', '.svelte.ts', '.jsx', '.tsx', '.json', '.svelte'],
   },
   server: {
     proxy: {
