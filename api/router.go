@@ -1,6 +1,7 @@
 package api
 
 import (
+	"github.com/warsmite/gamejanitor/controller/event"
 	"github.com/warsmite/gamejanitor/controller/settings"
 	"github.com/warsmite/gamejanitor/controller/auth"
 	"github.com/warsmite/gamejanitor/controller"
@@ -64,7 +65,7 @@ func NewRouter(opts RouterOptions) http.Handler {
 	optionsRegistry := games.NewOptionsRegistry(opts.Log)
 	gameHandlers := handler.NewGameHandlers(opts.GameStore, optionsRegistry, opts.Log)
 	gameserverHandlers := handler.NewGameserverHandlers(opts.GameserverSvc, opts.ConsoleSvc, opts.QuerySvc, opts.StatsPoller, opts.Log)
-	eventHistorySvc := service.NewEventHistoryService(opts.DB)
+	eventHistorySvc := event.NewEventHistoryService(opts.DB)
 	eventHandlers := handler.NewEventHandlers(opts.Broadcaster, eventHistorySvc, opts.Log)
 	scheduleHandlers := handler.NewScheduleHandlers(opts.ScheduleSvc, opts.Log)
 	backupHandlers := handler.NewBackupHandlers(opts.BackupSvc, opts.Log)
