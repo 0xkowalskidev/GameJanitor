@@ -144,10 +144,6 @@ func printSDKGameDetails(g *gamejanitor.Game) {
 		fmt.Println("Settings (--env KEY=VALUE):")
 		w := newTabWriter()
 		for _, e := range visible {
-			label := e.Label
-			if label == "" {
-				label = e.Key
-			}
 			def := e.Default
 			if def == "" {
 				def = "(none)"
@@ -160,7 +156,7 @@ func printSDKGameDetails(g *gamejanitor.Game) {
 			if len(e.Options) > 0 {
 				opts = "[" + joinStrings(e.Options) + "]"
 			}
-			fmt.Fprintf(w, "  %s\t%s\tdefault: %s\t%s%s\n", e.Key, label, def, opts, required)
+			fmt.Fprintf(w, "  %s\tdefault: %s\t%s%s\n", e.Key, def, opts, required)
 		}
 		w.Flush()
 	}
@@ -197,10 +193,6 @@ func printLocalGameDetails(g *games.Game) {
 		fmt.Println("Settings (--env KEY=VALUE):")
 		w := newTabWriter()
 		for _, e := range visible {
-			label := e.Label
-			if label == "" {
-				label = e.Key
-			}
 			def := e.Default
 			if def == "" {
 				def = "(none)"
@@ -213,7 +205,7 @@ func printLocalGameDetails(g *games.Game) {
 			if len(e.Options) > 0 {
 				opts = "[" + strings.Join(e.Options, ", ") + "]"
 			}
-			fmt.Fprintf(w, "  %s\t%s\tdefault: %s\t%s%s\n", e.Key, label, def, opts, required)
+			fmt.Fprintf(w, "  %s\tdefault: %s\t%s%s\n", e.Key, def, opts, required)
 		}
 		w.Flush()
 	}
