@@ -691,6 +691,14 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 		s.log.Warn("failed to list backups for store cleanup", "id", id, "error", err)
 	}
 
+	// Record activity and publish event before delete — the FK reference
+	// must exist when the activity row is inserted.
+	s.store.PopulateNode(gs)
+	deleteActor := controller.ActorFromContext(ctx)
+	deleteActorJSON, _ := json.Marshal(deleteActor)
+	deleteDataJSON, _ := json.Marshal(gs)
+	s.recordInstant(&gs.ID, controller.EventGameserverDelete, deleteActorJSON, deleteDataJSON)
+
 	if err := s.store.DeleteGameserver(id); err != nil {
 		return err
 	}
@@ -702,8 +710,6 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 		}
 	}
 
-	s.store.PopulateNode(gs)
-	deleteActor := controller.ActorFromContext(ctx)
 	s.broadcaster.Publish(controller.GameserverActionEvent{
 		Type:         controller.EventGameserverDelete,
 		Timestamp:    time.Now(),
@@ -711,10 +717,6 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 		GameserverID: gs.ID,
 		Gameserver:   gs,
 	})
-
-	deleteActorJSON, _ := json.Marshal(deleteActor)
-	deleteDataJSON, _ := json.Marshal(gs)
-	s.recordInstant(&gs.ID, controller.EventGameserverDelete, deleteActorJSON, deleteDataJSON)
 
 	return nil
 }

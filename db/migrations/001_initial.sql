@@ -87,7 +87,7 @@ CREATE TABLE worker_nodes (
 
 CREATE TABLE activity (
     id TEXT PRIMARY KEY,
-    gameserver_id TEXT REFERENCES gameservers(id) ON DELETE CASCADE,
+    gameserver_id TEXT REFERENCES gameservers(id) ON DELETE SET NULL,
     worker_id TEXT NOT NULL DEFAULT '',
     type TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'running',
