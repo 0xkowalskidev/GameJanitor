@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 	gamejanitor "github.com/warsmite/gamejanitor/sdk"
@@ -192,6 +193,21 @@ var statusCmd = &cobra.Command{
 			fmt.Printf("  State:      %s\n", status.Container.State)
 			fmt.Printf("  Started:    %s\n", status.Container.StartedAt)
 		}
+
+		// Show live query data if the server is running
+		query, err := getClient().Gameservers.Query(ctx(), gsID)
+		if err == nil && query.PlayersOnline >= 0 {
+			fmt.Printf("Players:     %d/%d\n", query.PlayersOnline, query.MaxPlayers)
+			if len(query.Players) > 0 {
+				fmt.Printf("Online:      %s\n", strings.Join(query.Players, ", "))
+			}
+			if query.Map != "" {
+				fmt.Printf("Map:         %s\n", query.Map)
+			}
+			if query.Version != "" {
+				fmt.Printf("Version:     %s\n", query.Version)
+			}
+		}
 		return nil
 	},
 }
@@ -213,9 +229,15 @@ func runStatusOverview() error {
 	}
 
 	w := newTabWriter()
-	fmt.Fprintln(w, "NAME\tGAME\tSTATUS")
+	fmt.Fprintln(w, "NAME\tGAME\tSTATUS\tPLAYERS")
 	for _, gs := range resp.Gameservers {
-		fmt.Fprintf(w, "%s\t%s\t%s\n", gs.Name, gs.GameID, colorStatus(gs.Status))
+		players := ""
+		if gs.Status == "running" || gs.Status == "started" {
+			if q, err := getClient().Gameservers.Query(ctx(), gs.ID); err == nil {
+				players = fmt.Sprintf("%d/%d", q.PlayersOnline, q.MaxPlayers)
+			}
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", gs.Name, gs.GameID, colorStatus(gs.Status), players)
 	}
 	w.Flush()
 	return nil
