@@ -17,9 +17,10 @@ minecraft-java/
   scripts/        # Shell scripts that run inside the container
     install-server
     start-server
+    stop-server
     send-command
     save-server
-    update-server  (optional)
+    update-server
   assets/         # UI images
     icon.ico
   defaults/       # Default config files copied on first run (optional)
@@ -48,8 +49,8 @@ ports:
   - name: game
     port: 25565
     protocol: tcp
-  - name: query                        # Explicit query port (optional, defaults to game port)
-    port: 25565
+  - name: rcon
+    port: 25575
     protocol: tcp
 
 # Query config — used by gjq for server status queries
@@ -61,9 +62,6 @@ query:
     client_id: "..."
     client_secret: "..."
     deployment_id: "..."
-    use_external_auth: true
-    attributes:
-      name: NAME_s
 
 # Container config — used by gamejanitor for hosting (omit for query-only games)
 container:
@@ -76,7 +74,13 @@ container:
       default: "false"
       label: "Accept Minecraft EULA"
       type: boolean
+      group: server
       consent_required: true
+      notice: "You must agree to the [Minecraft EULA](https://aka.ms/MinecraftEULA)"
+    - key: RCON_PASSWORD
+      default: ""
+      autogenerate: password
+      group: server
     - key: SERVER_PORT
       default: "25565"
       system: true
@@ -109,11 +113,15 @@ assets:
 
 | Field | Description |
 |-------|-------------|
-| `system: true` | Hidden from users, set automatically |
-| `autogenerate: password` | Auto-generates a random value on gameserver creation |
-| `required: true` | Must be set before the server can start |
+| `system: true` | Internal, hidden from users. Used for ports, timeouts, etc. |
+| `hidden: true` | Exists but not shown in UI. Used for internal toggles (e.g. MODLOADER, OXIDE_ENABLED) |
+| `autogenerate: password` | Auto-generates a random value on gameserver creation if not set |
+| `required: true` | Must be set before the server can start. Unused by built-in games — all have defaults. For custom games needing user-provided values (e.g. license keys). |
+| `consent_required: true` | Requires explicit user consent (e.g. EULA acceptance) |
 | `triggers_install: true` | Changing this value triggers a full reinstall |
-| `consent_required: true` | Requires explicit user consent (e.g. EULA) |
+| `group: <name>` | Groups env vars in the UI (e.g. "server", "gameplay", "world", "performance") |
+| `notice: "<markdown>"` | Help text shown below the field in the UI |
+| `dynamic_options` | Options loaded at runtime from an external source (e.g. Mojang version API) |
 
 ## Script Interface
 
@@ -121,26 +129,87 @@ Scripts run inside a Docker container with the game's base image. They are bind-
 
 | Script | When it runs | Purpose |
 |--------|-------------|---------|
-| `install-server` | First start (when `/data/.installed` doesn't exist) | Download and install the game server |
-| `start-server` | Every start | Launch the game server process |
-| `send-command` | User sends a console command | Execute a command (e.g. via RCON) |
-| `save-server` | Before backups, before graceful stop | Trigger a world save |
+| `install-server` | First start (SKIP_INSTALL not set) | Download and install the game server |
+| `start-server` | Every start | Configure and launch the game server process |
+| `stop-server` | Before container stop | Announce shutdown, save world, prepare for SIGTERM |
+| `send-command` | User sends a console command | Execute a command via RCON or stdin pipe |
+| `save-server` | Before backups | Trigger a world save |
 | `update-server` | User clicks "Update" | Update the game server to latest version |
+
+### Script Conventions
+
+Every script must follow these conventions:
+
+**Structure:**
+```bash
+#!/bin/bash
+set -e  # Required for install-server and start-server. Optional for stop/save/send.
+```
+
+**Logging — always use `[script-name]` prefix:**
+```bash
+# install-server
+echo "[install-server] installing <game name> via <SteamCMD|API|GitHub>"
+echo "[install-server] <game name> installed"
+
+# start-server — log config summary, then "starting"
+echo "[start-server] config: <key=val pairs of important user-facing settings>"
+echo "[start-server] starting <game name>"
+
+# stop-server
+echo "[stop-server] announcing shutdown"
+echo "[stop-server] save complete, ready for shutdown"
+
+# save-server
+echo "[save-server] saving world"
+echo "[save-server] save complete"
+
+# Errors
+echo "[start-server] ERROR: <what went wrong>"
+```
+
+**Never log passwords or secrets.**
+
+**start-server must:**
+1. Write/update config files from env vars
+2. Log a config summary with key settings
+3. Log "starting <game name>"
+4. Use `exec` to launch the game binary (so it becomes PID 1)
+
+**stop-server must:**
+1. Announce shutdown to players via RCON/chat (if available)
+2. Trigger a world save (if available)
+3. Exit — Docker sends SIGTERM after this script completes
+
+**install-server must:**
+1. Download the game server binary/files
+2. Log progress for long operations
+3. The entrypoint prints `[gamejanitor:installed]` after this script succeeds
+
+**send-command patterns:**
+- RCON games: `rcon -a "localhost:${RCON_PORT}" -p "$RCON_PASSWORD" "$1"`
+- FIFO games: `echo "$1" > /tmp/cmd-input`
+- No support: `echo "[send-command] <game> does not support remote commands"; exit 1`
+
+**Env var defaults:**
+- Use `${VAR:-default}` for optional values with sensible defaults
+- Don't provide fallback defaults for autogenerated values (passwords) — they will always be set
+- Port defaults should match the game.yaml port definitions
 
 ## Base Images
 
-<!-- TODO: migrate base images to ghcr.io/gamejanitor when going public -->
-
 | Image | Contents | Used by |
 |-------|----------|---------|
-| `ghcr.io/warsmite/gamejanitor/base` | Ubuntu 24.04, curl, wget, entrypoint | Minecraft Bedrock |
-| `ghcr.io/warsmite/gamejanitor/steamcmd` | base + SteamCMD, rcon-cli, 32-bit libs | Most games (Rust, CS2, ARK, etc.) |
-| `ghcr.io/warsmite/gamejanitor/java` | base + JDK 21 | Minecraft Java |
+| `ghcr.io/warsmite/gamejanitor/base` | Ubuntu 24.04, curl, wget, rcon-cli, entrypoint | Minecraft Bedrock |
+| `ghcr.io/warsmite/gamejanitor/steamcmd` | base + SteamCMD, 32-bit libs | Most games (Rust, CS2, ARK, etc.) |
+| `ghcr.io/warsmite/gamejanitor/java` | base + OpenJDK 8, 17, 21, 25 | Minecraft Java |
 | `ghcr.io/warsmite/gamejanitor/dotnet` | base + .NET 9 | Terraria |
 
 ## Adding a Custom Game
 
 1. Create a directory in `{dataDir}/games/` with your game ID
 2. Add a `game.yaml` with at least `id`, `name`, `ports`, and a `container:` section
-3. Add scripts (`install-server` and `start-server` are required)
+3. Add scripts (`install-server` and `start-server` are required, `stop-server` recommended)
 4. Restart Gamejanitor — the game appears in the UI
+
+Use `gamejanitor games get <id>` to verify your game definition loads correctly.

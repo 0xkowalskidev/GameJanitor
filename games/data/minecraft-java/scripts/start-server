@@ -39,6 +39,7 @@ update_property "enable-rcon"  "true"                              "$PROPS"
 update_property "rcon.port"    "${RCON_PORT:-25575}"               "$PROPS"
 update_property "rcon.password" "${RCON_PASSWORD}"                 "$PROPS"
 
+echo "[start-server] config: gamemode=${GAMEMODE:-survival} difficulty=${DIFFICULTY:-normal} max_players=${MAX_PLAYERS:-20} port=${SERVER_PORT:-25565}"
 echo "[start-server] updated server.properties and eula.txt"
 
 # Select Java binary based on version resolved during install

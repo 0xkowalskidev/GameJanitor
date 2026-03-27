@@ -22,6 +22,7 @@ update_property "online-mode"      "${ONLINE_MODE:-true}"                       
 update_property "allow-cheats"     "${ALLOW_CHEATS:-false}"                     "$PROPS"
 update_property "view-distance"    "${VIEW_DISTANCE:-32}"                       "$PROPS"
 
+echo "[start-server] config: gamemode=${GAMEMODE:-survival} difficulty=${DIFFICULTY:-normal} max_players=${MAX_PLAYERS:-10} port=${SERVER_PORT:-19132}"
 echo "[start-server] updated server.properties"
 
 # FIFO pipe for command input
