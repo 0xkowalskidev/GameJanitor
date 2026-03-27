@@ -70,7 +70,7 @@ func TestMultiNode_WorkerConnectAndLifecycle(t *testing.T) {
 	workerGRPCPort := freePort(t)
 
 	workerArgs := []string{"serve",
-		"--bind", "127.0.0.1",
+		"--bind", "0.0.0.0",
 		"--controller=false",
 		"--worker",
 		"--grpc-port", fmt.Sprintf("%d", workerGRPCPort),
