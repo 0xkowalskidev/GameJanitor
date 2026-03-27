@@ -2,7 +2,11 @@ package cli
 
 import (
 	"fmt"
+	"io"
+	"log/slog"
 
+	"github.com/warsmite/gamejanitor/config"
+	"github.com/warsmite/gamejanitor/games"
 	"github.com/spf13/cobra"
 )
 
@@ -19,20 +23,53 @@ var gamesListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all games",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		games, err := getClient().Games.List(ctx())
-		if err != nil {
+		// Try API first, fall back to local game store if server isn't running
+		gameList, err := getClient().Games.List(ctx())
+		if err == nil {
+			if jsonOutput {
+				printJSON(gameList)
+				return nil
+			}
+			w := newTabWriter()
+			fmt.Fprintln(w, "ID\tNAME\tALIASES")
+			for _, g := range gameList {
+				aliases := ""
+				if len(g.Aliases) > 0 {
+					for i, a := range g.Aliases {
+						if i > 0 { aliases += ", " }
+						aliases += a
+					}
+				}
+				fmt.Fprintf(w, "%s\t%s\t%s\n", g.ID, g.Name, aliases)
+			}
+			w.Flush()
+			return nil
+		}
+
+		// Fallback: load embedded game store locally
+		log := slog.New(slog.NewTextHandler(io.Discard, nil))
+		dataDir := config.DefaultConfig().DataDir
+		store, storeErr := games.NewGameStore(dataDir+"/games", log)
+		if storeErr != nil {
+			// Return original API error if local fallback also fails
 			return exitError(err)
 		}
 
+		allGames := store.ListGames()
 		if jsonOutput {
-			printJSON(games)
+			printJSON(allGames)
 			return nil
 		}
 
 		w := newTabWriter()
-		fmt.Fprintln(w, "ID\tNAME\tIMAGE")
-		for _, g := range games {
-			fmt.Fprintf(w, "%s\t%s\t%s\n", g.ID, g.Name, g.BaseImage)
+		fmt.Fprintln(w, "ID\tNAME\tALIASES")
+		for _, g := range allGames {
+			aliases := ""
+			for i, a := range g.Aliases {
+				if i > 0 { aliases += ", " }
+				aliases += a
+			}
+			fmt.Fprintf(w, "%s\t%s\t%s\n", g.ID, g.Name, aliases)
 		}
 		w.Flush()
 		return nil
