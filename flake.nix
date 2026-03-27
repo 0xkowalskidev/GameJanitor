@@ -30,8 +30,8 @@
           vendorHash = "sha256-9EFMCBKLLMU4aZUbStIRqY6W5FbD0qsGT0P7RBkm6Ds=";
           env.CGO_ENABLED = "0";
 
-          # sdk/ is a separate Go module with its own go.mod — exclude from main build
-          excludedPackages = [ "sdk" ];
+          # sdk/ and games/ are separate Go modules with their own go.mod — exclude from main build
+          excludedPackages = [ "sdk" "games" ];
 
           preBuild = ''
             rm -rf ui/dist
