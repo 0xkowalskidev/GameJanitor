@@ -71,6 +71,47 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 		return controller.ErrUnavailablef("worker unavailable for gameserver %s", id)
 	}
 
+	// Check if assigned node can fit this gameserver's resources.
+	// If not, auto-migrate to a node that can before starting.
+	if gs.NodeID != nil && *gs.NodeID != "" {
+		limitErr := s.checkWorkerLimitsExcluding(*gs.NodeID, gs.MemoryLimitMB, gs.CPULimit, ptrIntOr0(gs.StorageLimitMB), gs.ID)
+		if limitErr != nil {
+			s.log.Warn("assigned node cannot fit gameserver resources, attempting auto-migration",
+				"id", id, "node_id", *gs.NodeID, "error", limitErr)
+
+			candidates := s.dispatcher.RankWorkersForPlacement(gs.NodeTags)
+			foundNode := ""
+			for _, c := range candidates {
+				if c.NodeID == *gs.NodeID {
+					continue
+				}
+				if err := s.checkWorkerLimits(c.NodeID, gs.MemoryLimitMB, gs.CPULimit, ptrIntOr0(gs.StorageLimitMB)); err == nil {
+					foundNode = c.NodeID
+					break
+				}
+			}
+
+			if foundNode == "" {
+				return fmt.Errorf("cannot start: node %s lacks capacity and no other node can fit %d MB / %.1f CPU", *gs.NodeID, gs.MemoryLimitMB, gs.CPULimit)
+			}
+
+			s.log.Info("auto-migrating before start", "id", id, "from_node", *gs.NodeID, "to_node", foundNode)
+			if err := s.MigrateGameserver(ctx, id, foundNode); err != nil {
+				return fmt.Errorf("auto-migration before start failed: %w", err)
+			}
+
+			// Reload gameserver after migration (node_id changed)
+			gs, err = s.store.GetGameserver(id)
+			if err != nil || gs == nil {
+				return fmt.Errorf("reloading gameserver after migration: %w", err)
+			}
+			w = s.dispatcher.WorkerFor(id)
+			if w == nil {
+				return controller.ErrUnavailablef("worker unavailable after migration for gameserver %s", id)
+			}
+		}
+	}
+
 	workerID := ""
 	if gs.NodeID != nil {
 		workerID = *gs.NodeID
