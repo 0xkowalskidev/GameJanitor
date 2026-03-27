@@ -142,7 +142,7 @@ func (m *StatusManager) RecoverOnStartup(ctx context.Context) error {
 	}
 
 	if withContainer > 0 && containerMissing == withContainer {
-		m.log.Warn("all gameserver containers are missing — did you switch container runtimes (Docker ↔ Podman)? Volumes may need manual migration",
+		m.log.Warn("all gameserver containers are missing — did you switch container runtimes? Volumes may need manual migration",
 			"expected_containers", withContainer,
 		)
 	}

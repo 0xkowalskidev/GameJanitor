@@ -90,7 +90,7 @@ func detectLANIP(log *slog.Logger) string {
 
 			// Prefer 192.168.x.x and 172.16-31.x.x (with /24 or smaller subnets)
 			// over 10.x.x.x, since 10.x.x.x is commonly used by VPNs.
-			// Docker/Podman use large subnets (/16, /20) in the 172.x range,
+			// Docker uses large subnets (/16, /20) in the 172.x range,
 			// so we filter those out by checking the subnet mask.
 			if ip[0] == 192 {
 				return ip.String()

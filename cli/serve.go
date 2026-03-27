@@ -46,7 +46,7 @@ func init() {
 	serveCmd.Flags().String("controller-address", "", "Controller gRPC address for worker registration")
 	serveCmd.Flags().String("worker-id", "", "Worker ID (defaults to hostname)")
 	serveCmd.Flags().String("worker-token", "", "Worker auth token for gRPC registration")
-	serveCmd.Flags().String("runtime", "", "Container runtime: docker, podman, process, auto")
+	serveCmd.Flags().String("runtime", "", "Container runtime: docker, process, auto")
 }
 
 // loadConfig loads config file (if any) and applies CLI flag overrides.

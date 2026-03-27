@@ -108,16 +108,9 @@ func New(logger *slog.Logger, socketPath string) (*Client, error) {
 		return nil, fmt.Errorf("connecting to container runtime at %s: %w (is the daemon running?)", socketDisplay, err)
 	}
 
-	runtimeName := "docker"
 	version, vErr := cli.ServerVersion(ctx)
 	if vErr == nil {
-		for _, comp := range version.Components {
-			if strings.Contains(strings.ToLower(comp.Name), "podman") {
-				runtimeName = "podman"
-				break
-			}
-		}
-		logger.Info("connected to container runtime", "runtime", runtimeName, "version", version.Version, "api_version", ping.APIVersion)
+		logger.Info("connected to container runtime", "version", version.Version, "api_version", ping.APIVersion)
 	} else {
 		logger.Info("connected to container runtime", "api_version", ping.APIVersion)
 	}

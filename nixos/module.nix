@@ -257,9 +257,9 @@ in {
     };
 
     containerRuntime = lib.mkOption {
-      type = lib.types.enum [ "auto" "docker" "podman" "process" ];
+      type = lib.types.enum [ "auto" "docker" "process" ];
       default = "auto";
-      description = "Container runtime. Auto-detects Podman then Docker by default.";
+      description = "Container runtime. Auto-detects Docker, falls back to process.";
     };
 
     containerSocket = lib.mkOption {
@@ -300,7 +300,7 @@ in {
       }
     ];
 
-    virtualisation.docker.enable = lib.mkIf (hasLocalWorker && cfg.containerRuntime != "podman" && cfg.containerRuntime != "process") true;
+    virtualisation.docker.enable = lib.mkIf (hasLocalWorker && cfg.containerRuntime != "process") true;
 
     systemd.services.gamejanitor = {
       description = "Gamejanitor Game Server Manager";

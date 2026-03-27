@@ -154,7 +154,7 @@
           test-e2e = pkgs.writeShellScriptBin "test-e2e" ''
             echo "Building gamejanitor..."
             go build -o /tmp/gamejanitor-e2e .
-            echo "Running e2e tests (requires Docker/Podman + base image)..."
+            echo "Running e2e tests (requires Docker + base image)..."
             exec go test -tags e2e -timeout 5m -v ./e2e/ "$@"
           '';
 
@@ -185,25 +185,20 @@
           '';
 
           cleanup = pkgs.writeShellScriptBin "cleanup" ''
-            for runtime in docker podman; do
-              if ! command -v "$runtime" &>/dev/null; then
-                continue
+            if command -v docker &>/dev/null; then
+              if docker info &>/dev/null; then
+                echo "Cleaning up docker containers..."
+                docker ps -a --filter "name=gamejanitor-" --format '{{.ID}}' | xargs -r docker rm -f
+                echo "Cleaning up docker volumes..."
+                docker volume ls --filter "name=gamejanitor-" --format '{{.Name}}' | xargs -r docker volume rm -f
               fi
-              # Try rootless first
-              if $runtime info &>/dev/null; then
-                echo "Cleaning up $runtime containers..."
-                $runtime ps -a --filter "name=gamejanitor-" --format '{{.ID}}' | xargs -r $runtime rm -f
-                echo "Cleaning up $runtime volumes..."
-                $runtime volume ls --filter "name=gamejanitor-" --format '{{.Name}}' | xargs -r $runtime volume rm -f
+              if sudo -n true 2>/dev/null && sudo docker info &>/dev/null; then
+                echo "Cleaning up docker containers (rootful)..."
+                sudo docker ps -a --filter "name=gamejanitor-" --format '{{.ID}}' | xargs -r sudo docker rm -f
+                echo "Cleaning up docker volumes (rootful)..."
+                sudo docker volume ls --filter "name=gamejanitor-" --format '{{.Name}}' | xargs -r sudo docker volume rm -f
               fi
-              # Try rootful if sudo is available
-              if sudo -n true 2>/dev/null && sudo $runtime info &>/dev/null; then
-                echo "Cleaning up $runtime containers (rootful)..."
-                sudo $runtime ps -a --filter "name=gamejanitor-" --format '{{.ID}}' | xargs -r sudo $runtime rm -f
-                echo "Cleaning up $runtime volumes (rootful)..."
-                sudo $runtime volume ls --filter "name=gamejanitor-" --format '{{.Name}}' | xargs -r sudo $runtime volume rm -f
-              fi
-            done
+            fi
             echo "Removing /tmp/gamejanitor-*..."
             rm -rf /tmp/gamejanitor-data /tmp/gamejanitor-controller /tmp/gamejanitor-worker-*
             echo "Cleanup complete."

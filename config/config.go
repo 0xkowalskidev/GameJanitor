@@ -44,7 +44,7 @@ type Config struct {
 	TLS *TLSConfig `yaml:"tls"`
 
 	// Container runtime
-	ContainerRuntime string `yaml:"container_runtime"` // "docker", "podman", or "auto" (default)
+	ContainerRuntime string `yaml:"container_runtime"` // "docker", "process", or "auto" (default)
 	ContainerSocket  string `yaml:"container_socket"`  // explicit socket path; auto-detected if empty
 
 	// Backup storage
@@ -177,7 +177,7 @@ func (c *Config) WorkerOnly() bool {
 }
 
 // ResolveContainerSocket returns the container runtime socket path.
-// Auto-detects Docker or Podman sockets if not explicitly configured.
+// Auto-detects Docker socket if not explicitly configured.
 func (c *Config) ResolveContainerSocket() string {
 	if c.ContainerSocket != "" {
 		return c.ContainerSocket
@@ -188,30 +188,12 @@ func (c *Config) ResolveContainerSocket() string {
 		return ""
 	case "docker":
 		return "/var/run/docker.sock"
-	case "podman":
-		return detectPodmanSocket()
 	default:
-		// Auto-detect: Podman first (rootless), then Docker
-		if path := detectPodmanSocket(); path != "" {
-			return path
-		}
 		if _, err := os.Stat("/var/run/docker.sock"); err == nil {
 			return "/var/run/docker.sock"
 		}
 		return "" // fall back to DOCKER_HOST env var
 	}
-}
-
-func detectPodmanSocket() string {
-	// Prefer rootless socket — it doesn't require group membership or root
-	rootless := fmt.Sprintf("/run/user/%d/podman/podman.sock", os.Getuid())
-	if isSocketAccessible(rootless) {
-		return rootless
-	}
-	if isSocketAccessible("/run/podman/podman.sock") {
-		return "/run/podman/podman.sock"
-	}
-	return ""
 }
 
 // isSocketAccessible checks that a unix socket has a healthy daemon behind it.
