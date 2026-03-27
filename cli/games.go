@@ -141,7 +141,8 @@ func printSDKGameDetails(g *gamejanitor.Game) {
 	}
 	if len(visible) > 0 {
 		fmt.Println()
-		fmt.Println("Settings:")
+		fmt.Println("Settings (--env KEY=VALUE):")
+		w := newTabWriter()
 		for _, e := range visible {
 			label := e.Label
 			if label == "" {
@@ -153,14 +154,15 @@ func printSDKGameDetails(g *gamejanitor.Game) {
 			}
 			required := ""
 			if e.Required || e.ConsentRequired {
-				required = " [required]"
+				required = " *"
 			}
+			opts := ""
 			if len(e.Options) > 0 {
-				fmt.Printf("  %-24s default: %-14s options: %s%s\n", label, def, joinStrings(e.Options), required)
-			} else {
-				fmt.Printf("  %-24s default: %s%s\n", label, def, required)
+				opts = "[" + joinStrings(e.Options) + "]"
 			}
+			fmt.Fprintf(w, "  %s\t%s\tdefault: %s\t%s%s\n", e.Key, label, def, opts, required)
 		}
+		w.Flush()
 	}
 }
 
@@ -192,7 +194,8 @@ func printLocalGameDetails(g *games.Game) {
 	}
 	if len(visible) > 0 {
 		fmt.Println()
-		fmt.Println("Settings:")
+		fmt.Println("Settings (--env KEY=VALUE):")
+		w := newTabWriter()
 		for _, e := range visible {
 			label := e.Label
 			if label == "" {
@@ -204,14 +207,15 @@ func printLocalGameDetails(g *games.Game) {
 			}
 			required := ""
 			if e.Required || e.ConsentRequired {
-				required = " [required]"
+				required = " *"
 			}
+			opts := ""
 			if len(e.Options) > 0 {
-				fmt.Printf("  %-24s default: %-14s options: %s%s\n", label, def, strings.Join(e.Options, ", "), required)
-			} else {
-				fmt.Printf("  %-24s default: %s%s\n", label, def, required)
+				opts = "[" + strings.Join(e.Options, ", ") + "]"
 			}
+			fmt.Fprintf(w, "  %s\t%s\tdefault: %s\t%s%s\n", e.Key, label, def, opts, required)
 		}
+		w.Flush()
 	}
 }
 
