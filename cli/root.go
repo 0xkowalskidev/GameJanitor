@@ -230,6 +230,16 @@ func customUsage(cmd *cobra.Command) error {
 	}
 	fmt.Fprintln(os.Stdout, usage)
 
+	if cmd.Example != "" {
+		fmt.Fprintln(os.Stdout)
+		header := "Example:"
+		if !noColor {
+			header = headerStyle.Render(header)
+		}
+		fmt.Fprintln(os.Stdout, header)
+		fmt.Fprintln(os.Stdout, cmd.Example)
+	}
+
 	if cmd.HasAvailableSubCommands() {
 		fmt.Fprintln(os.Stdout)
 		header := "Available Commands:"

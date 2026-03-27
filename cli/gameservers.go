@@ -115,10 +115,11 @@ var getCmd = &cobra.Command{
 // --- Create ---
 
 var createCmd = &cobra.Command{
-	Use:   "create <name> <game>",
-	Short: "Create a new gameserver",
-	Args:  cobra.ExactArgs(2),
-	RunE:  runCreate,
+	Use:     "create <name> <game>",
+	Short:   "Create a new gameserver",
+	Example: `  gamejanitor create "My Server" mc --env EULA=true --memory 2g`,
+	Args:    cobra.ExactArgs(2),
+	RunE:    runCreate,
 }
 
 func init() {
