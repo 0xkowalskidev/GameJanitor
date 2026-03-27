@@ -5,73 +5,39 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 
 	"github.com/spf13/cobra"
 )
 
 var installCmd = &cobra.Command{
-	Use:   "install [--systemd|--launchd]",
+	Use:   "install",
 	Short: "Install as a system service",
-	Long:  "Installs gamejanitor as a system service so it starts on boot and survives terminal closure.",
+	Long:  "Installs gamejanitor as a systemd service so it starts on boot and restarts on crash.",
 	RunE:  runInstall,
 }
 
 func init() {
-	installCmd.Flags().Bool("systemd", false, "Force systemd service installation")
-	installCmd.Flags().Bool("launchd", false, "Force launchd service installation (macOS)")
+	installCmd.Flags().String("runtime", "auto", "Container runtime: docker, process, auto")
+	installCmd.Flags().String("data-dir", "/var/lib/gamejanitor", "Data directory")
 }
 
 func runInstall(cmd *cobra.Command, args []string) error {
-	forceSystemd, _ := cmd.Flags().GetBool("systemd")
-	forceLaunchd, _ := cmd.Flags().GetBool("launchd")
-
-	if forceSystemd && forceLaunchd {
-		return exitError(fmt.Errorf("cannot specify both --systemd and --launchd"))
+	if os.Getuid() != 0 {
+		return exitError(fmt.Errorf("installing a systemd service requires root\n  Run: sudo gamejanitor install"))
 	}
 
-	if forceSystemd {
-		return installSystemd()
-	}
-	if forceLaunchd {
-		return installLaunchd()
+	if _, err := exec.LookPath("systemctl"); err != nil {
+		return exitError(fmt.Errorf("systemd not found — gamejanitor install requires systemd"))
 	}
 
-	// Auto-detect
-	if runtime.GOOS == "darwin" {
-		return installLaunchd()
-	}
+	runtimeFlag, _ := cmd.Flags().GetString("runtime")
+	dataDir, _ := cmd.Flags().GetString("data-dir")
 
-	if _, err := exec.LookPath("systemctl"); err == nil {
-		return installSystemd()
-	}
-
-	return exitError(fmt.Errorf("could not detect init system\n  Use --systemd or --launchd to specify manually"))
+	return installSystemd(runtimeFlag, dataDir)
 }
 
-const systemdUnit = `[Unit]
-Description=Gamejanitor - Game Server Manager
-After=network-online.target docker.service
-Wants=network-online.target
-
-[Service]
-Type=simple
-ExecStart=%s serve
-Restart=on-failure
-RestartSec=5
-
-# Security hardening
-NoNewPrivileges=true
-ProtectSystem=strict
-ProtectHome=true
-ReadWritePaths=/var/lib/gamejanitor
-
-[Install]
-WantedBy=multi-user.target
-`
-
-func installSystemd() error {
+func installSystemd(runtime, dataDir string) error {
 	binPath, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("finding executable path: %w", err)
@@ -81,23 +47,46 @@ func installSystemd() error {
 		return fmt.Errorf("resolving executable path: %w", err)
 	}
 
-	unitContent := fmt.Sprintf(systemdUnit, binPath)
-	unitPath := "/etc/systemd/system/gamejanitor.service"
-
-	if os.Getuid() != 0 {
-		return exitError(fmt.Errorf("installing a systemd service requires root\n  Run: sudo gamejanitor install"))
+	// Build the ExecStart command with flags
+	execStart := fmt.Sprintf("%s serve -d %s", binPath, dataDir)
+	if runtime != "" && runtime != "auto" {
+		execStart += " --runtime " + runtime
 	}
 
-	if err := os.MkdirAll("/var/lib/gamejanitor", 0755); err != nil {
+	// Only depend on Docker if using container runtime
+	afterUnits := "network-online.target"
+	if runtime == "docker" || runtime == "auto" || runtime == "" {
+		afterUnits += " docker.service"
+	}
+
+	unitContent := fmt.Sprintf(`[Unit]
+Description=Gamejanitor - Game Server Manager
+After=%s
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=%s
+Restart=on-failure
+RestartSec=5
+
+NoNewPrivileges=true
+ReadWritePaths=%s
+
+[Install]
+WantedBy=multi-user.target
+`, afterUnits, execStart, dataDir)
+
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		return fmt.Errorf("creating data directory: %w", err)
 	}
 
+	unitPath := "/etc/systemd/system/gamejanitor.service"
 	if err := os.WriteFile(unitPath, []byte(unitContent), 0644); err != nil {
 		return fmt.Errorf("writing service file: %w", err)
 	}
 	fmt.Printf("Service file written to %s\n", unitPath)
 
-	// Reload systemd, enable and start
 	for _, cmdArgs := range [][]string{
 		{"systemctl", "daemon-reload"},
 		{"systemctl", "enable", "gamejanitor"},
@@ -112,74 +101,10 @@ func installSystemd() error {
 	}
 
 	fmt.Println("Gamejanitor installed and started.")
-	fmt.Println("  Status:  systemctl status gamejanitor")
-	fmt.Println("  Logs:    journalctl -u gamejanitor -f")
-	fmt.Println("  Stop:    sudo systemctl stop gamejanitor")
-	fmt.Println("  Remove:  sudo systemctl disable gamejanitor && sudo rm " + unitPath)
-	return nil
-}
-
-const launchdPlist = `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>dev.gamejanitor</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>%s</string>
-        <string>serve</string>
-    </array>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <true/>
-    <key>StandardOutPath</key>
-    <string>/tmp/gamejanitor.log</string>
-    <key>StandardErrorPath</key>
-    <string>/tmp/gamejanitor.log</string>
-</dict>
-</plist>
-`
-
-func installLaunchd() error {
-	binPath, err := os.Executable()
-	if err != nil {
-		return fmt.Errorf("finding executable path: %w", err)
-	}
-	binPath, err = filepath.EvalSymlinks(binPath)
-	if err != nil {
-		return fmt.Errorf("resolving executable path: %w", err)
-	}
-
-	plistContent := fmt.Sprintf(launchdPlist, binPath)
-
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("finding home directory: %w", err)
-	}
-
-	plistDir := filepath.Join(home, "Library", "LaunchAgents")
-	if err := os.MkdirAll(plistDir, 0755); err != nil {
-		return fmt.Errorf("creating LaunchAgents directory: %w", err)
-	}
-
-	plistPath := filepath.Join(plistDir, "dev.gamejanitor.plist")
-	if err := os.WriteFile(plistPath, []byte(plistContent), 0644); err != nil {
-		return fmt.Errorf("writing plist: %w", err)
-	}
-	fmt.Printf("Plist written to %s\n", plistPath)
-
-	c := exec.Command("launchctl", "load", plistPath)
-	c.Stdout = os.Stdout
-	c.Stderr = os.Stderr
-	if err := c.Run(); err != nil {
-		return fmt.Errorf("loading plist: %w", err)
-	}
-
-	fmt.Println("Gamejanitor installed and started.")
-	fmt.Println("  Logs:    tail -f /tmp/gamejanitor.log")
-	fmt.Println("  Stop:    launchctl unload " + plistPath)
-	fmt.Println("  Remove:  launchctl unload " + plistPath + " && rm " + plistPath)
+	fmt.Printf("  Data dir: %s\n", dataDir)
+	fmt.Println("  Status:   systemctl status gamejanitor")
+	fmt.Println("  Logs:     journalctl -u gamejanitor -f")
+	fmt.Println("  Stop:     sudo systemctl stop gamejanitor")
+	fmt.Println("  Remove:   sudo systemctl disable gamejanitor && sudo rm " + unitPath)
 	return nil
 }
