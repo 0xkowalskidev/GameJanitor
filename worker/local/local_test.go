@@ -245,15 +245,22 @@ func TestWorker_WatchEvents(t *testing.T) {
 
 	require.NoError(t, w.StartContainer(ctx, id))
 
-	// Should receive a "start" event
-	select {
-	case evt := <-events:
-		assert.Equal(t, "start", evt.Action)
-		assert.Equal(t, id, evt.ContainerID)
-	case err := <-errs:
-		t.Fatalf("error watching events: %v", err)
-	case <-time.After(10 * time.Second):
-		t.Fatal("timed out waiting for start event")
+	// Should receive a "start" event for our container.
+	// Filter out events from other containers on the host.
+	for {
+		select {
+		case evt := <-events:
+			if evt.ContainerID != id {
+				continue // skip events from other containers
+			}
+			assert.Equal(t, "start", evt.Action)
+			assert.Equal(t, id, evt.ContainerID)
+			return
+		case err := <-errs:
+			t.Fatalf("error watching events: %v", err)
+		case <-time.After(10 * time.Second):
+			t.Fatal("timed out waiting for start event")
+		}
 	}
 }
 
