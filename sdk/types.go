@@ -234,6 +234,7 @@ type UpdateScheduleRequest struct {
 // Worker represents a worker node in the cluster.
 type Worker struct {
 	ID                 string            `json:"id"`
+	Name               string            `json:"name"`
 	LanIP              string            `json:"lan_ip"`
 	ExternalIP         string            `json:"external_ip"`
 	CPUCores           int64             `json:"cpu_cores"`
@@ -256,6 +257,7 @@ type Worker struct {
 
 // UpdateWorkerRequest is the request body for updating a worker node.
 type UpdateWorkerRequest struct {
+	Name         *string           `json:"name,omitempty"`
 	MaxMemoryMB  *int              `json:"max_memory_mb,omitempty"`
 	MaxCPU       *float64          `json:"max_cpu,omitempty"`
 	MaxStorageMB *int              `json:"max_storage_mb,omitempty"`

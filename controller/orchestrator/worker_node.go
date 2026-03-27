@@ -15,6 +15,7 @@ import (
 type WorkerNodeStore interface {
 	GetWorkerNode(id string) (*model.WorkerNode, error)
 	ListWorkerNodes() ([]model.WorkerNode, error)
+	SetWorkerNodeName(id string, name string) error
 	SetWorkerNodeLimits(id string, maxMemoryMB *int, maxCPU *float64, maxStorageMB *int) error
 	SetWorkerNodeCordoned(id string, cordoned bool) error
 	SetWorkerNodeTags(id string, tags model.Labels) error
@@ -36,6 +37,7 @@ func NewWorkerNodeService(store WorkerNodeStore, registry *Registry, broadcaster
 // WorkerView is the enriched API representation of a worker node.
 type WorkerView struct {
 	ID                string   `json:"id"`
+	Name              string   `json:"name"`
 	LanIP             string   `json:"lan_ip"`
 	ExternalIP        string   `json:"external_ip"`
 	CPUCores          int64    `json:"cpu_cores"`
@@ -94,6 +96,7 @@ func (s *WorkerNodeService) Get(id string) (*WorkerView, error) {
 // WorkerNodeUpdate represents a partial update to a worker node.
 // Nil pointer fields are not updated. To clear a limit, set it to a pointer to 0.
 type WorkerNodeUpdate struct {
+	Name           *string       `json:"name,omitempty"`
 	MaxMemoryMB    *int          `json:"max_memory_mb,omitempty"`
 	MaxCPU         *float64      `json:"max_cpu,omitempty"`
 	MaxStorageMB   *int          `json:"max_storage_mb,omitempty"`
@@ -121,6 +124,11 @@ func (s *WorkerNodeService) Update(ctx context.Context, id string, update *Worke
 		return err
 	}
 
+	if update.Name != nil {
+		if err := s.store.SetWorkerNodeName(id, *update.Name); err != nil {
+			return err
+		}
+	}
 	if update.MaxMemoryMB != nil || update.MaxCPU != nil || update.MaxStorageMB != nil {
 		if err := s.store.SetWorkerNodeLimits(id, update.MaxMemoryMB, update.MaxCPU, update.MaxStorageMB); err != nil {
 			return err
@@ -202,6 +210,7 @@ func (s *WorkerNodeService) buildView(info WorkerInfo, gsCount, allocMem int, al
 		LastSeen:          lastSeen,
 	}
 	if node != nil {
+		v.Name = node.Name
 		v.MaxMemoryMB = node.MaxMemoryMB
 		v.MaxCPU = node.MaxCPU
 		v.MaxStorageMB = node.MaxStorageMB

@@ -2631,6 +2631,7 @@ type RegisterRequest struct {
 	MaxMemoryMb       int64                  `protobuf:"varint,13,opt,name=max_memory_mb,json=maxMemoryMb,proto3" json:"max_memory_mb,omitempty"`
 	MaxCpu            float64                `protobuf:"fixed64,14,opt,name=max_cpu,json=maxCpu,proto3" json:"max_cpu,omitempty"`
 	MaxStorageMb      int64                  `protobuf:"varint,15,opt,name=max_storage_mb,json=maxStorageMb,proto3" json:"max_storage_mb,omitempty"`
+	Name              string                 `protobuf:"bytes,16,opt,name=name,proto3" json:"name,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -2768,6 +2769,13 @@ func (x *RegisterRequest) GetMaxStorageMb() int64 {
 		return x.MaxStorageMb
 	}
 	return 0
+}
+
+func (x *RegisterRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
 }
 
 type RegisterResponse struct {
@@ -3364,7 +3372,7 @@ const file_proto_worker_proto_rawDesc = "" +
 	"\rdisk_total_mb\x18\a \x01(\x03R\vdiskTotalMb\x12*\n" +
 	"\x11disk_available_mb\x18\b \x01(\x03R\x0fdiskAvailableMb\"/\n" +
 	"\x11HeartbeatResponse\x12\x1a\n" +
-	"\baccepted\x18\x01 \x01(\bR\baccepted\"\x9e\x04\n" +
+	"\baccepted\x18\x01 \x01(\bR\baccepted\"\xb2\x04\n" +
 	"\x0fRegisterRequest\x12\x1b\n" +
 	"\tworker_id\x18\x01 \x01(\tR\bworkerId\x12!\n" +
 	"\fgrpc_address\x18\x02 \x01(\tR\vgrpcAddress\x12\x1b\n" +
@@ -3382,7 +3390,8 @@ const file_proto_worker_proto_rawDesc = "" +
 	"\x11disk_available_mb\x18\f \x01(\x03R\x0fdiskAvailableMb\x12\"\n" +
 	"\rmax_memory_mb\x18\r \x01(\x03R\vmaxMemoryMb\x12\x17\n" +
 	"\amax_cpu\x18\x0e \x01(\x01R\x06maxCpu\x12$\n" +
-	"\x0emax_storage_mb\x18\x0f \x01(\x03R\fmaxStorageMb\"\x9c\x01\n" +
+	"\x0emax_storage_mb\x18\x0f \x01(\x03R\fmaxStorageMb\x12\x12\n" +
+	"\x04name\x18\x10 \x01(\tR\x04name\"\x9c\x01\n" +
 	"\x10RegisterResponse\x12\x1a\n" +
 	"\baccepted\x18\x01 \x01(\bR\baccepted\x12\x1e\n" +
 	"\vca_cert_pem\x18\x02 \x01(\fR\tcaCertPem\x12&\n" +

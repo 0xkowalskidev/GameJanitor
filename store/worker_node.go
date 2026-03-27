@@ -8,7 +8,7 @@ import (
 	"github.com/warsmite/gamejanitor/model"
 )
 
-const workerNodeColumns = "id, grpc_address, lan_ip, external_ip, status, max_memory_mb, max_cpu, max_storage_mb, cordoned, tags, port_range_start, port_range_end, sftp_port, last_seen, created_at, updated_at"
+const workerNodeColumns = "id, name, grpc_address, lan_ip, external_ip, status, max_memory_mb, max_cpu, max_storage_mb, cordoned, tags, port_range_start, port_range_end, sftp_port, last_seen, created_at, updated_at"
 
 type WorkerNodeStore struct {
 	db *sql.DB
@@ -20,7 +20,7 @@ func NewWorkerNodeStore(db *sql.DB) *WorkerNodeStore {
 
 func scanWorkerNode(scanner interface{ Scan(...any) error }) (*model.WorkerNode, error) {
 	var n model.WorkerNode
-	err := scanner.Scan(&n.ID, &n.GRPCAddress, &n.LanIP, &n.ExternalIP, &n.Status, &n.MaxMemoryMB, &n.MaxCPU, &n.MaxStorageMB, &n.Cordoned, &n.Tags, &n.PortRangeStart, &n.PortRangeEnd, &n.SFTPPort, &n.LastSeen, &n.CreatedAt, &n.UpdatedAt)
+	err := scanner.Scan(&n.ID, &n.Name, &n.GRPCAddress, &n.LanIP, &n.ExternalIP, &n.Status, &n.MaxMemoryMB, &n.MaxCPU, &n.MaxStorageMB, &n.Cordoned, &n.Tags, &n.PortRangeStart, &n.PortRangeEnd, &n.SFTPPort, &n.LastSeen, &n.CreatedAt, &n.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -35,16 +35,17 @@ func (s *WorkerNodeStore) UpsertWorkerNode(node *model.WorkerNode) error {
 		status = model.WorkerStatusOffline
 	}
 	_, err := s.db.Exec(`
-		INSERT INTO worker_nodes (id, grpc_address, lan_ip, external_ip, status, last_seen, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO worker_nodes (id, name, grpc_address, lan_ip, external_ip, status, last_seen, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
+			name = CASE WHEN excluded.name != '' THEN excluded.name ELSE name END,
 			grpc_address = CASE WHEN excluded.grpc_address != '' THEN excluded.grpc_address ELSE grpc_address END,
 			lan_ip = excluded.lan_ip,
 			external_ip = excluded.external_ip,
 			status = excluded.status,
 			last_seen = excluded.last_seen,
 			updated_at = excluded.updated_at`,
-		node.ID, node.GRPCAddress, node.LanIP, node.ExternalIP, status, now, now, now,
+		node.ID, node.Name, node.GRPCAddress, node.LanIP, node.ExternalIP, status, now, now, now,
 	)
 	if err != nil {
 		return fmt.Errorf("upserting worker node %s: %w", node.ID, err)
@@ -77,7 +78,7 @@ func (s *WorkerNodeStore) ListWorkerNodes() ([]model.WorkerNode, error) {
 	var nodes []model.WorkerNode
 	for rows.Next() {
 		var n model.WorkerNode
-		if err := rows.Scan(&n.ID, &n.GRPCAddress, &n.LanIP, &n.ExternalIP, &n.Status, &n.MaxMemoryMB, &n.MaxCPU, &n.MaxStorageMB, &n.Cordoned, &n.Tags, &n.PortRangeStart, &n.PortRangeEnd, &n.SFTPPort, &n.LastSeen, &n.CreatedAt, &n.UpdatedAt); err != nil {
+		if err := rows.Scan(&n.ID, &n.Name, &n.GRPCAddress, &n.LanIP, &n.ExternalIP, &n.Status, &n.MaxMemoryMB, &n.MaxCPU, &n.MaxStorageMB, &n.Cordoned, &n.Tags, &n.PortRangeStart, &n.PortRangeEnd, &n.SFTPPort, &n.LastSeen, &n.CreatedAt, &n.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scanning worker node row: %w", err)
 		}
 		nodes = append(nodes, n)
@@ -109,6 +110,24 @@ func (s *WorkerNodeStore) ResetAllWorkerStatus(status string) error {
 	_, err := s.db.Exec("UPDATE worker_nodes SET status = ?, updated_at = ?", status, time.Now())
 	if err != nil {
 		return fmt.Errorf("resetting all worker status to %s: %w", status, err)
+	}
+	return nil
+}
+
+func (s *WorkerNodeStore) SetWorkerNodeName(id string, name string) error {
+	result, err := s.db.Exec(
+		"UPDATE worker_nodes SET name = ?, updated_at = ? WHERE id = ?",
+		name, time.Now(), id,
+	)
+	if err != nil {
+		return fmt.Errorf("setting name for worker node %s: %w", id, err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("checking rows affected for worker node %s: %w", id, err)
+	}
+	if rows == 0 {
+		return fmt.Errorf("worker node %s not found", id)
 	}
 	return nil
 }

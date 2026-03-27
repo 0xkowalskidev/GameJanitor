@@ -300,6 +300,7 @@ message RegisterRequest {
     int64 max_memory_mb = 13;
     double max_cpu = 14;
     int64 max_storage_mb = 15;
+    string name = 16;
 }
 message RegisterResponse {
     bool accepted = 1;

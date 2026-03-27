@@ -10,6 +10,7 @@ const (
 
 type WorkerNode struct {
 	ID           string     `json:"id"`
+	Name         string     `json:"name"`
 	GRPCAddress  string     `json:"grpc_address"`
 	LanIP        string     `json:"lan_ip"`
 	ExternalIP   string     `json:"external_ip"`

@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"crypto/ecdsa"
+	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/warsmite/gamejanitor/config"
@@ -108,10 +110,7 @@ func runWorkerAgent(cfg config.Config, logger *slog.Logger) error {
 	if cfg.ControllerAddress != "" {
 		workerID := cfg.WorkerID
 		if workerID == "" {
-			workerID, _ = os.Hostname()
-			if workerID == "" {
-				workerID = fmt.Sprintf("worker-%d", os.Getpid())
-			}
+			workerID = loadOrGenerateWorkerID(cfg.DataDir, logger)
 		}
 
 		if cfg.WorkerToken == "" {
@@ -167,8 +166,10 @@ func runRegistrationLoop(cfg config.Config, workerID string, grpcPort int, tlsCo
 		// Register
 		ctx := context.Background()
 		req := buildHeartbeatRequest(workerID, netInfo)
+		hostname, _ := os.Hostname()
 		regReq := &pb.RegisterRequest{
 			WorkerId:          workerID,
+			Name:              hostname,
 			GrpcAddress:       ownAddr,
 			CpuCores:          req.CpuCores,
 			MemoryTotalMb:     req.MemoryTotalMb,
@@ -281,4 +282,40 @@ func startGRPCServer(w worker.Worker, gameStore *games.GameStore, dataDir string
 
 	logger.Info("grpc server listening", "port", port)
 	return grpcServer.Serve(listener)
+}
+
+// loadOrGenerateWorkerID reads a persisted worker ID from {dataDir}/worker-id,
+// or generates a new UUID and saves it. This ensures the worker has a stable
+// identity across restarts, independent of hostname changes.
+func loadOrGenerateWorkerID(dataDir string, logger *slog.Logger) string {
+	idPath := filepath.Join(dataDir, "worker-id")
+
+	if data, err := os.ReadFile(idPath); err == nil {
+		id := strings.TrimSpace(string(data))
+		if id != "" {
+			return id
+		}
+	}
+
+	id := fmt.Sprintf("w-%s", generateShortID())
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		logger.Error("failed to create data dir for worker ID", "error", err)
+		return id
+	}
+	if err := os.WriteFile(idPath, []byte(id), 0644); err != nil {
+		logger.Error("failed to persist worker ID", "path", idPath, "error", err)
+	} else {
+		logger.Info("generated worker ID", "id", id, "path", idPath)
+	}
+	return id
+}
+
+// generateShortID produces a short random hex string for worker IDs.
+// Not a full UUID — readable enough for CLI/UI use.
+func generateShortID() string {
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Sprintf("%d", time.Now().UnixNano())
+	}
+	return fmt.Sprintf("%x", b)
 }

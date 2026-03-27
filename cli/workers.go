@@ -15,6 +15,7 @@ var workersCmd = &cobra.Command{
 }
 
 func init() {
+	workersSetCmd.Flags().String("name", "", "Display name for this worker")
 	workersSetCmd.Flags().Int("memory", 0, "Max memory in MB (0 to clear)")
 	workersSetCmd.Flags().Float64("cpu", 0, "Max CPU cores (0 to clear)")
 	workersSetCmd.Flags().Int("storage", 0, "Max storage in MB (0 to clear)")

@@ -86,7 +86,7 @@ func (c *ControllerGRPC) Register(ctx context.Context, req *pb.RegisterRequest) 
 
 	// Persist worker node (dial-back happens on first heartbeat after worker has certs)
 	if err := c.store.UpsertWorkerNode(&model.WorkerNode{
-		ID: req.WorkerId, GRPCAddress: req.GrpcAddress, LanIP: req.LanIp, ExternalIP: req.ExternalIp,
+		ID: req.WorkerId, Name: req.Name, GRPCAddress: req.GrpcAddress, LanIP: req.LanIp, ExternalIP: req.ExternalIp,
 	}); err != nil {
 		c.log.Error("failed to persist worker node on register", "worker_id", req.WorkerId, "error", err)
 	}
