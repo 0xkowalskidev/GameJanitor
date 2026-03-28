@@ -133,7 +133,7 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 
 	// Pull image
 	s.broadcaster.Publish(controller.ImagePullingEvent{GameserverID: id, Timestamp: time.Now()})
-	if err := w.PullImage(ctx, game.BaseImage); err != nil {
+	if err := w.PullImage(ctx, game.ResolveImage(map[string]string(gs.Env))); err != nil {
 		s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: id, Reason: "Failed to pull game image. Check your internet connection.", Timestamp: time.Now()})
 		return fmt.Errorf("pulling image for gameserver %s: %w", id, err)
 	}
@@ -192,7 +192,7 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 	// Create container
 	containerID, err := w.CreateContainer(ctx, worker.ContainerOptions{
 		Name:          containerName,
-		Image:         game.BaseImage,
+		Image:         game.ResolveImage(map[string]string(gs.Env)),
 		Env:           env,
 		Ports:         ports,
 		VolumeName:    gs.VolumeName,
@@ -418,7 +418,7 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) (er
 	}
 
 	// Pull latest image
-	if err := w.PullImage(ctx, game.BaseImage); err != nil {
+	if err := w.PullImage(ctx, game.ResolveImage(map[string]string(gs.Env))); err != nil {
 		return fmt.Errorf("pulling image for update: %w", err)
 	}
 
@@ -439,7 +439,7 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) (er
 	tempName := naming.UpdateContainerName(id)
 	tempID, err := w.CreateContainer(ctx, worker.ContainerOptions{
 		Name:       tempName,
-		Image:      game.BaseImage,
+		Image:      game.ResolveImage(map[string]string(gs.Env)),
 		Env:        env,
 		VolumeName: gs.VolumeName,
 		Binds:      updateBinds,

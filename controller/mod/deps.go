@@ -9,7 +9,9 @@ import (
 
 const maxDepDepth = 10
 
-func (s *ModService) installDependencies(ctx context.Context, gameserverID string, catalog ModCatalog, version *ModVersion, src games.ModCategorySource, category string, filters CatalogFilters, depth int) error {
+// installDependencies recursively installs required dependencies for a mod version.
+// parentModID is the installed_mod ID of the mod that requires these deps.
+func (s *ModService) installDependencies(ctx context.Context, gameserverID, parentModID string, catalog ModCatalog, version *ModVersion, src games.ModCategorySource, category string, filters CatalogFilters, depth int) error {
 	if depth >= maxDepDepth {
 		return fmt.Errorf("dependency depth limit reached (%d levels)", maxDepDepth)
 	}
@@ -40,26 +42,25 @@ func (s *ModService) installDependencies(ctx context.Context, gameserverID strin
 			continue
 		}
 
+		// Record the dependency (before recursing so its ID exists for grandchildren)
+		depMod := s.newInstalledMod(gameserverID, src.Name, dep.ModID, category, depVersion, src.Delivery, true, nil)
+		depMod.DependsOn = &parentModID
+		if src.Delivery == "file" {
+			depMod.FilePath = fmt.Sprintf("%s/%s", src.InstallPath, sanitizeFileName(depVersion.FileName))
+			depMod.FileName = sanitizeFileName(depVersion.FileName)
+		}
+
 		// Recursive: install the dependency's dependencies first
-		if err := s.installDependencies(ctx, gameserverID, catalog, depVersion, src, category, filters, depth+1); err != nil {
+		if err := s.installDependencies(ctx, gameserverID, depMod.ID, catalog, depVersion, src, category, filters, depth+1); err != nil {
 			return err
 		}
 
-		// Install the dependency itself
+		// Install the dependency file
 		if src.Delivery == "file" {
 			if err := s.fileDel.Install(ctx, gameserverID, src.InstallPath, depVersion.DownloadURL, sanitizeFileName(depVersion.FileName)); err != nil {
 				return fmt.Errorf("installing dependency %s: %w", dep.ModID, err)
 			}
 		}
-
-		// Record as auto-installed
-		depMod := s.newInstalledMod(gameserverID, src.Name, dep.ModID, category, depVersion, src.Delivery, true, nil)
-		if src.Delivery == "file" {
-			depMod.FilePath = fmt.Sprintf("%s/%s", src.InstallPath, sanitizeFileName(depVersion.FileName))
-			depMod.FileName = sanitizeFileName(depVersion.FileName)
-		}
-		dependsOn := version.VersionID // track what required this dep
-		depMod.DependsOn = &dependsOn
 
 		if err := s.store.CreateInstalledMod(depMod); err != nil {
 			s.log.Warn("failed to record auto-installed dependency", "dep_mod_id", dep.ModID, "error", err)
@@ -68,6 +69,8 @@ func (s *ModService) installDependencies(ctx context.Context, gameserverID strin
 	return nil
 }
 
+// removeOrphanedDependencies removes auto-installed mods that were dependencies
+// of the removed mod and aren't needed by any other installed mod.
 func (s *ModService) removeOrphanedDependencies(ctx context.Context, gameserverID, removedModID string) {
 	installed, err := s.store.ListInstalledMods(gameserverID)
 	if err != nil {
@@ -79,23 +82,27 @@ func (s *ModService) removeOrphanedDependencies(ctx context.Context, gameserverI
 			continue
 		}
 
-		// Check if this dep was required by the removed mod
-		// (DependsOn stores the version ID of the parent, not the mod ID,
-		// but for orphan cleanup we check if any non-removed mod still needs it)
+		// Only consider deps that were installed for the removed mod
+		if *dep.DependsOn != removedModID {
+			continue
+		}
+
+		// Check if any other mod also depends on this one
 		stillNeeded := false
 		for _, other := range installed {
 			if other.ID == removedModID || other.ID == dep.ID {
 				continue
 			}
-			// A simple heuristic: if another mod of the same source exists,
-			// keep the dependency (it might need it too)
-			if other.Source == dep.Source && !other.AutoInstalled {
+			if other.DependsOn != nil && *other.DependsOn == dep.ID {
 				stillNeeded = true
 				break
 			}
 		}
 
 		if !stillNeeded {
+			// Recursively remove this dep's own orphaned dependencies
+			s.removeOrphanedDependencies(ctx, gameserverID, dep.ID)
+
 			if dep.Delivery == "file" {
 				s.fileDel.Uninstall(ctx, gameserverID, dep.FilePath)
 			}

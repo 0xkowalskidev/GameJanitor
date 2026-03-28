@@ -214,9 +214,12 @@ func (s *ModService) Install(ctx context.Context, gameserverID, category, source
 		return nil, err
 	}
 
+	// Pre-generate mod ID so dependencies can reference it
+	modID := uuid.New().String()
+
 	// Install dependencies (file delivery only)
 	if src.Delivery == "file" {
-		if err := s.installDependencies(ctx, gameserverID, catalog, version, *src, category, filters, 0); err != nil {
+		if err := s.installDependencies(ctx, gameserverID, modID, catalog, version, *src, category, filters, 0); err != nil {
 			return nil, fmt.Errorf("installing dependencies: %w", err)
 		}
 	}
@@ -228,6 +231,7 @@ func (s *ModService) Install(ctx context.Context, gameserverID, category, source
 
 	// Record
 	mod := s.newInstalledMod(gameserverID, sourceName, sourceID, category, version, src.Delivery, false, nil)
+	mod.ID = modID
 	if src.Delivery == "file" {
 		mod.FilePath = fmt.Sprintf("%s/%s", src.InstallPath, sanitizeFileName(version.FileName))
 		mod.FileName = sanitizeFileName(version.FileName)
