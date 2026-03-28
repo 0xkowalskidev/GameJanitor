@@ -61,7 +61,7 @@
   });
 
   const hasMods = $derived(
-    (game?.mods?.sources?.length ?? 0) > 0
+    (game?.mods?.categories?.length ?? 0) > 0
   );
 
   const tabs = $derived([

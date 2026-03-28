@@ -179,27 +179,29 @@ export interface Game {
   default_env: EnvVar[];
   recommended_memory_mb: number;
   disabled_capabilities: string[];
-  mods?: { loader?: ModLoaderConfig; sources: ModSourceConfig[] };
+  mods?: { version_env?: string; loader?: { env: string; options: Record<string, any> }; categories: ModCategoryDef[] };
 }
 
-export interface ModLoaderConfig {
-  env_key: string;
-  label: string;
-  type: string;  // "select" or "boolean"
-  options?: string[];
-  default: string;
+// --- Mod system types ---
+
+export interface ModTabConfig {
+  version?: { env: string; current: string; options: DynamicOption[] };
+  loader?: { env: string; current: string; options: string[] };
+  categories: ModCategoryDef[];
 }
 
-export interface ModSourceConfig {
-  type: string;
+export interface ModCategoryDef {
+  name: string;
+  sources: ModCategorySource[];
+}
+
+export interface ModCategorySource {
+  name: string;
+  delivery: string;
   install_path?: string;
-  install_paths?: Record<string, string>;
-  file_extension?: string;
-  requires_env?: Record<string, string>;
-  loaders?: Record<string, string>;
-  loader_env?: string;
-  version_env?: string;
-  app_id?: number;
+  overrides_path?: string;
+  filters?: Record<string, string>;
+  config?: Record<string, string>;
 }
 
 export interface InstalledMod {
@@ -207,17 +209,23 @@ export interface InstalledMod {
   gameserver_id: string;
   source: string;
   source_id: string;
+  category: string;
   name: string;
   version: string;
   version_id: string;
   file_path: string;
   file_name: string;
+  delivery: string;
+  auto_installed: boolean;
+  depends_on?: string;
+  pack_id?: string;
   metadata: any;
   installed_at: string;
 }
 
 export interface ModSearchResult {
   source_id: string;
+  source: string;
   name: string;
   slug: string;
   author: string;
@@ -237,10 +245,18 @@ export interface ModVersion {
   loader: string;
 }
 
-export interface ModSourceInfo {
+export interface ModUpdate {
+  mod_id: string;
+  mod_name: string;
+  current_version: string;
+  latest_version: ModVersion;
+}
+
+export interface ModIssue {
+  mod_id: string;
+  mod_name: string;
   type: string;
-  search_mode: string;
-  game_version?: string;
+  reason: string;
 }
 
 export interface EnvVar {
@@ -452,14 +468,22 @@ export const api = {
   },
 
   mods: {
+    config: (gsId: string) => get<ModTabConfig>(`/api/gameservers/${gsId}/mods/config`),
     list: (gsId: string) => get<InstalledMod[]>(`/api/gameservers/${gsId}/mods`),
-    sources: (gsId: string) => get<ModSourceInfo[]>(`/api/gameservers/${gsId}/mods/sources`),
-    search: (gsId: string, source: string, q: string, offset?: number, limit?: number) =>
-      get<{ results: ModSearchResult[]; total: number }>(`/api/gameservers/${gsId}/mods/search`, { source, q, offset, limit }),
-    versions: (gsId: string, source: string, sourceId: string) =>
-      get<ModVersion[]>(`/api/gameservers/${gsId}/mods/versions`, { source, source_id: sourceId }),
-    install: (gsId: string, data: { source: string; source_id: string; version_id?: string; name?: string }) =>
+    search: (gsId: string, category: string, q: string, offset?: number, limit?: number) =>
+      get<{ results: ModSearchResult[]; total: number }>(`/api/gameservers/${gsId}/mods/search`, { category, q, offset, limit }),
+    versions: (gsId: string, category: string, source: string, sourceId: string) =>
+      get<ModVersion[]>(`/api/gameservers/${gsId}/mods/versions`, { category, source, source_id: sourceId }),
+    updates: (gsId: string) => get<ModUpdate[]>(`/api/gameservers/${gsId}/mods/updates`),
+    install: (gsId: string, data: { category: string; source: string; source_id: string; version_id?: string }) =>
       post<InstalledMod>(`/api/gameservers/${gsId}/mods`, data),
+    installPack: (gsId: string, data: { source: string; pack_id: string; version_id?: string }) =>
+      post<any>(`/api/gameservers/${gsId}/mods/pack`, data),
+    update: (gsId: string, modId: string) => post<InstalledMod>(`/api/gameservers/${gsId}/mods/${modId}/update`),
+    updateAll: (gsId: string) => post<ModUpdate[]>(`/api/gameservers/${gsId}/mods/update-all`),
+    updatePack: (gsId: string, modId: string) => post<any>(`/api/gameservers/${gsId}/mods/${modId}/update-pack`),
+    checkCompatibility: (gsId: string, env: Record<string, string>) =>
+      post<ModIssue[]>(`/api/gameservers/${gsId}/mods/check-compatibility`, { env }),
     uninstall: (gsId: string, modId: string) => del(`/api/gameservers/${gsId}/mods/${modId}`),
   },
 
