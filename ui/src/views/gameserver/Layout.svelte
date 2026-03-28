@@ -60,15 +60,10 @@
     if (uptimeInterval) clearInterval(uptimeInterval);
   });
 
-  const hasMods = $derived(
-    (game?.mods?.categories?.length ?? 0) > 0
-  );
-
   const tabs = $derived([
     { label: 'Overview', path: '' },
     ...(can('gameserver.logs') ? [{ label: 'Console', path: '/console' }] : []),
     ...(can('gameserver.files.read') ? [{ label: 'Files', path: '/files' }] : []),
-    ...(hasMods && can('gameserver.mods.read') ? [{ label: 'Mods', path: '/mods' }] : []),
     ...(can('backup.read') ? [{ label: 'Backups', path: '/backups' }] : []),
     ...(can('schedule.read') ? [{ label: 'Schedules', path: '/schedules' }] : []),
     { label: 'Settings', path: '/settings' },

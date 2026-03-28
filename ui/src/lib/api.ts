@@ -179,10 +179,8 @@ export interface Game {
   default_env: EnvVar[];
   recommended_memory_mb: number;
   disabled_capabilities: string[];
-  mods?: { categories?: any[] }; // TODO: proper types when UI is rebuilt
 }
 
-// --- Mod system types (TODO: rebuild UI) ---
 
 export interface EnvVar {
   key: string;
@@ -392,7 +390,6 @@ export const api = {
     get: (id: string) => get<WorkerView>(`/api/workers/${id}`),
   },
 
-  // mods: TODO — rebuild UI properly
 
   events: {
     history: (params?: { type?: string; gameserver_id?: string; limit?: number; offset?: number }) =>

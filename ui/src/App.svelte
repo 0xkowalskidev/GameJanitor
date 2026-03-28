@@ -19,7 +19,6 @@
   import Backups from './views/gameserver/Backups.svelte';
   import Schedules from './views/gameserver/Schedules.svelte';
   import GameserverSettings from './views/gameserver/GameserverSettings.svelte';
-  import Mods from './views/gameserver/Mods.svelte';
 
   const route = $derived(getRoute());
 
@@ -114,8 +113,6 @@
         <Schedules id={gameserverId} />
       {:else if route.name === 'gameserverSettings'}
         <GameserverSettings id={gameserverId} />
-      {:else if route.name === 'gameserverMods'}
-        <Mods id={gameserverId} />
       {/if}
     {/snippet}
   </GameserverLayout>
