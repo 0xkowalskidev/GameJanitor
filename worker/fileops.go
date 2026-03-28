@@ -285,30 +285,56 @@ func DownloadFileDirect(resolve VolumeResolver, ctx context.Context, volumeName 
 		return fmt.Errorf("creating parent directory: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return fmt.Errorf("creating download request: %w", err)
-	}
-	req.Header.Set("User-Agent", "gamejanitor")
-
-	resp, err := downloadClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("download failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("download returned status %d", resp.StatusCode)
-	}
-
 	limit := maxBytes
 	if limit <= 0 {
 		limit = defaultMaxDownloadBytes
 	}
 
+	// Try up to 2 attempts — first failure on hash mismatch could be a transient
+	// network issue (truncated response). Second failure is likely a genuine CDN
+	// rebuild, so we warn and keep the file.
+	const maxAttempts = 2
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		hashOK, err := downloadToFile(ctx, url, hostPath, expectedHash, limit)
+		if err != nil {
+			return err
+		}
+		if hashOK || expectedHash == "" {
+			break
+		}
+		if attempt < maxAttempts {
+			slog.Warn("download hash mismatch, retrying", "path", destPath, "attempt", attempt)
+			continue
+		}
+		slog.Warn("download hash mismatch after retry, keeping file", "path", destPath)
+	}
+
+	os.Chown(hostPath, model.GameserverUID, model.GameserverGID)
+	return nil
+}
+
+// downloadToFile downloads a URL to a file, optionally verifying SHA-512.
+// Returns (hashMatched, error). If no hash is expected, hashMatched is true.
+func downloadToFile(ctx context.Context, url string, hostPath string, expectedHash string, limit int64) (bool, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return false, fmt.Errorf("creating download request: %w", err)
+	}
+	req.Header.Set("User-Agent", "gamejanitor")
+
+	resp, err := downloadClient.Do(req)
+	if err != nil {
+		return false, fmt.Errorf("download failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("download returned status %d", resp.StatusCode)
+	}
+
 	f, err := os.OpenFile(hostPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
-		return fmt.Errorf("creating file: %w", err)
+		return false, fmt.Errorf("creating file: %w", err)
 	}
 
 	var w io.Writer = f
@@ -322,25 +348,20 @@ func DownloadFileDirect(resolve VolumeResolver, ctx context.Context, volumeName 
 	if err != nil {
 		f.Close()
 		os.Remove(hostPath)
-		return fmt.Errorf("writing download: %w", err)
+		return false, fmt.Errorf("writing download: %w", err)
 	}
 	if err := f.Close(); err != nil {
 		os.Remove(hostPath)
-		return fmt.Errorf("closing file: %w", err)
+		return false, fmt.Errorf("closing file: %w", err)
 	}
 
 	if hasher != nil {
 		actual := hex.EncodeToString(hasher.Sum(nil))
 		if actual != expectedHash {
-			// Warn but keep the file — upstream CDNs sometimes serve rebuilt files
-			// at the same URL. A hard failure would break entire modpack installs
-			// over a single re-uploaded mod.
-			slog.Warn("download hash mismatch, keeping file", "path", destPath, "expected", expectedHash, "actual", actual)
+			return false, nil
 		}
 	}
-
-	os.Chown(hostPath, model.GameserverUID, model.GameserverGID)
-	return nil
+	return true, nil
 }
 
 // DownloadToMemory downloads a URL to []byte with hash verification.
