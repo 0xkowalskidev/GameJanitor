@@ -27,7 +27,7 @@ func NewWorkshopCatalog(apiKey string, log *slog.Logger) *WorkshopCatalog {
 	}
 }
 
-func (c *WorkshopCatalog) Search(ctx context.Context, query string, filters CatalogFilters) ([]ModResult, int, error) {
+func (c *WorkshopCatalog) Search(ctx context.Context, query string, filters CatalogFilters, offset, limit int) ([]ModResult, int, error) {
 	key := c.apiKey
 	if key == "" {
 		return nil, 0, controller.ErrBadRequest("Steam Workshop search requires a Steam API key. Configure it in Settings, or paste a Workshop item ID directly.")
@@ -38,7 +38,7 @@ func (c *WorkshopCatalog) Search(ctx context.Context, query string, filters Cata
 		"search_text":              {query},
 		"return_short_description": {"true"},
 		"return_previews":          {"true"},
-		"numperpage":               {"20"},
+		"numperpage":               {fmt.Sprintf("%d", limit)},
 		"cursor":                   {"*"},
 		"query_type":               {"1"},
 	}

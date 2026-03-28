@@ -177,10 +177,11 @@ func NewRouter(opts RouterOptions) http.Handler {
 
 				r.Route("/mods", func(r chi.Router) {
 					r.With(requireModsRead).Get("/", modHandlers.List)
-					r.With(requireModsRead).Get("/categories", modHandlers.Categories)
+					r.With(requireModsRead).Get("/config", modHandlers.Config)
 					r.With(requireModsRead).Get("/search", modHandlers.Search)
 					r.With(requireModsRead).Get("/versions", modHandlers.Versions)
 					r.With(requireModsRead).Get("/updates", modHandlers.CheckUpdates)
+					r.With(requireModsRead).Post("/check-compatibility", modHandlers.CheckCompatibility)
 					r.With(requireModsWrite).Post("/", modHandlers.Install)
 					r.With(requireModsWrite).Post("/pack", modHandlers.InstallPack)
 					r.With(requireModsWrite).Post("/update-all", modHandlers.UpdateAll)

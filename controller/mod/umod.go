@@ -58,9 +58,11 @@ type umodPluginDetail struct {
 	Filename         string `json:"filename"`
 }
 
-func (c *UmodCatalog) Search(ctx context.Context, query string, filters CatalogFilters) ([]ModResult, int, error) {
-	limit := 20
-	page := 1
+func (c *UmodCatalog) Search(ctx context.Context, query string, filters CatalogFilters, offset, limit int) ([]ModResult, int, error) {
+	if limit <= 0 {
+		limit = DefaultModLimit
+	}
+	page := (offset / limit) + 1
 
 	params := url.Values{
 		"query":   {query},
@@ -108,7 +110,6 @@ func (c *UmodCatalog) Search(ctx context.Context, query string, filters CatalogF
 		})
 	}
 
-	_ = limit // used for pagination in the future
 	return results, searchResp.TotalCount, nil
 }
 

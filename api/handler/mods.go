@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/warsmite/gamejanitor/controller/mod"
+	"github.com/warsmite/gamejanitor/model"
 )
 
 type ModHandlers struct {
@@ -19,15 +20,15 @@ func NewModHandlers(svc *mod.ModService, log *slog.Logger) *ModHandlers {
 	return &ModHandlers{svc: svc, log: log}
 }
 
-func (h *ModHandlers) Categories(w http.ResponseWriter, r *http.Request) {
+func (h *ModHandlers) Config(w http.ResponseWriter, r *http.Request) {
 	gsID := chi.URLParam(r, "id")
-	cats, err := h.svc.GetCategories(r.Context(), gsID)
+	config, err := h.svc.GetConfig(r.Context(), gsID)
 	if err != nil {
-		h.log.Error("getting mod categories", "gameserver_id", gsID, "error", err)
+		h.log.Error("getting mod config", "gameserver_id", gsID, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
-	respondOK(w, cats)
+	respondOK(w, config)
 }
 
 func (h *ModHandlers) List(w http.ResponseWriter, r *http.Request) {
@@ -215,4 +216,32 @@ func (h *ModHandlers) UpdatePack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	respondOK(w, result)
+}
+
+func (h *ModHandlers) CheckCompatibility(w http.ResponseWriter, r *http.Request) {
+	gsID := chi.URLParam(r, "id")
+
+	var req struct {
+		Env map[string]string `json:"env"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+
+	env := make(model.Env, len(req.Env))
+	for k, v := range req.Env {
+		env[k] = v
+	}
+
+	issues, err := h.svc.CheckCompatibility(r.Context(), gsID, env)
+	if err != nil {
+		h.log.Error("checking mod compatibility", "gameserver_id", gsID, "error", err)
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
+		return
+	}
+	if issues == nil {
+		issues = []mod.ModIssue{}
+	}
+	respondOK(w, issues)
 }

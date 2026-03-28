@@ -6,11 +6,13 @@ import "context"
 // Each source (Modrinth, uMod, Workshop, Thunderstore, CurseForge)
 // implements this interface.
 type ModCatalog interface {
-	Search(ctx context.Context, query string, filters CatalogFilters) ([]ModResult, int, error)
+	Search(ctx context.Context, query string, filters CatalogFilters, offset, limit int) ([]ModResult, int, error)
 	GetDetails(ctx context.Context, modID string) (*ModDetails, error)
 	GetVersions(ctx context.Context, modID string, filters CatalogFilters) ([]ModVersion, error)
 	GetDependencies(ctx context.Context, versionID string) ([]ModDependency, error)
 }
+
+const DefaultModLimit = 20
 
 // CatalogFilters carries resolved filter values for catalog queries.
 type CatalogFilters struct {

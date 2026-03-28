@@ -84,8 +84,10 @@ type modrinthProject struct {
 	Downloads   int    `json:"downloads"`
 }
 
-func (c *ModrinthCatalog) Search(ctx context.Context, query string, filters CatalogFilters) ([]ModResult, int, error) {
-	limit := 20
+func (c *ModrinthCatalog) Search(ctx context.Context, query string, filters CatalogFilters, offset, limit int) ([]ModResult, int, error) {
+	if limit <= 0 {
+		limit = DefaultModLimit
+	}
 
 	var facets []string
 	if pt := filters.Extra["project_type"]; pt != "" {
@@ -102,7 +104,7 @@ func (c *ModrinthCatalog) Search(ctx context.Context, query string, filters Cata
 	params := url.Values{
 		"query":  {query},
 		"facets": {facetStr},
-		"offset": {"0"},
+		"offset": {strconv.Itoa(offset)},
 		"limit":  {strconv.Itoa(limit)},
 	}
 

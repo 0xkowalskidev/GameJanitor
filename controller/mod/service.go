@@ -43,11 +43,12 @@ type ModService struct {
 	packDel     *PackDelivery
 	store       Store
 	gameStore   *games.GameStore
+	options     *games.OptionsRegistry
 	broadcaster *controller.EventBus
 	log         *slog.Logger
 }
 
-func NewModService(store Store, fileSvc FileOperator, gameStore *games.GameStore, broadcaster *controller.EventBus, log *slog.Logger) *ModService {
+func NewModService(store Store, fileSvc FileOperator, gameStore *games.GameStore, options *games.OptionsRegistry, broadcaster *controller.EventBus, log *slog.Logger) *ModService {
 	return &ModService{
 		catalogs:    make(map[string]ModCatalog),
 		fileDel:     NewFileDelivery(fileSvc, log),
@@ -55,6 +56,7 @@ func NewModService(store Store, fileSvc FileOperator, gameStore *games.GameStore
 		packDel:     NewPackDelivery(fileSvc, log),
 		store:       store,
 		gameStore:   gameStore,
+		options:     options,
 		broadcaster: broadcaster,
 		log:         log,
 	}
@@ -67,9 +69,28 @@ func (s *ModService) RegisterCatalog(name string, catalog ModCatalog) {
 
 // --- Query methods ---
 
-// GetCategories returns available mod categories for a gameserver based on
-// its current loader/framework config.
-func (s *ModService) GetCategories(ctx context.Context, gameserverID string) ([]games.ModCategoryDef, error) {
+// ModTabConfig is everything the mods tab needs in one call.
+type ModTabConfig struct {
+	Version    *VersionPickerConfig `json:"version,omitempty"`
+	Loader     *LoaderPickerConfig  `json:"loader,omitempty"`
+	Categories []games.ModCategoryDef `json:"categories"`
+}
+
+type VersionPickerConfig struct {
+	Env     string         `json:"env"`
+	Current string         `json:"current"`
+	Options []games.Option `json:"options"`
+}
+
+type LoaderPickerConfig struct {
+	Env     string   `json:"env"`
+	Current string   `json:"current"`
+	Options []string `json:"options"`
+}
+
+// GetConfig returns the full mods tab configuration: version picker, loader picker,
+// and available categories. One call gives the UI everything it needs.
+func (s *ModService) GetConfig(ctx context.Context, gameserverID string) (*ModTabConfig, error) {
 	gs, err := s.getGameserver(gameserverID)
 	if err != nil {
 		return nil, err
@@ -79,7 +100,46 @@ func (s *ModService) GetCategories(ctx context.Context, gameserverID string) ([]
 		return nil, controller.ErrNotFoundf("game %s not found", gs.GameID)
 	}
 
-	return s.availableCategories(game, gs.Env), nil
+	config := &ModTabConfig{
+		Categories: s.availableCategories(game, gs.Env),
+	}
+
+	// Version picker
+	if game.Mods.VersionEnv != "" {
+		vc := &VersionPickerConfig{
+			Env:     game.Mods.VersionEnv,
+			Current: string(gs.Env[game.Mods.VersionEnv]),
+		}
+		// Resolve dynamic options for the version env var
+		for _, e := range game.DefaultEnv {
+			if e.Key == game.Mods.VersionEnv && e.DynamicOptions != nil && s.options != nil {
+				opts, err := s.options.GetOptionsForEnv(e)
+				if err == nil {
+					vc.Options = opts
+				}
+				break
+			}
+		}
+		config.Version = vc
+	}
+
+	// Loader picker
+	if game.Mods.Loader != nil {
+		lc := &LoaderPickerConfig{
+			Env:     game.Mods.Loader.Env,
+			Current: string(gs.Env[game.Mods.Loader.Env]),
+		}
+		for name := range game.Mods.Loader.Options {
+			lc.Options = append(lc.Options, name)
+		}
+		config.Loader = lc
+	}
+
+	if config.Categories == nil {
+		config.Categories = []games.ModCategoryDef{}
+	}
+
+	return config, nil
 }
 
 func (s *ModService) ListInstalled(ctx context.Context, gameserverID string) ([]model.InstalledMod, error) {
@@ -115,7 +175,7 @@ func (s *ModService) Search(ctx context.Context, gameserverID, category, query s
 		}
 
 		filters := s.buildFilters(src, gameVersion, loaderID)
-		results, total, err := catalog.Search(ctx, query, filters)
+		results, total, err := catalog.Search(ctx, query, filters, offset, limit)
 		if err != nil {
 			s.log.Warn("search failed for source", "source", src.Name, "error", err)
 			continue
