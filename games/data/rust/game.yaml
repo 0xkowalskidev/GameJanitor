@@ -65,16 +65,21 @@ container:
       system: true
   mods:
     loader:
-      env_key: OXIDE_ENABLED
-      label: "Oxide (uMod)"
-      type: boolean
-      default: "false"
-    sources:
-      - type: umod
-        install_path: /data/server/oxide/plugins
-        file_extension: .cs
-        requires_env:
-          OXIDE_ENABLED: "true"
+      env: OXIDE_ENABLED
+      options:
+        "false":
+          mod_sources: []
+        "true":
+          mod_sources: [umod]
+
+    categories:
+      - name: Plugins
+        sources:
+          - name: umod
+            delivery: file
+            install_path: /data/server/oxide/plugins
+            config:
+              category: rust
 
 assets:
   icon: rust-icon.ico

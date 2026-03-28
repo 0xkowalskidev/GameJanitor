@@ -57,10 +57,14 @@ container:
       default: "5"
       system: true
   mods:
-    sources:
-      - type: workshop
-        app_id: 730
-        install_path: /data/server/game/csgo/maps/workshop
+    categories:
+      - name: Maps
+        sources:
+          - name: workshop
+            delivery: manifest
+            config:
+              app_id: "730"
+              manifest_path: /data/.gamejanitor/workshop_items.json
 
 assets:
   icon: counter-strike-2-icon.ico

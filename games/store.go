@@ -43,31 +43,52 @@ type DynamicOptions struct {
 	Config map[string]any `yaml:"config,omitempty" json:"config,omitempty"`
 }
 
-type ModSourceConfig struct {
-	Type          string            `yaml:"type" json:"type"`
+// RuntimeConfig controls image variant resolution.
+// Static images set Image directly. Dynamic resolution (e.g., Minecraft → Java version)
+// uses a named Resolver that maps env values to image tags.
+type RuntimeConfig struct {
+	Image        string            `yaml:"image,omitempty" json:"image,omitempty"`
+	Resolver     string            `yaml:"resolver,omitempty" json:"resolver,omitempty"`
+	DefaultImage string            `yaml:"default_image,omitempty" json:"default_image,omitempty"`
+	Images       map[string]string `yaml:"images,omitempty" json:"images,omitempty"`
+}
+
+// ModsConfig defines the full mod system configuration for a game.
+// Version/loader pickers and mod categories are all declared here.
+type ModsConfig struct {
+	VersionEnv string           `yaml:"version_env,omitempty" json:"version_env,omitempty"`
+	Loader     *ModLoaderDef    `yaml:"loader,omitempty" json:"loader,omitempty"`
+	Categories []ModCategoryDef `yaml:"categories,omitempty" json:"categories,omitempty"`
+}
+
+// ModLoaderDef defines the loader/framework selector (e.g., Fabric/Forge/Paper for MC,
+// Oxide on/off for Rust). The env var controls the loader, and each option specifies
+// which mod sources are available when that loader is active.
+type ModLoaderDef struct {
+	Env     string                    `yaml:"env" json:"env"`
+	Options map[string]ModLoaderOption `yaml:"options" json:"options"`
+}
+
+// ModLoaderOption defines which mod sources are available for a given loader value.
+type ModLoaderOption struct {
+	ModSources []string `yaml:"mod_sources" json:"mod_sources"`
+	LoaderID   string   `yaml:"loader_id,omitempty" json:"loader_id,omitempty"`
+}
+
+// ModCategoryDef defines a tab in the mod UI (e.g., "Mods", "Resource Packs", "Modpacks").
+type ModCategoryDef struct {
+	Name    string             `yaml:"name" json:"name"`
+	Sources []ModCategorySource `yaml:"sources" json:"sources"`
+}
+
+// ModCategorySource configures one mod source within a category.
+type ModCategorySource struct {
+	Name          string            `yaml:"name" json:"name"`
+	Delivery      string            `yaml:"delivery" json:"delivery"` // "file", "manifest", "pack"
 	InstallPath   string            `yaml:"install_path,omitempty" json:"install_path,omitempty"`
-	InstallPaths  map[string]string `yaml:"install_paths,omitempty" json:"install_paths,omitempty"`
-	FileExtension string            `yaml:"file_extension,omitempty" json:"file_extension,omitempty"`
-	RequiresEnv   map[string]string `yaml:"requires_env,omitempty" json:"requires_env,omitempty"`
-	Loaders       map[string]string `yaml:"loaders,omitempty" json:"loaders,omitempty"`
-	LoaderEnv     string            `yaml:"loader_env,omitempty" json:"loader_env,omitempty"`
-	VersionEnv    string            `yaml:"version_env,omitempty" json:"version_env,omitempty"`
-	AppID         int               `yaml:"app_id,omitempty" json:"app_id,omitempty"`
-}
-
-// ModLoaderConfig describes the mod loader/framework selector shown at the top of the Mods tab.
-// This replaces the env var in Settings — the Mods tab owns the loader UX.
-type ModLoaderConfig struct {
-	EnvKey  string   `yaml:"env_key" json:"env_key"`
-	Label   string   `yaml:"label" json:"label"`
-	Type    string   `yaml:"type" json:"type"`
-	Options []string `yaml:"options,omitempty" json:"options,omitempty"`
-	Default string   `yaml:"default" json:"default"`
-}
-
-type ModConfig struct {
-	Loader  *ModLoaderConfig  `yaml:"loader,omitempty" json:"loader,omitempty"`
-	Sources []ModSourceConfig `yaml:"sources,omitempty" json:"sources,omitempty"`
+	OverridesPath string            `yaml:"overrides_path,omitempty" json:"overrides_path,omitempty"`
+	Filters       map[string]string `yaml:"filters,omitempty" json:"filters,omitempty"`
+	Config        map[string]string `yaml:"config,omitempty" json:"config,omitempty"`
 }
 
 type Assets struct {
@@ -80,20 +101,21 @@ type Assets struct {
 // Gamejanitor services use this type — fields are flattened from GameDef.Container
 // for ergonomic access (game.BaseImage instead of game.Container.Image).
 type Game struct {
-	ID                   string       `json:"id"`
-	Name                 string       `json:"name"`
-	Aliases              []string     `json:"aliases,omitempty"`
-	Description          string       `json:"description,omitempty"`
-	AppID                uint32       `json:"app_id,omitempty"`
-	BaseImage            string       `json:"base_image"`
-	IconPath             string       `json:"icon_path"`
-	DefaultPorts         []Port       `json:"default_ports"`
-	DefaultEnv           []EnvVar     `json:"default_env"`
-	RecommendedMemoryMB  int          `json:"recommended_memory_mb"`
-	ReadyPattern         string       `json:"ready_pattern,omitempty"`
-	DisabledCapabilities []string     `json:"disabled_capabilities"`
-	Mods                 ModConfig    `json:"mods,omitempty"`
-	Query                *QueryConfig `json:"query,omitempty"`
+	ID                   string        `json:"id"`
+	Name                 string        `json:"name"`
+	Aliases              []string      `json:"aliases,omitempty"`
+	Description          string        `json:"description,omitempty"`
+	AppID                uint32        `json:"app_id,omitempty"`
+	BaseImage            string        `json:"base_image"`
+	Runtime              RuntimeConfig `json:"runtime,omitempty"`
+	IconPath             string        `json:"icon_path"`
+	DefaultPorts         []Port        `json:"default_ports"`
+	DefaultEnv           []EnvVar      `json:"default_env"`
+	RecommendedMemoryMB  int           `json:"recommended_memory_mb"`
+	ReadyPattern         string        `json:"ready_pattern,omitempty"`
+	DisabledCapabilities []string      `json:"disabled_capabilities"`
+	Mods                 ModsConfig    `json:"mods,omitempty"`
+	Query                *QueryConfig  `json:"query,omitempty"`
 }
 
 // HasCapability returns true if the capability is NOT in the game's DisabledCapabilities list.
@@ -257,8 +279,13 @@ func defToGame(def *GameDef) *Game {
 	}
 
 	mods := c.Mods
-	if mods.Sources == nil {
-		mods.Sources = []ModSourceConfig{}
+	if mods.Categories == nil {
+		mods.Categories = []ModCategoryDef{}
+	}
+
+	runtime := RuntimeConfig{}
+	if c.Runtime != nil {
+		runtime = *c.Runtime
 	}
 
 	aliases := def.Aliases
@@ -273,6 +300,7 @@ func defToGame(def *GameDef) *Game {
 		Description:          def.Description,
 		AppID:                def.AppID,
 		BaseImage:            c.Image,
+		Runtime:              runtime,
 		RecommendedMemoryMB:  c.RecommendedMemoryMB,
 		ReadyPattern:         c.ReadyPattern,
 		DefaultPorts:         ports,

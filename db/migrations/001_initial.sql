@@ -141,14 +141,30 @@ CREATE TABLE installed_mods (
     gameserver_id TEXT NOT NULL REFERENCES gameservers(id) ON DELETE CASCADE,
     source TEXT NOT NULL,
     source_id TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT '',
     name TEXT NOT NULL,
     version TEXT NOT NULL DEFAULT '',
     version_id TEXT NOT NULL DEFAULT '',
     file_path TEXT NOT NULL DEFAULT '',
     file_name TEXT NOT NULL DEFAULT '',
+    delivery TEXT NOT NULL DEFAULT 'file',
+    auto_installed BOOLEAN NOT NULL DEFAULT 0,
+    depends_on TEXT,
+    pack_id TEXT,
     metadata JSON NOT NULL DEFAULT '{}',
     installed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_installed_mods_gameserver ON installed_mods(gameserver_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_installed_mods_unique ON installed_mods(gameserver_id, source, source_id);
+CREATE INDEX IF NOT EXISTS idx_installed_mods_depends ON installed_mods(depends_on) WHERE depends_on IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_installed_mods_pack ON installed_mods(pack_id) WHERE pack_id IS NOT NULL;
+
+CREATE TABLE pack_exclusions (
+    id TEXT PRIMARY KEY,
+    pack_mod_id TEXT NOT NULL REFERENCES installed_mods(id) ON DELETE CASCADE,
+    source_id TEXT NOT NULL,
+    excluded_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_pack_exclusions_unique ON pack_exclusions(pack_mod_id, source_id);

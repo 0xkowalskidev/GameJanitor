@@ -51,10 +51,14 @@ container:
       default: "5"
       system: true
   mods:
-    sources:
-      - type: workshop
-        app_id: 4000
-        install_path: /data/server/garrysmod/addons
+    categories:
+      - name: Addons
+        sources:
+          - name: workshop
+            delivery: manifest
+            config:
+              app_id: "4000"
+              manifest_path: /data/.gamejanitor/workshop_items.json
 
 assets:
   icon: garrys-mod-icon.ico

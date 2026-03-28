@@ -48,12 +48,13 @@ type EOSQueryConfig struct {
 // ContainerConfig holds fields only needed by gamejanitor for running game servers.
 // Query-only games (most gjq games) omit this section entirely.
 type ContainerConfig struct {
-	Image                string    `yaml:"image" json:"image"`
-	ReadyPattern         string    `yaml:"ready_pattern,omitempty" json:"ready_pattern,omitempty"`
-	RecommendedMemoryMB  int       `yaml:"recommended_memory_mb,omitempty" json:"recommended_memory_mb,omitempty"`
-	DisabledCapabilities []string  `yaml:"disabled_capabilities,omitempty" json:"disabled_capabilities,omitempty"`
-	Env                  []EnvVar  `yaml:"env,omitempty" json:"env,omitempty"`
-	Mods                 ModConfig `yaml:"mods,omitempty" json:"mods,omitempty"`
+	Image                string         `yaml:"image" json:"image"`
+	Runtime              *RuntimeConfig `yaml:"runtime,omitempty" json:"runtime,omitempty"`
+	ReadyPattern         string         `yaml:"ready_pattern,omitempty" json:"ready_pattern,omitempty"`
+	RecommendedMemoryMB  int            `yaml:"recommended_memory_mb,omitempty" json:"recommended_memory_mb,omitempty"`
+	DisabledCapabilities []string       `yaml:"disabled_capabilities,omitempty" json:"disabled_capabilities,omitempty"`
+	Env                  []EnvVar       `yaml:"env,omitempty" json:"env,omitempty"`
+	Mods                 ModsConfig     `yaml:"mods,omitempty" json:"mods,omitempty"`
 }
 
 // HasCapability returns true if the capability is NOT disabled.
@@ -172,8 +173,8 @@ func newRegistryFromFS(root fs.FS) (*Registry, error) {
 			if def.Container.Env == nil {
 				def.Container.Env = []EnvVar{}
 			}
-			if def.Container.Mods.Sources == nil {
-				def.Container.Mods.Sources = []ModSourceConfig{}
+			if def.Container.Mods.Categories == nil {
+				def.Container.Mods.Categories = []ModCategoryDef{}
 			}
 		}
 		if def.Query != nil && def.Query.Supports == nil {
