@@ -358,48 +358,120 @@ type Activity struct {
 
 // --- Mods ---
 
-// InstalledMod represents a mod installed on a gameserver.
-type InstalledMod struct {
-	ID           string          `json:"id"`
-	GameserverID string          `json:"gameserver_id"`
-	Source       string          `json:"source"`
-	SourceID     string          `json:"source_id"`
-	Name         string          `json:"name"`
-	Version      string          `json:"version"`
-	VersionID    string          `json:"version_id"`
-	FilePath     string          `json:"file_path"`
-	FileName     string          `json:"file_name"`
-	Metadata     json.RawMessage `json:"metadata"`
-	InstalledAt  time.Time       `json:"installed_at"`
+// ModTabConfig is the full mods tab configuration.
+type ModTabConfig struct {
+	Version    *VersionPickerConfig `json:"version,omitempty"`
+	Loader     *LoaderPickerConfig  `json:"loader,omitempty"`
+	Categories []ModCategoryDef     `json:"categories"`
 }
 
-// InstallModRequest is the request body for installing a mod.
-type InstallModRequest struct {
-	Source    string `json:"source"`
-	SourceID string `json:"source_id"`
-	VersionID string `json:"version_id,omitempty"`
-	Name     string `json:"name"`
+type VersionPickerConfig struct {
+	Env     string          `json:"env"`
+	Current string          `json:"current"`
+	Options []DynamicOption `json:"options"`
 }
 
-// ModSource describes an available mod source for a game.
-type ModSource struct {
-	Type          string            `json:"type"`
+type LoaderPickerConfig struct {
+	Env     string   `json:"env"`
+	Current string   `json:"current"`
+	Options []string `json:"options"`
+}
+
+type DynamicOption struct {
+	Value string `json:"value"`
+	Label string `json:"label"`
+	Group string `json:"group,omitempty"`
+}
+
+type ModCategoryDef struct {
+	Name            string             `json:"name"`
+	AlwaysAvailable bool               `json:"always_available,omitempty"`
+	Sources         []ModCategorySource `json:"sources"`
+}
+
+type ModCategorySource struct {
+	Name          string            `json:"name"`
+	Delivery      string            `json:"delivery"`
 	InstallPath   string            `json:"install_path,omitempty"`
-	InstallPaths  map[string]string `json:"install_paths,omitempty"`
-	FileExtension string            `json:"file_extension,omitempty"`
-	RequiresEnv   map[string]string `json:"requires_env,omitempty"`
-	Loaders       map[string]string `json:"loaders,omitempty"`
-	LoaderEnv     string            `json:"loader_env,omitempty"`
-	VersionEnv    string            `json:"version_env,omitempty"`
-	AppID         int               `json:"app_id,omitempty"`
+	OverridesPath string            `json:"overrides_path,omitempty"`
+	Filters       map[string]string `json:"filters,omitempty"`
+	Config        map[string]string `json:"config,omitempty"`
 }
 
-// ModSearchResult represents a mod from a search query.
-// The structure varies by source; use json.RawMessage fields as needed.
-type ModSearchResult json.RawMessage
+type InstalledMod struct {
+	ID            string          `json:"id"`
+	GameserverID  string          `json:"gameserver_id"`
+	Source        string          `json:"source"`
+	SourceID      string          `json:"source_id"`
+	Category      string          `json:"category"`
+	Name          string          `json:"name"`
+	Version       string          `json:"version"`
+	VersionID     string          `json:"version_id"`
+	FilePath      string          `json:"file_path"`
+	FileName      string          `json:"file_name"`
+	Delivery      string          `json:"delivery"`
+	AutoInstalled bool            `json:"auto_installed"`
+	DependsOn     *string         `json:"depends_on,omitempty"`
+	PackID        *string         `json:"pack_id,omitempty"`
+	Metadata      json.RawMessage `json:"metadata"`
+	InstalledAt   time.Time       `json:"installed_at"`
+}
 
-// ModVersion represents a version of a mod.
-type ModVersion json.RawMessage
+type ModSearchResult struct {
+	SourceID    string `json:"source_id"`
+	Source      string `json:"source"`
+	Name        string `json:"name"`
+	Slug        string `json:"slug"`
+	Author      string `json:"author"`
+	Description string `json:"description"`
+	IconURL     string `json:"icon_url"`
+	Downloads   int    `json:"downloads"`
+	UpdatedAt   string `json:"updated_at"`
+}
+
+type ModVersion struct {
+	VersionID    string   `json:"version_id"`
+	Version      string   `json:"version"`
+	FileName     string   `json:"file_name"`
+	DownloadURL  string   `json:"download_url"`
+	GameVersion  string   `json:"game_version"`
+	GameVersions []string `json:"game_versions,omitempty"`
+	Loader       string   `json:"loader"`
+}
+
+type ModUpdate struct {
+	ModID          string     `json:"mod_id"`
+	ModName        string     `json:"mod_name"`
+	CurrentVersion string     `json:"current_version"`
+	LatestVersion  ModVersion `json:"latest_version"`
+}
+
+type ModIssue struct {
+	ModID   string `json:"mod_id"`
+	ModName string `json:"mod_name"`
+	Type    string `json:"type"`
+	Reason  string `json:"reason"`
+}
+
+type InstallModRequest struct {
+	Category  string `json:"category"`
+	Source    string `json:"source"`
+	SourceID  string `json:"source_id"`
+	VersionID string `json:"version_id,omitempty"`
+}
+
+type InstallPackRequest struct {
+	Source    string `json:"source"`
+	PackID    string `json:"pack_id"`
+	VersionID string `json:"version_id,omitempty"`
+}
+
+type SearchResults struct {
+	Results []ModSearchResult `json:"results"`
+	Total   int               `json:"total"`
+	Offset  int               `json:"offset"`
+	Limit   int               `json:"limit"`
+}
 
 // --- Files ---
 
