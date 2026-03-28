@@ -102,6 +102,7 @@ CREATE INDEX IF NOT EXISTS idx_activity_gameserver_id ON activity(gameserver_id)
 CREATE INDEX IF NOT EXISTS idx_activity_status ON activity(status);
 CREATE INDEX IF NOT EXISTS idx_activity_type ON activity(type);
 CREATE INDEX IF NOT EXISTS idx_activity_status_changed ON activity(gameserver_id, type, started_at DESC) WHERE type = 'status_changed';
+CREATE INDEX IF NOT EXISTS idx_activity_worker_id ON activity(worker_id);
 CREATE INDEX IF NOT EXISTS idx_gameservers_game_id ON gameservers(game_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_gameservers_sftp_username ON gameservers(sftp_username) WHERE sftp_username != '';
 CREATE INDEX IF NOT EXISTS idx_schedules_gameserver_id ON schedules(gameserver_id);
