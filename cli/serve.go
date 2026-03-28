@@ -5,12 +5,15 @@ import (
 	"crypto/ecdsa"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	"github.com/warsmite/gamejanitor/config"
@@ -146,9 +149,12 @@ func runServe(cmd *cobra.Command, args []string) error {
 	logger := slog.New(multiHandler{stderrHandler, fileHandler})
 	slog.SetDefault(logger)
 
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
 	// Worker-only mode: start gRPC agent and exit (no DB, no web UI)
 	if cfg.WorkerOnly() {
-		return runWorkerAgent(cfg, logger)
+		return runWorkerAgent(ctx, cfg, logger)
 	}
 
 	role := "controller"
@@ -185,7 +191,6 @@ func runServe(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	ctx := context.Background()
 	svcs.StatusMgr.Start(ctx)
 	defer svcs.StatusMgr.Stop()
 
@@ -215,13 +220,18 @@ func runServe(cmd *cobra.Command, args []string) error {
 		}
 		ticker := time.NewTicker(time.Hour)
 		defer ticker.Stop()
-		for range ticker.C {
-			days := svcs.SettingsSvc.GetInt(settings.SettingEventRetention)
-			if days > 0 {
-				if pruned, err := db.PruneActivities(days); err != nil {
-					logger.Error("failed to prune activities", "error", err)
-				} else if pruned > 0 {
-					logger.Info("pruned old activities", "count", pruned, "retention_days", days)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				days := svcs.SettingsSvc.GetInt(settings.SettingEventRetention)
+				if days > 0 {
+					if pruned, err := db.PruneActivities(days); err != nil {
+						logger.Error("failed to prune activities", "error", err)
+					} else if pruned > 0 {
+						logger.Info("pruned old activities", "count", pruned, "retention_days", days)
+					}
 				}
 			}
 		}
@@ -258,8 +268,9 @@ func runServe(cmd *cobra.Command, args []string) error {
 			}
 		}
 	}
+	grpcServer := newGRPCServer(nil, gameStore, cfg.DataDir, registry, svcs.AuthSvc, db, cfg.Bind, cfg.GRPCPort, serverTLS, dialBackTLS, caCert, caKey, logger)
 	go func() {
-		if err := startGRPCServer(nil, gameStore, cfg.DataDir, registry, svcs.AuthSvc, db, cfg.Bind, cfg.GRPCPort, serverTLS, dialBackTLS, caCert, caKey, logger); err != nil {
+		if err := grpcServer.serve(); err != nil {
 			logger.Error("grpc server stopped", "error", err)
 		}
 	}()
@@ -310,7 +321,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 			AdvertiseAddress:  fmt.Sprintf("%s:%d", advertiseHost, cfg.WorkerGRPCPort),
 		}
 		go func() {
-			if err := runWorkerAgent(workerCfg, logger); err != nil {
+			if err := runWorkerAgent(ctx, workerCfg, logger); err != nil {
 				logger.Error("local worker agent failed", "error", err)
 			}
 		}()
@@ -416,8 +427,34 @@ func runServe(cmd *cobra.Command, args []string) error {
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
-	if err := srv.ListenAndServe(); err != nil {
-		return listenError("http", addr, cfg.Port, err)
+
+	// Start HTTP server in background so we can wait for shutdown signal
+	srvErr := make(chan error, 1)
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			srvErr <- listenError("http", addr, cfg.Port, err)
+		}
+		close(srvErr)
+	}()
+
+	// Wait for signal or server error
+	select {
+	case err := <-srvErr:
+		return err
+	case <-ctx.Done():
 	}
+
+	logger.Info("shutting down")
+
+	// Give in-flight requests up to 10 seconds to finish
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+
+	grpcServer.gracefulStop()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		logger.Error("http server shutdown error", "error", err)
+	}
+
+	logger.Info("shutdown complete")
 	return nil
 }

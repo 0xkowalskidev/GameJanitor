@@ -32,7 +32,7 @@ import (
 
 // runWorkerAgent starts a worker-only node: gRPC agent wrapping a local Docker worker.
 // No database, no web UI, no scheduler.
-func runWorkerAgent(cfg config.Config, logger *slog.Logger) error {
+func runWorkerAgent(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	grpcPort := cfg.GRPCPort
 	if grpcPort == 0 {
 		grpcPort = 9090
@@ -74,8 +74,9 @@ func runWorkerAgent(cfg config.Config, logger *slog.Logger) error {
 	}
 
 	// Start gRPC agent in background
+	grpcServer := newGRPCServer(localWorker, gameStore, cfg.DataDir, nil, nil, nil, cfg.Bind, grpcPort, workerServerTLS, nil, nil, nil, logger)
 	go func() {
-		if err := startGRPCServer(localWorker, gameStore, cfg.DataDir, nil, nil, nil, cfg.Bind, grpcPort, workerServerTLS, nil, nil, nil, logger); err != nil {
+		if err := grpcServer.serve(); err != nil {
 			logger.Error("grpc agent stopped", "error", err)
 		}
 	}()
@@ -123,24 +124,26 @@ func runWorkerAgent(cfg config.Config, logger *slog.Logger) error {
 			"has_token", cfg.WorkerToken != "",
 		)
 
-		runRegistrationLoop(cfg, workerID, grpcPort, workerTLSConfig, logger)
-		// runRegistrationLoop blocks forever
+		runRegistrationLoop(ctx, cfg, workerID, grpcPort, workerTLSConfig, logger)
 	}
 
-	// No controller — just serve gRPC forever
+	// No controller — just serve gRPC until shutdown signal
 	logger.Info("worker agent running without controller (standalone gRPC)")
-	select {}
+	<-ctx.Done()
+	logger.Info("shutting down worker agent")
+	grpcServer.gracefulStop()
+	return nil
 }
 
 // runRegistrationLoop connects to the controller, registers, and sends heartbeats.
-// Reconnects with backoff on failure. Blocks forever.
+// Reconnects with backoff on failure. Blocks until context is cancelled.
 // Re-detects network info on each registration attempt so that workers recover
 // from boot-time detection failures (e.g. network not ready after power cut).
-func runRegistrationLoop(cfg config.Config, workerID string, grpcPort int, tlsConfig *tls.Config, logger *slog.Logger) {
+func runRegistrationLoop(ctx context.Context, cfg config.Config, workerID string, grpcPort int, tlsConfig *tls.Config, logger *slog.Logger) {
 	backoff := time.Second
 	maxBackoff := 30 * time.Second
 
-	for {
+	for ctx.Err() == nil {
 		// Re-detect IPs each attempt so we recover if network wasn't ready at startup
 		netInfo := netinfo.Detect(logger)
 		ownAddr := fmt.Sprintf("%s:%d", netInfo.LANIP, grpcPort)
@@ -158,13 +161,11 @@ func runRegistrationLoop(cfg config.Config, workerID string, grpcPort int, tlsCo
 		client, conn, err := orchestrator.DialController(cfg.ControllerAddress, cfg.WorkerToken, tlsConfig)
 		if err != nil {
 			logger.Error("failed to connect to controller", "error", err, "retry_in", backoff)
-			time.Sleep(backoff)
+			sleepCtx(ctx, backoff)
 			backoff = min(backoff*2, maxBackoff)
 			continue
 		}
 
-		// Register
-		ctx := context.Background()
 		req := buildHeartbeatRequest(workerID, netInfo)
 		hostname, _ := os.Hostname()
 		regReq := &pb.RegisterRequest{
@@ -201,14 +202,14 @@ func runRegistrationLoop(cfg config.Config, workerID string, grpcPort int, tlsCo
 		if err != nil {
 			logger.Error("registration failed", "error", err, "retry_in", backoff)
 			conn.Close()
-			time.Sleep(backoff)
+			sleepCtx(ctx, backoff)
 			backoff = min(backoff*2, maxBackoff)
 			continue
 		}
 		if !regResp.Accepted {
 			logger.Error("registration rejected by controller", "retry_in", backoff)
 			conn.Close()
-			time.Sleep(backoff)
+			sleepCtx(ctx, backoff)
 			backoff = min(backoff*2, maxBackoff)
 			continue
 		}
@@ -221,9 +222,15 @@ func runRegistrationLoop(cfg config.Config, workerID string, grpcPort int, tlsCo
 		ticker := time.NewTicker(10 * time.Second)
 		heartbeatFailed := false
 		firstHeartbeat := true
-		for {
+		for ctx.Err() == nil {
 			if !firstHeartbeat {
-				<-ticker.C
+				select {
+				case <-ctx.Done():
+				case <-ticker.C:
+				}
+				if ctx.Err() != nil {
+					break
+				}
 			}
 			firstHeartbeat = false
 			hbReq := buildHeartbeatRequest(workerID, netInfo)
@@ -243,18 +250,36 @@ func runRegistrationLoop(cfg config.Config, workerID string, grpcPort int, tlsCo
 		ticker.Stop()
 		conn.Close()
 
-		if heartbeatFailed {
+		if heartbeatFailed && ctx.Err() == nil {
 			logger.Info("reconnecting to controller", "retry_in", backoff)
-			time.Sleep(backoff)
+			sleepCtx(ctx, backoff)
 		}
 	}
 }
 
-func startGRPCServer(w worker.Worker, gameStore *games.GameStore, dataDir string, registry *orchestrator.Registry, authSvc *auth.AuthService, grpcStore orchestrator.GRPCStore, bindAddress string, port int, tlsConfig *tls.Config, dialBackTLS *tls.Config, caCert *x509.Certificate, caKey *ecdsa.PrivateKey, logger *slog.Logger) error {
+// sleepCtx sleeps for the given duration or until the context is cancelled.
+func sleepCtx(ctx context.Context, d time.Duration) {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+	case <-t.C:
+	}
+}
+
+// grpcHandle wraps a gRPC server with its listener for lifecycle management.
+type grpcHandle struct {
+	server   *grpc.Server
+	listener net.Listener
+	logger   *slog.Logger
+}
+
+func newGRPCServer(w worker.Worker, gameStore *games.GameStore, dataDir string, registry *orchestrator.Registry, authSvc *auth.AuthService, grpcStore orchestrator.GRPCStore, bindAddress string, port int, tlsConfig *tls.Config, dialBackTLS *tls.Config, caCert *x509.Certificate, caKey *ecdsa.PrivateKey, logger *slog.Logger) *grpcHandle {
 	addr := fmt.Sprintf("%s:%d", bindAddress, port)
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
-		return listenError("gRPC", addr, port, err)
+		logger.Error("failed to start grpc listener", "error", listenError("gRPC", addr, port, err))
+		return &grpcHandle{logger: logger}
 	}
 
 	var opts []grpc.ServerOption
@@ -266,22 +291,37 @@ func startGRPCServer(w worker.Worker, gameStore *games.GameStore, dataDir string
 	if registry != nil {
 		opts = append(opts, grpc.UnaryInterceptor(agent.WorkerAuthInterceptor()))
 	}
-	grpcServer := grpc.NewServer(opts...)
+	server := grpc.NewServer(opts...)
 
 	// Register WorkerService if we have a local worker (worker or controller+worker mode)
 	if w != nil {
 		agentSvc := agent.New(w, gameStore, dataDir, logger)
-		pb.RegisterWorkerServiceServer(grpcServer, agentSvc)
+		pb.RegisterWorkerServiceServer(server, agentSvc)
 	}
 
 	// Register ControllerService if we have a registry (controller or controller+worker mode)
 	if registry != nil {
 		controllerSvc := orchestrator.NewControllerGRPC(registry, authSvc, grpcStore, dialBackTLS, caCert, caKey, logger)
-		pb.RegisterControllerServiceServer(grpcServer, controllerSvc)
+		pb.RegisterControllerServiceServer(server, controllerSvc)
 	}
 
-	logger.Info("grpc server listening", "port", port)
-	return grpcServer.Serve(listener)
+	return &grpcHandle{server: server, listener: listener, logger: logger}
+}
+
+func (h *grpcHandle) serve() error {
+	if h.server == nil {
+		return fmt.Errorf("grpc server not initialized")
+	}
+	h.logger.Info("grpc server listening", "addr", h.listener.Addr())
+	return h.server.Serve(h.listener)
+}
+
+func (h *grpcHandle) gracefulStop() {
+	if h.server == nil {
+		return
+	}
+	h.logger.Info("stopping grpc server")
+	h.server.GracefulStop()
 }
 
 // loadOrGenerateWorkerID reads a persisted worker ID from {dataDir}/worker-id,
