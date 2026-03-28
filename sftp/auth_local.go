@@ -25,7 +25,7 @@ func NewLocalAuth(store GameserverLookup) *LocalAuth {
 func (a *LocalAuth) ValidateLogin(username, password string) (string, string, error) {
 	gs, err := a.store.GetGameserverBySFTPUsername(username)
 	if err != nil || gs == nil {
-		return "", "", fmt.Errorf("unknown sftp user %s", username)
+		return "", "", fmt.Errorf("invalid credentials")
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(gs.HashedSFTPPassword), []byte(password)); err != nil {
 		return "", "", fmt.Errorf("invalid credentials")
