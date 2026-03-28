@@ -83,9 +83,11 @@ func TestBackup_TwoSimultaneous_BothComplete(t *testing.T) {
 	b2, err := svc.BackupSvc.CreateBackup(ctx, gs.ID, "backup-2")
 	require.NoError(t, err)
 
-	// Wait for both to leave in_progress
+	// Wait for both to leave in_progress, plus a short settle for
+	// post-status DB writes (size update, activity completion)
 	waitForBackupDone(t, svc, b1.ID)
 	waitForBackupDone(t, svc, b2.ID)
+	time.Sleep(100 * time.Millisecond)
 
 	// Both should have valid terminal states
 	s := store.New(svc.DB)
