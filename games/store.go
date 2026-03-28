@@ -83,7 +83,17 @@ type ModLoaderOption struct {
 type ModCategoryDef struct {
 	Name            string             `yaml:"name" json:"name"`
 	AlwaysAvailable bool               `yaml:"always_available,omitempty" json:"always_available,omitempty"`
+	InstallPath     string             `yaml:"install_path,omitempty" json:"install_path,omitempty"`
 	Sources         []ModCategorySource `yaml:"sources" json:"sources"`
+}
+
+// ResolveInstallPath returns the install path for a source, falling back to the category-level path.
+// This allows categories with no catalog sources to still define where mods go (scan, upload, URL install).
+func (c ModCategoryDef) ResolveInstallPath(src *ModCategorySource) string {
+	if src != nil && src.InstallPath != "" {
+		return src.InstallPath
+	}
+	return c.InstallPath
 }
 
 // ModCategorySource configures one mod source within a category.

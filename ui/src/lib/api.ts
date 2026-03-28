@@ -340,6 +340,7 @@ export interface ModCategorySource {
 export interface ModCategoryDef {
   name: string;
   always_available?: boolean;
+  install_path?: string;
   sources: ModCategorySource[];
 }
 
