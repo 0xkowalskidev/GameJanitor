@@ -238,7 +238,9 @@ func (s *ModService) Install(ctx context.Context, gameserverID string, sourceTyp
 	fullPath := path.Join(installPath, fileName)
 
 	// Ensure the install directory exists
-	_ = s.fileSvc.CreateDirectory(ctx, gameserverID, installPath)
+	if err := s.fileSvc.CreateDirectory(ctx, gameserverID, installPath); err != nil {
+		return nil, fmt.Errorf("creating mod install directory %s: %w", installPath, err)
+	}
 
 	// Write file to gameserver volume
 	if err := s.fileSvc.WriteFile(ctx, gameserverID, fullPath, content); err != nil {
@@ -407,8 +409,11 @@ func (s *ModService) uninstallWorkshop(ctx context.Context, gameserverID string,
 	manifestPath := "/data/.gamejanitor/workshop_items.json"
 
 	if len(workshopIDs) == 0 {
-		// Delete the manifest if no workshop mods remain
-		_ = s.fileSvc.DeletePath(ctx, gameserverID, manifestPath)
+		// Delete the manifest if no workshop mods remain — best effort,
+		// missing file is not an error worth propagating to the user
+		if err := s.fileSvc.DeletePath(ctx, gameserverID, manifestPath); err != nil {
+			s.log.Warn("failed to delete workshop manifest", "gameserver_id", gameserverID, "error", err)
+		}
 	} else {
 		if err := s.fileSvc.WriteFile(ctx, gameserverID, manifestPath, manifestJSON); err != nil {
 			s.log.Warn("failed to update workshop manifest", "gameserver_id", gameserverID, "error", err)
@@ -434,7 +439,9 @@ func (s *ModService) writeWorkshopManifest(ctx context.Context, gameserverID str
 	manifestJSON, _ := json.Marshal(workshopIDs)
 
 	// Ensure the .gamejanitor directory exists
-	_ = s.fileSvc.CreateDirectory(ctx, gameserverID, "/data/.gamejanitor")
+	if err := s.fileSvc.CreateDirectory(ctx, gameserverID, "/data/.gamejanitor"); err != nil {
+		return fmt.Errorf("creating .gamejanitor directory: %w", err)
+	}
 
 	return s.fileSvc.WriteFile(ctx, gameserverID, "/data/.gamejanitor/workshop_items.json", manifestJSON)
 }
