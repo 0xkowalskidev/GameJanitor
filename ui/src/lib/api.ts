@@ -317,10 +317,15 @@ export interface VersionPickerConfig {
   options: ModVersionOption[];
 }
 
+export interface LoaderOption {
+  value: string;
+  mod_sources: string[];
+}
+
 export interface LoaderPickerConfig {
   env: string;
   current: string;
-  options: string[];
+  options: LoaderOption[];
 }
 
 export interface ModCategorySource {

@@ -91,20 +91,35 @@
   const loaderIsToggle = $derived(() => {
     if (!config?.loader) return false;
     const opts = config.loader.options;
-    return opts.length === 2 && (opts[0] === 'false' || opts[0] === '' || opts[1] === 'false' || opts[1] === '');
+    return opts.length === 2 && (opts[0].value === 'false' || opts[0].value === '' || opts[1].value === 'false' || opts[1].value === '');
   });
 
   // Loader toggle: which option is the "on" value
   const loaderOnValue = $derived(() => {
     if (!config?.loader) return '';
     const opts = config.loader.options;
-    return opts.find(o => o !== 'false' && o !== '') || opts[1] || '';
+    return opts.find(o => o.value !== 'false' && o.value !== '')?.value || opts[1]?.value || '';
   });
 
   const loaderIsOn = $derived(() => {
     if (!config?.loader) return false;
     return config.loader.current !== 'false' && config.loader.current !== '';
   });
+
+  // Find which loaders enable a given source name
+  function loadersForSource(sourceName: string): string[] {
+    if (!config?.loader) return [];
+    return config.loader.options
+      .filter(o => o.mod_sources.includes(sourceName))
+      .map(o => o.value);
+  }
+
+  // Check if the current loader supports a given source
+  function currentLoaderSupportsSource(sourceName: string): boolean {
+    if (!config?.loader) return true; // no loader config = all sources available
+    const current = config.loader.options.find(o => o.value === config.loader!.current);
+    return current?.mod_sources.includes(sourceName) ?? false;
+  }
 
   // Whether the active category uses pack delivery
   const activeCategoryIsPack = $derived(() => {
@@ -235,7 +250,7 @@
 
   function handleLoaderToggle() {
     if (!config?.loader) return;
-    const newValue = loaderIsOn() ? (config.loader.options.find(o => o === 'false' || o === '') || 'false') : loaderOnValue();
+    const newValue = loaderIsOn() ? (config.loader.options.find(o => o.value === 'false' || o.value === '')?.value || 'false') : loaderOnValue();
     handleLoaderChange(newValue);
   }
 
@@ -267,8 +282,46 @@
     }
   }
 
-  // Install
+  // Install — with loader switch prompt if needed
   async function installMod(result: ModSearchResult) {
+    // Check if the current loader supports this mod's source
+    if (!currentLoaderSupportsSource(result.source)) {
+      const compatible = loadersForSource(result.source);
+      if (compatible.length === 0) {
+        toast(`No loader supports ${result.source} mods for this game`, 'error');
+        return;
+      }
+      const loaderName = compatible[0];
+      const accepted = await confirm({
+        title: 'Loader Required',
+        message: `${result.name} requires ${loaderName}. Switch to ${loaderName}?`,
+        confirmLabel: `Switch to ${loaderName}`,
+      });
+      if (!accepted) return;
+
+      // Switch loader, then continue with install
+      if (!gameserver || !config?.loader) return;
+      const currentEnv = typeof gameserver.env === 'string' ? JSON.parse(gameserver.env) : { ...gameserver.env };
+      const newEnv = { ...currentEnv, [config.loader.env]: loaderName };
+      try {
+        await api.gameservers.update(id, { env: newEnv });
+        await loadConfig();
+      } catch (e: any) {
+        toast(`Failed to switch loader: ${e.message}`, 'error');
+        return;
+      }
+    }
+
+    // Modpack confirmation
+    if (activeCategoryIsPack()) {
+      const accepted = await confirm({
+        title: 'Install Modpack',
+        message: `Install "${result.name}"? This will download all mods in the pack and may overwrite config files.`,
+        confirmLabel: 'Install',
+      });
+      if (!accepted) return;
+    }
+
     const key = `${result.source}:${result.source_id}`;
     installingIds = new Set([...installingIds, key]);
     try {
@@ -453,7 +506,7 @@
                 onchange={(e) => handleLoaderChange((e.target as HTMLSelectElement).value)}
                 disabled={!canWrite}>
                 {#each config.loader.options as opt}
-                  <option value={opt} selected={opt === config.loader!.current}>{opt || '(none)'}</option>
+                  <option value={opt.value} selected={opt.value === config.loader!.current}>{opt.value || '(none)'}</option>
                 {/each}
               </select>
             {/if}

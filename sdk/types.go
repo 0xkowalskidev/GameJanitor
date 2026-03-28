@@ -371,10 +371,15 @@ type VersionPickerConfig struct {
 	Options []DynamicOption `json:"options"`
 }
 
+type LoaderOption struct {
+	Value      string   `json:"value"`
+	ModSources []string `json:"mod_sources"`
+}
+
 type LoaderPickerConfig struct {
-	Env     string   `json:"env"`
-	Current string   `json:"current"`
-	Options []string `json:"options"`
+	Env     string         `json:"env"`
+	Current string         `json:"current"`
+	Options []LoaderOption `json:"options"`
 }
 
 type DynamicOption struct {
