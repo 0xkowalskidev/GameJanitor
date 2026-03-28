@@ -12,6 +12,7 @@ import (
 
 	"github.com/warsmite/gamejanitor/docker"
 	"github.com/warsmite/gamejanitor/games"
+	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/pkg/naming"
 	"github.com/warsmite/gamejanitor/worker"
 )
@@ -122,7 +123,18 @@ func (w *LocalWorker) ContainerStats(ctx context.Context, containerID string) (*
 }
 
 func (w *LocalWorker) CreateVolume(ctx context.Context, name string) error {
-	return w.Docker.CreateVolume(ctx, name)
+	if err := w.Docker.CreateVolume(ctx, name); err != nil {
+		return err
+	}
+	// Set ownership so the gameserver user (1001) can write before the container starts.
+	// Docker creates volumes as root, but mods may be installed before first start.
+	if w.HasDirectAccess(ctx, name) {
+		mountpoint, err := w.Resolve(ctx, name)
+		if err == nil {
+			os.Chown(mountpoint, model.GameserverUID, model.GameserverGID)
+		}
+	}
+	return nil
 }
 
 func (w *LocalWorker) RemoveVolume(ctx context.Context, name string) error {

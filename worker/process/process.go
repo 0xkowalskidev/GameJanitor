@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/warsmite/gamejanitor/games"
+	"github.com/warsmite/gamejanitor/model"
 	"github.com/warsmite/gamejanitor/worker"
 )
 
@@ -448,8 +449,11 @@ func (w *ProcessWorker) ContainerStats(ctx context.Context, containerID string) 
 // --- Volume operations ---
 
 func (w *ProcessWorker) CreateVolume(ctx context.Context, name string) error {
-	path := filepath.Join(w.dataDir, "volumes", name)
-	return os.MkdirAll(path, 0755)
+	volPath := filepath.Join(w.dataDir, "volumes", name)
+	if err := os.MkdirAll(volPath, 0755); err != nil {
+		return err
+	}
+	return os.Chown(volPath, model.GameserverUID, model.GameserverGID)
 }
 
 func (w *ProcessWorker) RemoveVolume(ctx context.Context, name string) error {
