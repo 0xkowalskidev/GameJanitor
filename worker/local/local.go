@@ -207,6 +207,19 @@ func (w *LocalWorker) DeletePath(ctx context.Context, volumeName string, path st
 	return w.deletePathSidecar(ctx, volumeName, path)
 }
 
+func (w *LocalWorker) DownloadFile(ctx context.Context, volumeName string, url string, destPath string, expectedHash string, maxBytes int64) error {
+	if w.HasDirectAccess(ctx, volumeName) {
+		return worker.DownloadFileDirect(w.Resolve, ctx, volumeName, url, destPath, expectedHash, maxBytes)
+	}
+	// Sidecar fallback: download to memory, write via sidecar
+	// This path is rare (no direct volume access) and bounded by maxBytes
+	content, err := worker.DownloadToMemory(ctx, url, expectedHash, maxBytes)
+	if err != nil {
+		return err
+	}
+	return w.writeFileSidecar(ctx, volumeName, destPath, content)
+}
+
 func (w *LocalWorker) CreateDirectory(ctx context.Context, volumeName string, path string) error {
 	if w.HasDirectAccess(ctx, volumeName) {
 		return worker.CreateDirectoryDirect(w.Resolve, ctx, volumeName, path)

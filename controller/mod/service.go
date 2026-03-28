@@ -34,6 +34,7 @@ type FileOperator interface {
 	WriteFile(ctx context.Context, gameserverID string, filePath string, content []byte) error
 	DeletePath(ctx context.Context, gameserverID string, targetPath string) error
 	CreateDirectory(ctx context.Context, gameserverID string, dirPath string) error
+	DownloadToVolume(ctx context.Context, gameserverID string, url string, destPath string, expectedHash string, maxBytes int64) error
 }
 
 type ModService struct {

@@ -33,6 +33,7 @@ type Worker interface {
 	DeletePath(ctx context.Context, volumeName string, path string) error
 	CreateDirectory(ctx context.Context, volumeName string, path string) error
 	RenamePath(ctx context.Context, volumeName string, from string, to string) error
+	DownloadFile(ctx context.Context, volumeName string, url string, destPath string, expectedHash string, maxBytes int64) error
 
 	// Copy operations (used by config file read/write)
 	CopyFromContainer(ctx context.Context, containerID string, path string) ([]byte, error)

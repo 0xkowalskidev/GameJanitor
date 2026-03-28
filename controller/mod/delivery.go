@@ -4,8 +4,6 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
-	"crypto/sha512"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -24,17 +22,15 @@ const (
 
 // --- FileDelivery ---
 
-// FileDelivery downloads a file from a URL and writes it to the gameserver volume.
+// FileDelivery tells the worker to download a file from a URL directly to the gameserver volume.
 type FileDelivery struct {
 	fileSvc FileOperator
-	client  *http.Client
 	log     *slog.Logger
 }
 
 func NewFileDelivery(fileSvc FileOperator, log *slog.Logger) *FileDelivery {
 	return &FileDelivery{
 		fileSvc: fileSvc,
-		client:  &http.Client{Timeout: 60 * time.Second},
 		log:     log,
 	}
 }
@@ -44,16 +40,9 @@ func (d *FileDelivery) Install(ctx context.Context, gameserverID, installPath, d
 		return fmt.Errorf("creating install directory %s: %w", installPath, err)
 	}
 
-	// Download the file
-	// TODO: switch to streaming when FileOperator supports io.Reader writes
-	content, err := d.download(ctx, downloadURL, MaxModDownloadBytes)
-	if err != nil {
-		return fmt.Errorf("downloading mod: %w", err)
-	}
-
 	fullPath := path.Join(installPath, fileName)
-	if err := d.fileSvc.WriteFile(ctx, gameserverID, fullPath, content); err != nil {
-		return fmt.Errorf("writing mod file: %w", err)
+	if err := d.fileSvc.DownloadToVolume(ctx, gameserverID, downloadURL, fullPath, "", MaxModDownloadBytes); err != nil {
+		return fmt.Errorf("downloading mod %s: %w", fileName, err)
 	}
 
 	return nil
@@ -67,30 +56,6 @@ func (d *FileDelivery) Uninstall(ctx context.Context, gameserverID, filePath str
 		d.log.Warn("failed to delete mod file, continuing anyway", "path", filePath, "error", err)
 	}
 	return nil
-}
-
-func (d *FileDelivery) download(ctx context.Context, downloadURL string, maxBytes int64) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, downloadURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("creating download request: %w", err)
-	}
-	req.Header.Set("User-Agent", "gamejanitor")
-
-	resp, err := d.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("download failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("download returned status %d", resp.StatusCode)
-	}
-
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxBytes))
-	if err != nil {
-		return nil, fmt.Errorf("reading download: %w", err)
-	}
-	return data, nil
 }
 
 // --- ManifestDelivery ---
@@ -188,7 +153,7 @@ func (d *PackDelivery) Install(ctx context.Context, gameserverID, packURL, insta
 		return nil, fmt.Errorf("creating mod install directory: %w", err)
 	}
 
-	// Download and install each mod file
+	// Download each mod file directly to the worker volume
 	var mods []PackMod
 	for _, f := range index.Files {
 		// Filter: skip client-only mods
@@ -201,33 +166,20 @@ func (d *PackDelivery) Install(ctx context.Context, gameserverID, packURL, insta
 			continue
 		}
 
-		// Download the mod
 		downloadURL := f.Downloads[0]
-		content, err := d.downloadSingle(ctx, downloadURL)
-		if err != nil {
-			return nil, fmt.Errorf("downloading pack mod %s: %w", f.Path, err)
-		}
-
-		// Verify hash if available
-		if expected, ok := f.Hashes["sha512"]; ok {
-			actual := sha512Hash(content)
-			if actual != expected {
-				return nil, fmt.Errorf("hash mismatch for %s: expected %s, got %s", f.Path, expected, actual)
-			}
-		}
-
-		// Write to volume
 		fileName := path.Base(f.Path)
 		fullPath := path.Join(installPath, fileName)
-		if err := d.fileSvc.WriteFile(ctx, gameserverID, fullPath, content); err != nil {
-			return nil, fmt.Errorf("writing pack mod %s: %w", fileName, err)
+		expectedHash := f.Hashes["sha512"]
+
+		if err := d.fileSvc.DownloadToVolume(ctx, gameserverID, downloadURL, fullPath, expectedHash, MaxModDownloadBytes); err != nil {
+			return nil, fmt.Errorf("downloading pack mod %s: %w", fileName, err)
 		}
 
 		mods = append(mods, PackMod{
 			FileName:    fileName,
 			FilePath:    fullPath,
 			DownloadURL: downloadURL,
-			SHA512:      f.Hashes["sha512"],
+			SHA512:      expectedHash,
 		})
 	}
 
@@ -366,27 +318,3 @@ func (d *PackDelivery) download(ctx context.Context, downloadURL string) ([]byte
 	return io.ReadAll(io.LimitReader(resp.Body, MaxPackDownloadBytes))
 }
 
-func (d *PackDelivery) downloadSingle(ctx context.Context, downloadURL string) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, downloadURL, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("User-Agent", "gamejanitor")
-
-	resp, err := d.client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("download returned status %d", resp.StatusCode)
-	}
-
-	return io.ReadAll(io.LimitReader(resp.Body, MaxModDownloadBytes))
-}
-
-func sha512Hash(data []byte) string {
-	h := sha512.Sum512(data)
-	return hex.EncodeToString(h[:])
-}

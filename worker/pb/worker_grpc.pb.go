@@ -39,6 +39,7 @@ const (
 	WorkerService_DeletePath_FullMethodName               = "/worker.WorkerService/DeletePath"
 	WorkerService_CreateDirectory_FullMethodName          = "/worker.WorkerService/CreateDirectory"
 	WorkerService_RenamePath_FullMethodName               = "/worker.WorkerService/RenamePath"
+	WorkerService_DownloadFile_FullMethodName             = "/worker.WorkerService/DownloadFile"
 	WorkerService_CopyFromContainer_FullMethodName        = "/worker.WorkerService/CopyFromContainer"
 	WorkerService_CopyToContainer_FullMethodName          = "/worker.WorkerService/CopyToContainer"
 	WorkerService_CopyDirFromContainer_FullMethodName     = "/worker.WorkerService/CopyDirFromContainer"
@@ -79,6 +80,7 @@ type WorkerServiceClient interface {
 	DeletePath(ctx context.Context, in *DeletePathRequest, opts ...grpc.CallOption) (*DeletePathResponse, error)
 	CreateDirectory(ctx context.Context, in *CreateDirectoryRequest, opts ...grpc.CallOption) (*CreateDirectoryResponse, error)
 	RenamePath(ctx context.Context, in *RenamePathRequest, opts ...grpc.CallOption) (*RenamePathResponse, error)
+	DownloadFile(ctx context.Context, in *DownloadFileRequest, opts ...grpc.CallOption) (*DownloadFileResponse, error)
 	// Copy operations (streaming for large data)
 	CopyFromContainer(ctx context.Context, in *CopyFromContainerRequest, opts ...grpc.CallOption) (*CopyFromContainerResponse, error)
 	CopyToContainer(ctx context.Context, in *CopyToContainerRequest, opts ...grpc.CallOption) (*CopyToContainerResponse, error)
@@ -323,6 +325,16 @@ func (c *workerServiceClient) RenamePath(ctx context.Context, in *RenamePathRequ
 	return out, nil
 }
 
+func (c *workerServiceClient) DownloadFile(ctx context.Context, in *DownloadFileRequest, opts ...grpc.CallOption) (*DownloadFileResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DownloadFileResponse)
+	err := c.cc.Invoke(ctx, WorkerService_DownloadFile_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *workerServiceClient) CopyFromContainer(ctx context.Context, in *CopyFromContainerRequest, opts ...grpc.CallOption) (*CopyFromContainerResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CopyFromContainerResponse)
@@ -454,6 +466,7 @@ type WorkerServiceServer interface {
 	DeletePath(context.Context, *DeletePathRequest) (*DeletePathResponse, error)
 	CreateDirectory(context.Context, *CreateDirectoryRequest) (*CreateDirectoryResponse, error)
 	RenamePath(context.Context, *RenamePathRequest) (*RenamePathResponse, error)
+	DownloadFile(context.Context, *DownloadFileRequest) (*DownloadFileResponse, error)
 	// Copy operations (streaming for large data)
 	CopyFromContainer(context.Context, *CopyFromContainerRequest) (*CopyFromContainerResponse, error)
 	CopyToContainer(context.Context, *CopyToContainerRequest) (*CopyToContainerResponse, error)
@@ -536,6 +549,9 @@ func (UnimplementedWorkerServiceServer) CreateDirectory(context.Context, *Create
 }
 func (UnimplementedWorkerServiceServer) RenamePath(context.Context, *RenamePathRequest) (*RenamePathResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RenamePath not implemented")
+}
+func (UnimplementedWorkerServiceServer) DownloadFile(context.Context, *DownloadFileRequest) (*DownloadFileResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DownloadFile not implemented")
 }
 func (UnimplementedWorkerServiceServer) CopyFromContainer(context.Context, *CopyFromContainerRequest) (*CopyFromContainerResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CopyFromContainer not implemented")
@@ -917,6 +933,24 @@ func _WorkerService_RenamePath_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _WorkerService_DownloadFile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DownloadFileRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkerServiceServer).DownloadFile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WorkerService_DownloadFile_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkerServiceServer).DownloadFile(ctx, req.(*DownloadFileRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _WorkerService_CopyFromContainer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CopyFromContainerRequest)
 	if err := dec(in); err != nil {
@@ -1110,6 +1144,10 @@ var WorkerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RenamePath",
 			Handler:    _WorkerService_RenamePath_Handler,
+		},
+		{
+			MethodName: "DownloadFile",
+			Handler:    _WorkerService_DownloadFile_Handler,
 		},
 		{
 			MethodName: "CopyFromContainer",

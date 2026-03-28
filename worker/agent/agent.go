@@ -202,6 +202,13 @@ func (a *Agent) WriteFile(ctx context.Context, req *pb.WriteFileRequest) (*pb.Wr
 	return &pb.WriteFileResponse{}, nil
 }
 
+func (a *Agent) DownloadFile(ctx context.Context, req *pb.DownloadFileRequest) (*pb.DownloadFileResponse, error) {
+	if err := a.worker.DownloadFile(ctx, req.VolumeName, req.Url, req.DestPath, req.ExpectedHash, req.MaxBytes); err != nil {
+		return nil, err
+	}
+	return &pb.DownloadFileResponse{}, nil
+}
+
 func (a *Agent) DeletePath(ctx context.Context, req *pb.DeletePathRequest) (*pb.DeletePathResponse, error) {
 	if err := a.worker.DeletePath(ctx, req.VolumeName, req.Path); err != nil {
 		return nil, err

@@ -32,6 +32,7 @@ service WorkerService {
     rpc DeletePath(DeletePathRequest) returns (DeletePathResponse);
     rpc CreateDirectory(CreateDirectoryRequest) returns (CreateDirectoryResponse);
     rpc RenamePath(RenamePathRequest) returns (RenamePathResponse);
+    rpc DownloadFile(DownloadFileRequest) returns (DownloadFileResponse);
 
     // Copy operations (streaming for large data)
     rpc CopyFromContainer(CopyFromContainerRequest) returns (CopyFromContainerResponse);
@@ -226,6 +227,15 @@ message RenamePathRequest {
     string to = 3;
 }
 message RenamePathResponse {}
+
+message DownloadFileRequest {
+    string volume_name = 1;
+    string url = 2;
+    string dest_path = 3;
+    string expected_hash = 4; // sha512 hex, empty to skip verification
+    int64 max_bytes = 5;      // download size limit, 0 for default
+}
+message DownloadFileResponse {}
 
 // Copy operations
 

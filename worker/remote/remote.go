@@ -190,6 +190,17 @@ func (w *RemoteWorker) WriteFile(ctx context.Context, volumeName string, path st
 	return err
 }
 
+func (w *RemoteWorker) DownloadFile(ctx context.Context, volumeName string, url string, destPath string, expectedHash string, maxBytes int64) error {
+	_, err := w.client.DownloadFile(ctx, &pb.DownloadFileRequest{
+		VolumeName:   volumeName,
+		Url:          url,
+		DestPath:     destPath,
+		ExpectedHash: expectedHash,
+		MaxBytes:     maxBytes,
+	})
+	return err
+}
+
 func (w *RemoteWorker) DeletePath(ctx context.Context, volumeName string, path string) error {
 	_, err := w.client.DeletePath(ctx, &pb.DeletePathRequest{
 		VolumeName: volumeName,

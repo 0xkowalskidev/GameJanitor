@@ -1,17 +1,21 @@
 package worker
 
 import (
-	"github.com/warsmite/gamejanitor/model"
 	"archive/tar"
 	"context"
+	"crypto/sha512"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"io/fs"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
+	"github.com/warsmite/gamejanitor/model"
 )
 
 // VolumeResolver maps a volume name to its host filesystem path.
@@ -263,6 +267,136 @@ func VolumeSizeDirect(resolve VolumeResolver, ctx context.Context, volumeName st
 		return nil
 	})
 	return total, err
+}
+
+const defaultMaxDownloadBytes int64 = 100 * 1024 * 1024 // 100 MB
+
+var downloadClient = &http.Client{Timeout: 5 * time.Minute}
+
+func DownloadFileDirect(resolve VolumeResolver, ctx context.Context, volumeName string, url string, destPath string, expectedHash string, maxBytes int64) error {
+	hostPath, err := ResolveVolumePath(resolve, ctx, volumeName, destPath)
+	if err != nil {
+		return err
+	}
+
+	if err := os.MkdirAll(filepath.Dir(hostPath), 0755); err != nil {
+		return fmt.Errorf("creating parent directory: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return fmt.Errorf("creating download request: %w", err)
+	}
+	req.Header.Set("User-Agent", "gamejanitor")
+
+	resp, err := downloadClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("download failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("download returned status %d", resp.StatusCode)
+	}
+
+	limit := maxBytes
+	if limit <= 0 {
+		limit = defaultMaxDownloadBytes
+	}
+
+	f, err := os.OpenFile(hostPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		return fmt.Errorf("creating file: %w", err)
+	}
+
+	var w io.Writer = f
+	var hasher *sha512Hasher
+	if expectedHash != "" {
+		hasher = &sha512Hasher{}
+		w = io.MultiWriter(f, hasher)
+	}
+
+	_, err = io.Copy(w, io.LimitReader(resp.Body, limit))
+	if err != nil {
+		f.Close()
+		os.Remove(hostPath)
+		return fmt.Errorf("writing download: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(hostPath)
+		return fmt.Errorf("closing file: %w", err)
+	}
+
+	if hasher != nil {
+		actual := hasher.hexSum()
+		if actual != expectedHash {
+			os.Remove(hostPath)
+			return fmt.Errorf("hash mismatch: expected %s, got %s", expectedHash, actual)
+		}
+	}
+
+	os.Chown(hostPath, model.GameserverUID, model.GameserverGID)
+	return nil
+}
+
+type sha512Hasher struct {
+	h [sha512.Size]byte
+	w io.Writer
+}
+
+func (h *sha512Hasher) Write(p []byte) (int, error) {
+	if h.w == nil {
+		hash := sha512.New()
+		h.w = hash
+	}
+	return h.w.Write(p)
+}
+
+func (h *sha512Hasher) hexSum() string {
+	if hw, ok := h.w.(interface{ Sum([]byte) []byte }); ok {
+		return hex.EncodeToString(hw.Sum(nil))
+	}
+	return ""
+}
+
+// DownloadToMemory downloads a URL to []byte with hash verification.
+// Used as a fallback when direct filesystem access is unavailable.
+func DownloadToMemory(ctx context.Context, url string, expectedHash string, maxBytes int64) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating download request: %w", err)
+	}
+	req.Header.Set("User-Agent", "gamejanitor")
+
+	resp, err := downloadClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("download failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("download returned status %d", resp.StatusCode)
+	}
+
+	limit := maxBytes
+	if limit <= 0 {
+		limit = defaultMaxDownloadBytes
+	}
+
+	data, err := io.ReadAll(io.LimitReader(resp.Body, limit))
+	if err != nil {
+		return nil, fmt.Errorf("reading download: %w", err)
+	}
+
+	if expectedHash != "" {
+		h := sha512.Sum512(data)
+		actual := hex.EncodeToString(h[:])
+		if actual != expectedHash {
+			return nil, fmt.Errorf("hash mismatch: expected %s, got %s", expectedHash, actual)
+		}
+	}
+
+	return data, nil
 }
 
 func SortFileEntries(entries []FileEntry) {

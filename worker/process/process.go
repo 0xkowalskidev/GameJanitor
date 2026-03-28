@@ -475,6 +475,10 @@ func (w *ProcessWorker) WriteFile(ctx context.Context, volumeName string, path s
 	return worker.WriteFileDirect(w.resolve, ctx, volumeName, path, content, perm)
 }
 
+func (w *ProcessWorker) DownloadFile(ctx context.Context, volumeName string, url string, destPath string, expectedHash string, maxBytes int64) error {
+	return worker.DownloadFileDirect(w.resolve, ctx, volumeName, url, destPath, expectedHash, maxBytes)
+}
+
 func (w *ProcessWorker) DeletePath(ctx context.Context, volumeName string, path string) error {
 	return worker.DeletePathDirect(w.resolve, ctx, volumeName, path)
 }

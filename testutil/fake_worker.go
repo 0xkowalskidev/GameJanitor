@@ -399,6 +399,21 @@ func (w *FakeWorker) WriteFile(ctx context.Context, volumeName string, path stri
 	return os.WriteFile(fullPath, content, perm)
 }
 
+func (w *FakeWorker) DownloadFile(ctx context.Context, volumeName string, url string, destPath string, expectedHash string, maxBytes int64) error {
+	if err := w.popFailure("DownloadFile"); err != nil {
+		return err
+	}
+	fullPath, err := w.volumePath(volumeName, destPath)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
+		return err
+	}
+	// In tests, write a placeholder — no actual HTTP download
+	return os.WriteFile(fullPath, []byte("downloaded:"+url), 0644)
+}
+
 func (w *FakeWorker) DeletePath(ctx context.Context, volumeName string, path string) error {
 	if err := w.popFailure("DeletePath"); err != nil {
 		return err

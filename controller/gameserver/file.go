@@ -167,6 +167,27 @@ func (s *FileService) DownloadFile(ctx context.Context, gameserverID string, fil
 	return s.ReadFile(ctx, gameserverID, filePath)
 }
 
+// DownloadToVolume tells the worker to download a URL directly to the gameserver volume.
+// The controller never touches the file bytes — the worker downloads directly.
+func (s *FileService) DownloadToVolume(ctx context.Context, gameserverID string, url string, destPath string, expectedHash string, maxBytes int64) error {
+	destPath, err := validatePath(destPath)
+	if err != nil {
+		return err
+	}
+
+	gs, err := s.getGameserver(gameserverID)
+	if err != nil {
+		return err
+	}
+
+	relPath := strings.TrimPrefix(destPath, "/data")
+	w := s.dispatcher.WorkerFor(gameserverID)
+	if w == nil {
+		return controller.ErrUnavailablef("worker unavailable for gameserver %s", gameserverID)
+	}
+	return w.DownloadFile(ctx, gs.VolumeName, url, relPath, expectedHash, maxBytes)
+}
+
 // UploadFile writes an uploaded file to the gameserver volume.
 func (s *FileService) UploadFile(ctx context.Context, gameserverID string, filePath string, content []byte) error {
 	return s.WriteFile(ctx, gameserverID, filePath, content)
