@@ -16,10 +16,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/spf13/cobra"
+	"github.com/warsmite/gamejanitor/api"
 	"github.com/warsmite/gamejanitor/config"
+	"github.com/warsmite/gamejanitor/controller/browser"
 	"github.com/warsmite/gamejanitor/controller/orchestrator"
 	"github.com/warsmite/gamejanitor/controller/settings"
-	"github.com/warsmite/gamejanitor/controller/browser"
 	"github.com/warsmite/gamejanitor/controller/warning"
 	"github.com/warsmite/gamejanitor/db"
 	"github.com/warsmite/gamejanitor/games"
@@ -27,8 +29,6 @@ import (
 	"github.com/warsmite/gamejanitor/pkg/tlsutil"
 	gjsftp "github.com/warsmite/gamejanitor/sftp"
 	"github.com/warsmite/gamejanitor/store"
-	"github.com/warsmite/gamejanitor/api"
-	"github.com/spf13/cobra"
 )
 
 var serveCmd = &cobra.Command{
@@ -463,8 +463,8 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 	logger.Info("shutting down")
 
-	// Give in-flight requests up to 10 seconds to finish
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// Give in-flight requests up to 3 seconds to finish
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer shutdownCancel()
 
 	grpcServer.gracefulStop()

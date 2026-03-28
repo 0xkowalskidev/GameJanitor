@@ -27,7 +27,7 @@
           pname = "gamejanitor";
           version = "0.1.0";
           src = ./.;
-          vendorHash = "sha256-9EFMCBKLLMU4aZUbStIRqY6W5FbD0qsGT0P7RBkm6Ds=";
+          vendorHash = "sha256-dVrzyEj7mrE+zPeaqqrnMgQHoNuADR7Bomgz1T3mXdY=";
           env.CGO_ENABLED = "0";
 
           # sdk/ and games/ are separate Go modules with their own go.mod — exclude from main build
