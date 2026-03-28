@@ -67,8 +67,24 @@ var (
 
 func resolveMinecraftJava(env map[string]string) (string, error) {
 	mcVersion := env["MINECRAFT_VERSION"]
-	if mcVersion == "" || mcVersion == "latest" {
+	if mcVersion == "" {
 		return "", nil // fall back to default image
+	}
+
+	// Resolve "latest" / "latest-snapshot" to actual version number
+	if mcVersion == "latest" || mcVersion == "latest-snapshot" {
+		manifest, err := getMojangMainManifest()
+		if err != nil {
+			return "", nil // fall back to default
+		}
+		if mcVersion == "latest-snapshot" {
+			mcVersion = manifest.Latest.Snapshot
+		} else {
+			mcVersion = manifest.Latest.Release
+		}
+		if mcVersion == "" {
+			return "", nil
+		}
 	}
 
 	// Check cache first
@@ -107,9 +123,14 @@ var (
 )
 
 type mojangMainManifest struct {
+	Latest struct {
+		Release  string `json:"release"`
+		Snapshot string `json:"snapshot"`
+	} `json:"latest"`
 	Versions []struct {
-		ID  string `json:"id"`
-		URL string `json:"url"`
+		ID   string `json:"id"`
+		Type string `json:"type"`
+		URL  string `json:"url"`
 	} `json:"versions"`
 }
 
