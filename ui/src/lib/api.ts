@@ -360,6 +360,8 @@ export interface InstalledMod {
   version_id: string;
   file_path: string;
   file_name: string;
+  download_url: string;
+  file_hash: string;
   delivery: string;
   auto_installed: boolean;
   depends_on?: string;

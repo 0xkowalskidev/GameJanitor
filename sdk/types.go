@@ -412,9 +412,11 @@ type InstalledMod struct {
 	Name          string          `json:"name"`
 	Version       string          `json:"version"`
 	VersionID     string          `json:"version_id"`
-	FilePath      string          `json:"file_path"`
-	FileName      string          `json:"file_name"`
-	Delivery      string          `json:"delivery"`
+	FilePath    string `json:"file_path"`
+	FileName    string `json:"file_name"`
+	DownloadURL string `json:"download_url"`
+	FileHash    string `json:"file_hash"`
+	Delivery    string `json:"delivery"`
 	AutoInstalled bool            `json:"auto_installed"`
 	DependsOn     *string         `json:"depends_on,omitempty"`
 	PackID        *string         `json:"pack_id,omitempty"`

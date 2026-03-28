@@ -15,13 +15,14 @@ func NewModStore(db *sql.DB) *ModStore {
 	return &ModStore{db: db}
 }
 
-const modColumns = "id, gameserver_id, source, source_id, category, name, version, version_id, file_path, file_name, delivery, auto_installed, depends_on, pack_id, metadata, installed_at"
+const modColumns = "id, gameserver_id, source, source_id, category, name, version, version_id, file_path, file_name, download_url, file_hash, delivery, auto_installed, depends_on, pack_id, metadata, installed_at"
 
 func scanMod(scanner interface{ Scan(...any) error }) (*model.InstalledMod, error) {
 	var m model.InstalledMod
 	err := scanner.Scan(
 		&m.ID, &m.GameserverID, &m.Source, &m.SourceID, &m.Category,
 		&m.Name, &m.Version, &m.VersionID, &m.FilePath, &m.FileName,
+		&m.DownloadURL, &m.FileHash,
 		&m.Delivery, &m.AutoInstalled, &m.DependsOn, &m.PackID,
 		&m.Metadata, &m.InstalledAt,
 	)
@@ -78,9 +79,10 @@ func (s *ModStore) GetInstalledModBySource(gameserverID, source, sourceID string
 
 func (s *ModStore) CreateInstalledMod(m *model.InstalledMod) error {
 	_, err := s.db.Exec(
-		"INSERT INTO installed_mods (id, gameserver_id, source, source_id, category, name, version, version_id, file_path, file_name, delivery, auto_installed, depends_on, pack_id, metadata, installed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		"INSERT INTO installed_mods (id, gameserver_id, source, source_id, category, name, version, version_id, file_path, file_name, download_url, file_hash, delivery, auto_installed, depends_on, pack_id, metadata, installed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		m.ID, m.GameserverID, m.Source, m.SourceID, m.Category,
 		m.Name, m.Version, m.VersionID, m.FilePath, m.FileName,
+		m.DownloadURL, m.FileHash,
 		m.Delivery, m.AutoInstalled, m.DependsOn, m.PackID,
 		m.Metadata, m.InstalledAt,
 	)
@@ -152,5 +154,15 @@ func (s *ModStore) SetModPackID(modID, packID string) error {
 
 func (s *ModStore) UpdateModVersion(modID, versionID, version string) error {
 	_, err := s.db.Exec("UPDATE installed_mods SET version_id = ?, version = ? WHERE id = ?", versionID, version, modID)
+	return err
+}
+
+func (s *ModStore) UpdateModFileHash(modID, hash string) error {
+	_, err := s.db.Exec("UPDATE installed_mods SET file_hash = ? WHERE id = ?", hash, modID)
+	return err
+}
+
+func (s *ModStore) UpdateModDownloadURL(modID, url string) error {
+	_, err := s.db.Exec("UPDATE installed_mods SET download_url = ? WHERE id = ?", url, modID)
 	return err
 }

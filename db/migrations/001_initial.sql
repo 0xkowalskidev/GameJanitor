@@ -147,6 +147,8 @@ CREATE TABLE installed_mods (
     version_id TEXT NOT NULL DEFAULT '',
     file_path TEXT NOT NULL DEFAULT '',
     file_name TEXT NOT NULL DEFAULT '',
+    download_url TEXT NOT NULL DEFAULT '',
+    file_hash TEXT NOT NULL DEFAULT '',
     delivery TEXT NOT NULL DEFAULT 'file',
     auto_installed BOOLEAN NOT NULL DEFAULT 0,
     depends_on TEXT,
