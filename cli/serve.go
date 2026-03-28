@@ -117,6 +117,8 @@ func runServe(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("at least one of controller or worker must be enabled")
 	}
 
+	// --- 1. Logging ---
+
 	level := slog.LevelInfo
 	if os.Getenv("DEBUG") != "" {
 		level = slog.LevelDebug
@@ -157,6 +159,8 @@ func runServe(cmd *cobra.Command, args []string) error {
 		return runWorkerAgent(ctx, cfg, logger)
 	}
 
+	// --- 2. Database and services ---
+
 	role := "controller"
 	if cfg.HasWorker() {
 		role = "controller+worker"
@@ -190,6 +194,8 @@ func runServe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+
+	// --- 3. Background services ---
 
 	svcs.StatusMgr.Start(ctx)
 	defer svcs.StatusMgr.Stop()
@@ -244,7 +250,8 @@ func runServe(cmd *cobra.Command, args []string) error {
 	defer svcs.ReadyWatcher.StopAll()
 	defer svcs.QuerySvc.StopAll()
 
-	// Start gRPC server for controller
+	// --- 4. TLS and gRPC ---
+
 	var serverTLS, dialBackTLS *tls.Config
 	var caCert *x509.Certificate
 	var caKey *ecdsa.PrivateKey
@@ -275,7 +282,8 @@ func runServe(cmd *cobra.Command, args []string) error {
 		}
 	}()
 
-	// Launch local worker agent in controller+worker mode
+	// --- 5. Local worker (controller+worker mode) ---
+
 	if cfg.HasWorker() {
 		rawToken, _, err := svcs.AuthSvc.RotateWorkerToken("_local")
 		if err != nil {
@@ -327,9 +335,11 @@ func runServe(cmd *cobra.Command, args []string) error {
 		}()
 	}
 
+	// --- 6. Startup recovery ---
+
 	registry.StartReaper(ctx, logger)
 
-	// Reconcile gameserver status with Docker reality on startup.
+	// Reconcile gameserver status with container reality on startup.
 	// Online workers get checked immediately; offline workers' gameservers
 	// are marked unreachable and recovered when the worker reconnects.
 	if err := svcs.StatusMgr.RecoverOnStartup(ctx); err != nil {
@@ -342,6 +352,8 @@ func runServe(cmd *cobra.Command, args []string) error {
 	} else if abandoned > 0 {
 		logger.Warn("abandoned stale activities from previous run", "count", abandoned)
 	}
+
+	// --- 7. HTTP, SFTP, and listen ---
 
 	router := api.NewRouter(api.RouterOptions{
 		Config:          cfg,
@@ -367,7 +379,6 @@ func runServe(cmd *cobra.Command, args []string) error {
 		WebUI:           webUIFS(cfg),
 	})
 
-	// Start SFTP server if enabled
 	if cfg.SFTPPort > 0 {
 		hostKeyPath := filepath.Join(cfg.DataDir, "sftp_host_key")
 		sftpAuth := gjsftp.NewLocalAuth(db)
@@ -405,8 +416,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	)
 
 	// Newbies running from a terminal may not realize that closing it kills gamejanitor,
-	// even though their gameservers keep running in Docker. Scheduled backups, restarts,
-	// and status monitoring all stop when gamejanitor exits.
+	// even though their gameservers keep running in Docker.
 	if os.Getenv("INVOCATION_ID") == "" {
 		logger.Warn("running in foreground — closing this terminal will stop scheduled backups, restarts, and status monitoring. Your gameservers will keep running, but gamejanitor won't be managing them. Run as a systemd service to keep it running in the background.")
 	}
@@ -414,7 +424,6 @@ func runServe(cmd *cobra.Command, args []string) error {
 	// Auto-open browser for interactive users (not systemd, has a TTY)
 	if os.Getenv("INVOCATION_ID") == "" && isTTY() {
 		go func() {
-			// Small delay to let the server start accepting connections
 			time.Sleep(500 * time.Millisecond)
 			url := fmt.Sprintf("http://localhost:%d", cfg.Port)
 			openBrowser(url)
@@ -428,7 +437,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		IdleTimeout:       120 * time.Second,
 	}
 
-	// Start HTTP server in background so we can wait for shutdown signal
+	// Start HTTP in background so we can block on shutdown signal
 	srvErr := make(chan error, 1)
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -436,6 +445,8 @@ func runServe(cmd *cobra.Command, args []string) error {
 		}
 		close(srvErr)
 	}()
+
+	// --- 8. Shutdown ---
 
 	// Wait for signal or server error
 	select {
