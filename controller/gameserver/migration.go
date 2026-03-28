@@ -121,7 +121,11 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 			return
 		}
 		tarReader.Close()
-		gzWriter.Close()
+		if err := gzWriter.Close(); err != nil {
+			compressErr = fmt.Errorf("closing gzip writer: %w", err)
+			pw.CloseWithError(compressErr)
+			return
+		}
 		pw.Close()
 	}()
 
