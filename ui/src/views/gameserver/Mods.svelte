@@ -875,7 +875,7 @@
                 {/if}
                 {#if result.game_versions?.length}
                   <span class="mod-meta-sep">·</span>
-                  <span class="version-info">{result.game_versions.slice(0, 3).join(', ')}{result.game_versions.length > 3 ? ` +${result.game_versions.length - 3}` : ''}</span>
+                  <span class="version-info">{[...result.game_versions].reverse().slice(0, 3).join(', ')}{result.game_versions.length > 3 ? ` +${result.game_versions.length - 3}` : ''}</span>
                 {/if}
               </div>
               {#if result.description}
