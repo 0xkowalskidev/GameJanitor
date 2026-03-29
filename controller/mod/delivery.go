@@ -214,16 +214,17 @@ func (d *PackDelivery) Install(ctx context.Context, gameserverID, packURL, insta
 		fullPath := path.Join(overridesPath, relPath)
 		dir := path.Dir(fullPath)
 		if err := d.fileSvc.CreateDirectory(ctx, gameserverID, dir); err != nil {
-			d.log.Warn("failed to create override directory", "dir", dir, "error", err)
-			continue
+			return nil, fmt.Errorf("creating server-override directory %s: %w", dir, err)
 		}
 		if err := d.fileSvc.WriteFile(ctx, gameserverID, fullPath, content); err != nil {
-			return nil, fmt.Errorf("writing override %s: %w", relPath, err)
+			return nil, fmt.Errorf("writing server-override %s: %w", relPath, err)
 		}
 		overrides = append(overrides, fullPath)
 	}
 
-	// Also check plain "overrides/" folder (applied before server-overrides)
+	// Plain "overrides/" folder — client-side configs that may also apply to servers.
+	// Best-effort: warn and continue if individual files fail, since the server
+	// often works without them.
 	for _, zf := range zipReader.File {
 		if !strings.HasPrefix(zf.Name, "overrides/") || strings.HasPrefix(zf.Name, "overrides/../") {
 			continue
