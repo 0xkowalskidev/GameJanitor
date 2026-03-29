@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -244,4 +245,103 @@ func (h *ModHandlers) CheckCompatibility(w http.ResponseWriter, r *http.Request)
 		issues = []mod.ModIssue{}
 	}
 	respondOK(w, issues)
+}
+
+func (h *ModHandlers) Scan(w http.ResponseWriter, r *http.Request) {
+	gsID := chi.URLParam(r, "id")
+	result, err := h.svc.Scan(r.Context(), gsID)
+	if err != nil {
+		h.log.Error("scan failed", "gameserver", gsID, "error", err)
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
+		return
+	}
+	respondOK(w, result)
+}
+
+func (h *ModHandlers) TrackFile(w http.ResponseWriter, r *http.Request) {
+	gsID := chi.URLParam(r, "id")
+	var body struct {
+		Category string `json:"category"`
+		Name     string `json:"name"`
+		Path     string `json:"path"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if body.Path == "" {
+		respondError(w, http.StatusBadRequest, "path is required")
+		return
+	}
+
+	mod, err := h.svc.TrackFile(r.Context(), gsID, body.Category, body.Path, body.Name)
+	if err != nil {
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
+		return
+	}
+	respondCreated(w, mod)
+}
+
+func (h *ModHandlers) InstallURL(w http.ResponseWriter, r *http.Request) {
+	gsID := chi.URLParam(r, "id")
+	var body struct {
+		Category string `json:"category"`
+		Name     string `json:"name"`
+		URL      string `json:"url"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if body.URL == "" {
+		respondError(w, http.StatusBadRequest, "url is required")
+		return
+	}
+	if body.Name == "" {
+		respondError(w, http.StatusBadRequest, "name is required")
+		return
+	}
+
+	mod, err := h.svc.InstallFromURL(r.Context(), gsID, body.Category, body.Name, body.URL)
+	if err != nil {
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
+		return
+	}
+	respondCreated(w, mod)
+}
+
+func (h *ModHandlers) Upload(w http.ResponseWriter, r *http.Request) {
+	gsID := chi.URLParam(r, "id")
+
+	if err := r.ParseMultipartForm(50 << 20); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid multipart form")
+		return
+	}
+
+	category := r.FormValue("category")
+	name := r.FormValue("name")
+	if name == "" {
+		respondError(w, http.StatusBadRequest, "name is required")
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "file is required")
+		return
+	}
+	defer file.Close()
+
+	content, err := io.ReadAll(io.LimitReader(file, 50<<20))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "failed to read file")
+		return
+	}
+
+	mod, err := h.svc.InstallFromUpload(r.Context(), gsID, category, name, header.Filename, content)
+	if err != nil {
+		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
+		return
+	}
+	respondCreated(w, mod)
 }
