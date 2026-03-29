@@ -111,24 +111,6 @@
     new Map(updates.map(u => [u.mod_id, u]))
   );
 
-  // Whether loader should render as a toggle (2 options, one falsy)
-  const loaderIsToggle = $derived(() => {
-    if (!config?.loader) return false;
-    const opts = config.loader.options;
-    return opts.length === 2 && (opts[0].value === 'false' || opts[0].value === '' || opts[1].value === 'false' || opts[1].value === '');
-  });
-
-  // Loader toggle: which option is the "on" value
-  const loaderOnValue = $derived(() => {
-    if (!config?.loader) return '';
-    const opts = config.loader.options;
-    return opts.find(o => o.value !== 'false' && o.value !== '')?.value || opts[1]?.value || '';
-  });
-
-  const loaderIsOn = $derived(() => {
-    if (!config?.loader) return false;
-    return config.loader.current !== 'false' && config.loader.current !== '';
-  });
 
   // Find which loaders enable a given source name
   function loadersForSource(sourceName: string): string[] {
@@ -272,11 +254,7 @@
     await applyEnvChange(newEnv, `loader to ${newLoader || 'none'}`);
   }
 
-  function handleLoaderToggle() {
-    if (!config?.loader) return;
-    const newValue = loaderIsOn() ? (config.loader.options.find(o => o.value === 'false' || o.value === '')?.value || 'false') : loaderOnValue();
-    handleLoaderChange(newValue);
-  }
+
 
   async function applyEnvChange(newEnv: Record<string, string>, changeLabel: string) {
     try {
@@ -582,20 +560,15 @@
         {#if config.loader}
           <div class="config-field">
             <label class="label">Loader</label>
-            {#if loaderIsToggle()}
-              <div class="toggle-row">
-                <button class="toggle" class:on={loaderIsOn()} onclick={handleLoaderToggle} disabled={!canWrite}></button>
-                <span class="toggle-label">{loaderOnValue()}</span>
-              </div>
-            {:else}
-              <select class="select" value={config.loader.current}
-                onchange={(e) => handleLoaderChange((e.target as HTMLSelectElement).value)}
-                disabled={!canWrite}>
-                {#each config.loader.options as opt}
-                  <option value={opt.value} selected={opt.value === config.loader!.current}>{opt.value || '(none)'}</option>
-                {/each}
-              </select>
-            {/if}
+            <select class="select" value={config.loader.current}
+              onchange={(e) => handleLoaderChange((e.target as HTMLSelectElement).value)}
+              disabled={!canWrite}>
+              {#each config.loader.options as opt}
+                <option value={opt.value} selected={opt.value === config.loader!.current}>
+                  {opt.value === 'false' || opt.value === '' ? '(disabled)' : opt.value}
+                </option>
+              {/each}
+            </select>
           </div>
         {/if}
       </div>
