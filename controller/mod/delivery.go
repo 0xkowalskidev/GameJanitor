@@ -205,10 +205,13 @@ func (d *PackDelivery) Install(ctx context.Context, gameserverID, packURL, insta
 		if err != nil {
 			return nil, fmt.Errorf("opening override %s: %w", relPath, err)
 		}
-		content, err := io.ReadAll(io.LimitReader(rc, maxOverrideBytes))
+		content, err := io.ReadAll(io.LimitReader(rc, maxOverrideBytes+1))
 		rc.Close()
 		if err != nil {
 			return nil, fmt.Errorf("reading override %s: %w", relPath, err)
+		}
+		if int64(len(content)) > maxOverrideBytes {
+			return nil, fmt.Errorf("server-override %s exceeds %d MB limit", relPath, maxOverrideBytes/(1024*1024))
 		}
 
 		fullPath := path.Join(overridesPath, relPath)
@@ -242,10 +245,14 @@ func (d *PackDelivery) Install(ctx context.Context, gameserverID, packURL, insta
 			d.log.Warn("failed to open override file", "path", relPath, "error", err)
 			continue
 		}
-		content, err := io.ReadAll(io.LimitReader(rc, maxOverrideBytes))
+		content, err := io.ReadAll(io.LimitReader(rc, maxOverrideBytes+1))
 		rc.Close()
 		if err != nil {
 			d.log.Warn("failed to read override file", "path", relPath, "error", err)
+			continue
+		}
+		if int64(len(content)) > maxOverrideBytes {
+			d.log.Warn("override file exceeds size limit, skipping", "path", relPath, "limit_mb", maxOverrideBytes/(1024*1024))
 			continue
 		}
 
