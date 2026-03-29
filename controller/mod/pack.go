@@ -39,7 +39,7 @@ func (s *ModService) InstallPack(ctx context.Context, gameserverID, sourceName, 
 
 	// Resolve the pack version first (with empty filters — we need the version to know
 	// what game_version and loader the pack requires, before we can filter properly).
-	version, err := s.resolveVersion(ctx, catalog, packID, versionID, CatalogFilters{})
+	version, err := s.resolveVersion(ctx, catalog, packID, versionID, CatalogFilters{ServerPack: true})
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +201,8 @@ func (s *ModService) UpdatePack(ctx context.Context, gameserverID, packModID str
 	gameVersion := s.resolveGameVersion(game, gs.Env)
 	filters := s.buildFilters(*src, gameVersion, loaderID)
 
-	// Get latest pack version
+	// Get latest pack version — prefer server pack file
+	filters.ServerPack = true
 	versions, err := catalog.GetVersions(ctx, pack.SourceID, filters)
 	if err != nil || len(versions) == 0 {
 		return nil, fmt.Errorf("no versions available for modpack")

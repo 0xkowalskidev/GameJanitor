@@ -19,6 +19,7 @@ type CatalogFilters struct {
 	GameVersion string
 	Loader      string
 	Extra       map[string]string
+	ServerPack  bool // prefer server-specific pack files over client files
 }
 
 type ModResult struct {

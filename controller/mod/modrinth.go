@@ -165,7 +165,12 @@ func (c *ModrinthCatalog) GetVersions(ctx context.Context, modID string, filters
 
 	var versions []ModVersion
 	for _, v := range modrinthVersions {
-		file := primaryFile(v.Files)
+		var file *modrinthFile
+		if filters.ServerPack {
+			file = serverPackFile(v.Files)
+		} else {
+			file = primaryFile(v.Files)
+		}
 		if file == nil {
 			continue
 		}
@@ -259,4 +264,16 @@ func primaryFile(files []modrinthFile) *modrinthFile {
 		return &files[0]
 	}
 	return nil
+}
+
+// serverPackFile prefers a file with "[server]" in the name for modpack installs.
+// Modpack authors often include a separate server pack alongside the client pack.
+// Falls back to the primary file if no server-specific file exists.
+func serverPackFile(files []modrinthFile) *modrinthFile {
+	for i := range files {
+		if strings.Contains(strings.ToLower(files[i].Filename), "[server]") {
+			return &files[i]
+		}
+	}
+	return primaryFile(files)
 }
