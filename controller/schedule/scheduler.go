@@ -161,22 +161,27 @@ func (s *Scheduler) AddSchedule(schedule model.Schedule) error {
 func (s *Scheduler) RemoveSchedule(scheduleID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.removeEntryLocked(scheduleID)
+}
 
+func (s *Scheduler) UpdateSchedule(schedule model.Schedule) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.removeEntryLocked(schedule.ID)
+	if schedule.Enabled {
+		return s.addEntry(schedule)
+	}
+	return nil
+}
+
+// removeEntryLocked removes a cron entry. Must be called with s.mu held.
+func (s *Scheduler) removeEntryLocked(scheduleID string) {
 	if entryID, ok := s.entries[scheduleID]; ok {
 		s.cron.Remove(entryID)
 		delete(s.entries, scheduleID)
 		s.log.Debug("removed schedule from cron", "schedule_id", scheduleID)
 	}
-}
-
-func (s *Scheduler) UpdateSchedule(schedule model.Schedule) error {
-	s.RemoveSchedule(schedule.ID)
-	if schedule.Enabled {
-		s.mu.Lock()
-		defer s.mu.Unlock()
-		return s.addEntry(schedule)
-	}
-	return nil
 }
 
 // addEntry registers a schedule with cron. Must be called with s.mu held.
