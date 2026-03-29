@@ -337,7 +337,27 @@
       await loadInstalled();
       checkForUpdates();
     } catch (e: any) {
-      toast(`Failed to install ${result.name}: ${e.message}`, 'error');
+      const msg: string = e.message || '';
+
+      if (msg.includes('no compatible version found')) {
+        // Version mismatch — show modal with explanation
+        await confirm({
+          title: 'Incompatible Version',
+          message: `${result.name}: ${msg}.\n\nTo install this mod, switch your game version from the picker above to one this mod supports, then try again.`,
+          confirmLabel: 'OK',
+        });
+      } else if (msg.includes('not available') && !currentLoaderSupportsSource(result.source)) {
+        // Loader mismatch — show modal with explanation
+        const compatible = loadersForSource(result.source);
+        const loaderHint = compatible.length > 0 ? `\n\nThis mod requires one of: ${compatible.join(', ')}. Switch your loader from the picker above, then try again.` : '';
+        await confirm({
+          title: 'Loader Required',
+          message: `${result.name} isn't available with your current loader.${loaderHint}`,
+          confirmLabel: 'OK',
+        });
+      } else {
+        toast(`Failed to install ${result.name}: ${msg}`, 'error');
+      }
     } finally {
       const next = new Set(installingIds);
       next.delete(key);
