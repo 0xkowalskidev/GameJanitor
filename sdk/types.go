@@ -480,6 +480,31 @@ type SearchResults struct {
 	Limit   int               `json:"limit"`
 }
 
+type ScanResult struct {
+	Tracked   []InstalledMod  `json:"tracked"`
+	Untracked []UntrackedFile `json:"untracked"`
+	Missing   []InstalledMod  `json:"missing"`
+}
+
+type UntrackedFile struct {
+	Name     string `json:"name"`
+	Path     string `json:"path"`
+	Size     int64  `json:"size"`
+	Category string `json:"category"`
+}
+
+type InstallURLRequest struct {
+	Category string `json:"category"`
+	Name     string `json:"name"`
+	URL      string `json:"url"`
+}
+
+type TrackFileRequest struct {
+	Category string `json:"category"`
+	Name     string `json:"name"`
+	Path     string `json:"path"`
+}
+
 // --- Files ---
 
 // FileEntry represents a file or directory in a gameserver's file system.

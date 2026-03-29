@@ -124,3 +124,30 @@ func (s *ModService) CheckCompatibility(ctx context.Context, gameserverID string
 	}
 	return issues, nil
 }
+
+// Scan cross-references files on disk with the DB.
+func (s *ModService) Scan(ctx context.Context, gameserverID string) (*ScanResult, error) {
+	var result ScanResult
+	if err := s.client.post(ctx, "/api/gameservers/"+gameserverID+"/mods/scan", nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// TrackFile creates a DB record for an untracked file found on disk.
+func (s *ModService) TrackFile(ctx context.Context, gameserverID string, req *TrackFileRequest) (*InstalledMod, error) {
+	var mod InstalledMod
+	if err := s.client.post(ctx, "/api/gameservers/"+gameserverID+"/mods/track", req, &mod); err != nil {
+		return nil, err
+	}
+	return &mod, nil
+}
+
+// InstallFromURL installs a mod from a plain URL.
+func (s *ModService) InstallFromURL(ctx context.Context, gameserverID string, req *InstallURLRequest) (*InstalledMod, error) {
+	var mod InstalledMod
+	if err := s.client.post(ctx, "/api/gameservers/"+gameserverID+"/mods/url", req, &mod); err != nil {
+		return nil, err
+	}
+	return &mod, nil
+}
