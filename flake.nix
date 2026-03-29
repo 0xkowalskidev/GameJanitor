@@ -46,15 +46,8 @@
       devShells.${system}.default =
         let
           dev = pkgs.writeShellScriptBin "dev" ''
-            # Build UI once at startup
             (cd ui && npm run build) 2>&1 | head -5
-
-            # Watch Go, YAML, and UI source files. Rebuild UI on Svelte/TS/CSS changes.
-            reflex -s -r '\.(go|yaml|svelte|ts|css)$' -R 'node_modules' -R 'ui/dist' -- sh -c '
-              cd ui && npm run build 2>&1 | tail -1
-              cd ..
-              exec go run . serve -d /tmp/gamejanitor-data '"$@"'
-            '
+            exec go run . serve -d /tmp/gamejanitor-data "$@"
           '';
 
           cli = pkgs.writeShellScriptBin "cli" ''
@@ -208,7 +201,6 @@
           buildInputs = [
             pkgs.go
             pkgs.docker-client
-            pkgs.reflex
             pkgs.protobuf
             pkgs.protoc-gen-go
             pkgs.protoc-gen-go-grpc
