@@ -109,6 +109,8 @@ func (w *LocalWorker) ContainerStats(ctx context.Context, containerID string) (*
 		MemoryUsageMB: stats.MemoryUsageMB,
 		MemoryLimitMB: stats.MemoryLimitMB,
 		CPUPercent:    stats.CPUPercent,
+		NetRxBytes:    stats.NetRxBytes,
+		NetTxBytes:    stats.NetTxBytes,
 	}, nil
 }
 

@@ -127,6 +127,7 @@ func (w *RemoteWorker) ContainerStats(ctx context.Context, containerID string) (
 		MemoryUsageMB: int(resp.MemoryUsageMb),
 		MemoryLimitMB: int(resp.MemoryLimitMb),
 		CPUPercent:    resp.CpuPercent,
+		// NetRxBytes/NetTxBytes require adding fields to the proto ContainerStatsResponse
 	}, nil
 }
 

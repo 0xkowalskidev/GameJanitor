@@ -33,12 +33,16 @@ type ContainerStats struct {
 	MemoryUsageMB int
 	MemoryLimitMB int
 	CPUPercent    float64
+	NetRxBytes    int64
+	NetTxBytes    int64
 }
 
 type GameserverStats struct {
-	MemoryUsageMB int
-	MemoryLimitMB int
-	CPUPercent    float64
+	MemoryUsageMB   int
+	MemoryLimitMB   int
+	CPUPercent      float64
+	NetRxBytes      int64
+	NetTxBytes      int64
 	VolumeSizeBytes int64
 	StorageLimitMB  *int
 }

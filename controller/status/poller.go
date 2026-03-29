@@ -130,6 +130,8 @@ func (s *StatsPoller) pollOnce(ctx context.Context, gameserverID string) bool {
 			event.MemoryUsageMB = cs.MemoryUsageMB
 			event.MemoryLimitMB = cs.MemoryLimitMB
 			event.CPUPercent = cs.CPUPercent
+			event.NetRxBytes = cs.NetRxBytes
+			event.NetTxBytes = cs.NetTxBytes
 		}
 	}
 

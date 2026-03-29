@@ -70,6 +70,8 @@ type ContainerStats struct {
 	MemoryUsageMB int
 	MemoryLimitMB int
 	CPUPercent    float64
+	NetRxBytes    int64
+	NetTxBytes    int64
 }
 
 type ContainerEvent struct {
@@ -469,10 +471,19 @@ func (c *Client) ContainerStats(ctx context.Context, containerID string) (*Conta
 		cpuPercent = (cpuDelta / systemDelta) * float64(stats.CPUStats.OnlineCPUs) * 100.0
 	}
 
+	// Sum network I/O across all container interfaces
+	var netRx, netTx int64
+	for _, iface := range stats.Networks {
+		netRx += int64(iface.RxBytes)
+		netTx += int64(iface.TxBytes)
+	}
+
 	return &ContainerStats{
 		MemoryUsageMB: memUsageMB,
 		MemoryLimitMB: memLimitMB,
 		CPUPercent:    cpuPercent,
+		NetRxBytes:    netRx,
+		NetTxBytes:    netTx,
 	}, nil
 }
 
