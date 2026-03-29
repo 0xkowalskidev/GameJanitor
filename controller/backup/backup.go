@@ -205,18 +205,25 @@ func (s *BackupService) CreateBackup(ctx context.Context, gameserverID string, n
 }
 
 func (s *BackupService) runBackup(gameserverID, backupID, name string, gs *model.Gameserver, actor controller.Actor) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-	defer cancel()
+	// No operation timeout. Game server volumes can be 500GB+ and backup duration
+	// depends on disk speed, compression ratio, and upload bandwidth. An arbitrary
+	// timeout would corrupt large backups mid-stream. Concurrency is bounded by
+	// the semaphore (maxConcurrentBackups), and the process-level shutdown signal
+	// is the only external cancellation path.
+	ctx := context.Background()
 
-	// Wait for a backup slot. Queued backups show as "in progress" to the user
-	// and start once a slot frees up. The context timeout prevents infinite waits.
+	// Wait for a backup slot (up to 10 minutes in the queue).
+	// Queued backups show as "in progress" to the user and start once a slot opens.
+	queueCtx, queueCancel := context.WithTimeout(ctx, 10*time.Minute)
 	select {
 	case s.sem <- struct{}{}:
 		defer func() { <-s.sem }()
-	case <-ctx.Done():
+	case <-queueCtx.Done():
+		queueCancel()
 		s.failBackup(ctx, gameserverID, backupID, name, actor, "backup queue timeout — too many concurrent backups")
 		return
 	}
+	queueCancel()
 
 	workerID := ""
 	if gs.NodeID != nil {
@@ -360,16 +367,20 @@ func (s *BackupService) RestoreBackup(ctx context.Context, gameserverID, backupI
 }
 
 func (s *BackupService) runRestore(gameserverID, backupID, backupName, volumeName string, wasRunning bool, actor controller.Actor) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-	defer cancel()
+	// No operation timeout — same rationale as runBackup. Large restores (500GB+)
+	// must run to completion. Concurrency is bounded by the semaphore.
+	ctx := context.Background()
 
+	queueCtx, queueCancel := context.WithTimeout(ctx, 10*time.Minute)
 	select {
 	case s.sem <- struct{}{}:
 		defer func() { <-s.sem }()
-	case <-ctx.Done():
+	case <-queueCtx.Done():
+		queueCancel()
 		s.failRestore(gameserverID, backupID, backupName, actor, "restore queue timeout — too many concurrent backups")
 		return
 	}
+	queueCancel()
 
 	gs, err := s.store.GetGameserver(gameserverID)
 	if err != nil || gs == nil {
