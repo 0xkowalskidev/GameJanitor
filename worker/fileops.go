@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/warsmite/gamejanitor/model"
@@ -400,23 +401,25 @@ func DownloadToMemory(ctx context.Context, url string, expectedHash string) ([]b
 	return data, nil
 }
 
-// chownToGameserver walks the directory path and chowns any directories
-// that aren't already owned by the gameserver user. Stops at the first
-// directory that's already correctly owned.
+// chownToGameserver chowns the given directory and all its parent directories
+// up to the point where they're already owned by the gameserver user.
+// This ensures that MkdirAll-created intermediate directories (e.g., /data/server/oxide/
+// when creating /data/server/oxide/plugins/) are accessible inside the container.
 func chownToGameserver(dir string) {
-	info, err := os.Stat(dir)
-	if err != nil || !info.IsDir() {
-		return
-	}
-	filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+	for p := dir; p != "/" && p != "."; p = filepath.Dir(p) {
+		info, err := os.Stat(p)
 		if err != nil {
-			return err
+			break
 		}
-		if d.IsDir() {
-			os.Chown(p, model.GameserverUID, model.GameserverGID)
+		if !info.IsDir() {
+			continue
 		}
-		return nil
-	})
+		stat, ok := info.Sys().(*syscall.Stat_t)
+		if ok && stat.Uid == uint32(model.GameserverUID) {
+			break // already owned by gameserver user, parents should be too
+		}
+		os.Chown(p, model.GameserverUID, model.GameserverGID)
+	}
 }
 
 func SortFileEntries(entries []FileEntry) {
