@@ -498,7 +498,16 @@ func runServe(cmd *cobra.Command, args []string) error {
 	case <-ctx.Done():
 	}
 
-	logger.Info("shutting down")
+	logger.Info("shutting down (send again to force)")
+
+	// Second signal = force quit (useful during development)
+	forceCtx, forceStop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer forceStop()
+	go func() {
+		<-forceCtx.Done()
+		logger.Warn("forced shutdown")
+		os.Exit(1)
+	}()
 
 	// Stop accepting new gRPC connections (workers) and new HTTP requests.
 	grpcServer.gracefulStop()
