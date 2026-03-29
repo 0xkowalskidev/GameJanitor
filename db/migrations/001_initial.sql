@@ -59,6 +59,8 @@ CREATE TABLE tokens (
     expires_at DATETIME
 );
 
+CREATE INDEX IF NOT EXISTS idx_tokens_prefix ON tokens(token_prefix) WHERE token_prefix != '';
+
 CREATE TABLE settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL,
@@ -104,6 +106,7 @@ CREATE INDEX IF NOT EXISTS idx_activity_type ON activity(type);
 CREATE INDEX IF NOT EXISTS idx_activity_status_changed ON activity(gameserver_id, type, started_at DESC) WHERE type = 'status_changed';
 CREATE INDEX IF NOT EXISTS idx_activity_worker_id ON activity(worker_id);
 CREATE INDEX IF NOT EXISTS idx_gameservers_game_id ON gameservers(game_id);
+CREATE INDEX IF NOT EXISTS idx_gameservers_node_id ON gameservers(node_id) WHERE node_id IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_gameservers_sftp_username ON gameservers(sftp_username) WHERE sftp_username != '';
 CREATE INDEX IF NOT EXISTS idx_schedules_gameserver_id ON schedules(gameserver_id);
 CREATE INDEX IF NOT EXISTS idx_backups_gameserver_id ON backups(gameserver_id);
@@ -134,6 +137,7 @@ CREATE TABLE webhook_deliveries (
 
 CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_state_next ON webhook_deliveries(state, next_attempt_at);
 CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_endpoint ON webhook_deliveries(webhook_endpoint_id);
+CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_created_at ON webhook_deliveries(created_at);
 
 
 CREATE TABLE installed_mods (

@@ -21,8 +21,11 @@ func Open(dbPath string) (*sql.DB, error) {
 		return nil, fmt.Errorf("opening sqlite: %w", err)
 	}
 
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(1)
+	// WAL mode supports concurrent readers. Multiple connections let reads
+	// parallelize while writes still serialize (SQLite guarantees this).
+	// busy_timeout handles write contention — writers retry for up to 5s.
+	db.SetMaxOpenConns(10)
+	db.SetMaxIdleConns(5)
 
 	if err := db.Ping(); err != nil {
 		db.Close()
