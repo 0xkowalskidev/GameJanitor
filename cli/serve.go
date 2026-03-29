@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sync"
 	"syscall"
 	"time"
 
@@ -215,7 +216,10 @@ func runServe(cmd *cobra.Command, args []string) error {
 	defer reachabilityChecker.Stop()
 
 	// Prune old activities on startup, then hourly
+	var bgWg sync.WaitGroup
+	bgWg.Add(1)
 	go func() {
+		defer bgWg.Done()
 		retDays := svcs.SettingsSvc.GetInt(settings.SettingEventRetention)
 		if retDays > 0 {
 			if pruned, err := db.PruneActivities(retDays); err != nil {
@@ -473,6 +477,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	svcs.ReadyWatcher.StopAll()
 	svcs.AuthSvc.Stop()
 	router.Stop()
+	bgWg.Wait()
 
 	// Give in-flight HTTP requests time to finish (SSE streams, file downloads).
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
