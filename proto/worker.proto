@@ -145,6 +145,8 @@ message ContainerStatsResponse {
     int32 memory_usage_mb = 1;
     int32 memory_limit_mb = 2;
     double cpu_percent = 3;
+    int64 net_rx_bytes = 4;
+    int64 net_tx_bytes = 5;
 }
 
 // Volumes

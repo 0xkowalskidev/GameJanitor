@@ -144,6 +144,8 @@ func (a *Agent) ContainerStats(ctx context.Context, req *pb.ContainerStatsReques
 		MemoryUsageMb: int32(stats.MemoryUsageMB),
 		MemoryLimitMb: int32(stats.MemoryLimitMB),
 		CpuPercent:    stats.CPUPercent,
+		NetRxBytes:    stats.NetRxBytes,
+		NetTxBytes:    stats.NetTxBytes,
 	}, nil
 }
 

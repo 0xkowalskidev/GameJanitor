@@ -954,6 +954,8 @@ type ContainerStatsResponse struct {
 	MemoryUsageMb int32                  `protobuf:"varint,1,opt,name=memory_usage_mb,json=memoryUsageMb,proto3" json:"memory_usage_mb,omitempty"`
 	MemoryLimitMb int32                  `protobuf:"varint,2,opt,name=memory_limit_mb,json=memoryLimitMb,proto3" json:"memory_limit_mb,omitempty"`
 	CpuPercent    float64                `protobuf:"fixed64,3,opt,name=cpu_percent,json=cpuPercent,proto3" json:"cpu_percent,omitempty"`
+	NetRxBytes    int64                  `protobuf:"varint,4,opt,name=net_rx_bytes,json=netRxBytes,proto3" json:"net_rx_bytes,omitempty"`
+	NetTxBytes    int64                  `protobuf:"varint,5,opt,name=net_tx_bytes,json=netTxBytes,proto3" json:"net_tx_bytes,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1005,6 +1007,20 @@ func (x *ContainerStatsResponse) GetMemoryLimitMb() int32 {
 func (x *ContainerStatsResponse) GetCpuPercent() float64 {
 	if x != nil {
 		return x.CpuPercent
+	}
+	return 0
+}
+
+func (x *ContainerStatsResponse) GetNetRxBytes() int64 {
+	if x != nil {
+		return x.NetRxBytes
+	}
+	return 0
+}
+
+func (x *ContainerStatsResponse) GetNetTxBytes() int64 {
+	if x != nil {
+		return x.NetTxBytes
 	}
 	return 0
 }
@@ -3383,12 +3399,16 @@ const file_proto_worker_proto_rawDesc = "" +
 	"\x04tail\x18\x02 \x01(\x05R\x04tail\x12\x16\n" +
 	"\x06follow\x18\x03 \x01(\bR\x06follow\":\n" +
 	"\x15ContainerStatsRequest\x12!\n" +
-	"\fcontainer_id\x18\x01 \x01(\tR\vcontainerId\"\x89\x01\n" +
+	"\fcontainer_id\x18\x01 \x01(\tR\vcontainerId\"\xcd\x01\n" +
 	"\x16ContainerStatsResponse\x12&\n" +
 	"\x0fmemory_usage_mb\x18\x01 \x01(\x05R\rmemoryUsageMb\x12&\n" +
 	"\x0fmemory_limit_mb\x18\x02 \x01(\x05R\rmemoryLimitMb\x12\x1f\n" +
 	"\vcpu_percent\x18\x03 \x01(\x01R\n" +
-	"cpuPercent\")\n" +
+	"cpuPercent\x12 \n" +
+	"\fnet_rx_bytes\x18\x04 \x01(\x03R\n" +
+	"netRxBytes\x12 \n" +
+	"\fnet_tx_bytes\x18\x05 \x01(\x03R\n" +
+	"netTxBytes\")\n" +
 	"\x13CreateVolumeRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\"\x16\n" +
 	"\x14CreateVolumeResponse\")\n" +
