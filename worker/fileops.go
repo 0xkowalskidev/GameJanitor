@@ -15,7 +15,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/warsmite/gamejanitor/model"
@@ -77,6 +76,10 @@ func ReadFileDirect(resolve VolumeResolver, ctx context.Context, volumeName stri
 }
 
 func WriteFileDirect(resolve VolumeResolver, ctx context.Context, volumeName string, path string, content []byte, perm os.FileMode) error {
+	mountpoint, err := resolve(ctx, volumeName)
+	if err != nil {
+		return err
+	}
 	hostPath, err := ResolveVolumePath(resolve, ctx, volumeName, path)
 	if err != nil {
 		return err
@@ -85,7 +88,7 @@ func WriteFileDirect(resolve VolumeResolver, ctx context.Context, volumeName str
 	if err := os.MkdirAll(parentDir, 0755); err != nil {
 		return fmt.Errorf("creating parent directory: %w", err)
 	}
-	chownToGameserver(parentDir)
+	chownToGameserver(parentDir, mountpoint)
 	if err := os.WriteFile(hostPath, content, perm); err != nil {
 		return err
 	}
@@ -277,6 +280,10 @@ func VolumeSizeDirect(resolve VolumeResolver, ctx context.Context, volumeName st
 var downloadClient = &http.Client{Timeout: 10 * time.Minute}
 
 func DownloadFileDirect(resolve VolumeResolver, ctx context.Context, volumeName string, url string, destPath string, expectedHash string, maxBytes int64) error {
+	mountpoint, err := resolve(ctx, volumeName)
+	if err != nil {
+		return err
+	}
 	hostPath, err := ResolveVolumePath(resolve, ctx, volumeName, destPath)
 	if err != nil {
 		return err
@@ -286,8 +293,7 @@ func DownloadFileDirect(resolve VolumeResolver, ctx context.Context, volumeName 
 	if err := os.MkdirAll(parentDir, 0755); err != nil {
 		return fmt.Errorf("creating parent directory: %w", err)
 	}
-	// Chown created directories so the gameserver user (1001) can manage them inside the container
-	chownToGameserver(parentDir)
+	chownToGameserver(parentDir, mountpoint)
 
 	// Try up to 2 attempts — first failure on hash mismatch could be a transient
 	// network issue (truncated response). Second failure is likely a genuine CDN
@@ -405,24 +411,20 @@ func DownloadToMemory(ctx context.Context, url string, expectedHash string) ([]b
 // up to the point where they're already owned by the gameserver user.
 // This ensures that MkdirAll-created intermediate directories (e.g., /data/server/oxide/
 // when creating /data/server/oxide/plugins/) are accessible inside the container.
-func chownToGameserver(dir string) {
-	for p := dir; p != "/" && p != "."; p = filepath.Dir(p) {
+// chownToGameserver chowns the given directory and all parent directories up to
+// (and including) the volume mountpoint. Ensures directories created by MkdirAll
+// are accessible by the gameserver user inside the container.
+func chownToGameserver(dir string, volumeRoot string) {
+	for p := dir; len(p) >= len(volumeRoot); p = filepath.Dir(p) {
 		info, err := os.Stat(p)
 		if err != nil {
-			slog.Warn("chownToGameserver: stat failed", "path", p, "error", err)
 			break
 		}
-		if !info.IsDir() {
-			continue
+		if info.IsDir() {
+			os.Chown(p, model.GameserverUID, model.GameserverGID)
 		}
-		stat, ok := info.Sys().(*syscall.Stat_t)
-		if ok && stat.Uid == uint32(model.GameserverUID) {
-			break // already owned by gameserver user, parents should be too
-		}
-		if err := os.Chown(p, model.GameserverUID, model.GameserverGID); err != nil {
-			slog.Warn("chownToGameserver: chown failed", "path", p, "error", err)
-		} else {
-			slog.Debug("chownToGameserver: chowned", "path", p, "from_uid", stat.Uid)
+		if p == volumeRoot {
+			break
 		}
 	}
 }
