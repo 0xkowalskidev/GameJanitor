@@ -62,10 +62,8 @@
   // Upload state
   let uploadInput: HTMLInputElement | null = null;
 
-  // Derived: filter installed by active category
-  const categoryMods = $derived(
-    installedMods.filter(m => m.category === activeCategory)
-  );
+  // All installed mods — shown regardless of which browse category is selected
+  const categoryMods = $derived(installedMods);
 
   // Derived: group installed into packs + standalone
   // Pack headers may be in a different category (e.g., "Modpacks") than their children ("Mods"),
