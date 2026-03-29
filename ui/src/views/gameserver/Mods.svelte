@@ -370,7 +370,16 @@
         await loadInstalled();
         checkForUpdates();
       } catch (e: any) {
-        toast(`Failed to install ${result.name}: ${e.message}`, 'error');
+        const msg: string = e.message || '';
+        if (msg.includes('already installed')) {
+          await confirm({
+            title: 'Modpack Already Installed',
+            message: msg + '\n\nUninstall the existing modpack first, then try again.',
+            confirmLabel: 'OK',
+          });
+        } else {
+          toast(`Failed to install ${result.name}: ${msg}`, 'error');
+        }
       } finally {
         const next = new Set(installingIds);
         next.delete(key);
