@@ -463,12 +463,19 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 	logger.Info("shutting down")
 
-	// Give in-flight requests up to 3 seconds to finish
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer shutdownCancel()
-
+	// Stop accepting new gRPC connections (workers) and new HTTP requests.
 	grpcServer.gracefulStop()
+
+	// Stop background workers before closing HTTP so in-flight operations
+	// (backups, webhook deliveries) complete cleanly.
+	svcs.StatsPoller.StopAll()
+	svcs.QuerySvc.StopAll()
+	svcs.ReadyWatcher.StopAll()
 	svcs.AuthSvc.Stop()
+
+	// Give in-flight HTTP requests time to finish (SSE streams, file downloads).
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		logger.Error("http server shutdown error", "error", err)
 	}
