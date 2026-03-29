@@ -11,7 +11,7 @@ const maxDepDepth = 10
 
 // installDependencies recursively installs required dependencies for a mod version.
 // parentModID is the installed_mod ID of the mod that requires these deps.
-func (s *ModService) installDependencies(ctx context.Context, gameserverID, parentModID string, catalog ModCatalog, version *ModVersion, src games.ModCategorySource, category string, filters CatalogFilters, depth int) error {
+func (s *ModService) installDependencies(ctx context.Context, gameserverID, parentModID string, catalog ModCatalog, version *ModVersion, src games.ModCategorySource, category string, filters CatalogFilters, depth int, visited map[string]bool) error {
 	if depth >= maxDepDepth {
 		return fmt.Errorf("dependency depth limit reached (%d levels)", maxDepDepth)
 	}
@@ -28,6 +28,12 @@ func (s *ModService) installDependencies(ctx context.Context, gameserverID, pare
 		if !dep.Required {
 			continue
 		}
+
+		// Cycle or diamond detection — skip mods already being processed in this chain
+		if visited[dep.ModID] {
+			continue
+		}
+		visited[dep.ModID] = true
 
 		// Already installed?
 		existing, _ := s.store.GetInstalledModBySource(gameserverID, src.Name, dep.ModID)
@@ -51,7 +57,7 @@ func (s *ModService) installDependencies(ctx context.Context, gameserverID, pare
 		}
 
 		// Recursive: install the dependency's dependencies first
-		if err := s.installDependencies(ctx, gameserverID, depMod.ID, catalog, depVersion, src, category, filters, depth+1); err != nil {
+		if err := s.installDependencies(ctx, gameserverID, depMod.ID, catalog, depVersion, src, category, filters, depth+1, visited); err != nil {
 			return err
 		}
 

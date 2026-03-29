@@ -365,7 +365,7 @@ func (s *ModService) Install(ctx context.Context, gameserverID, category, source
 
 	// Install dependencies (file delivery only)
 	if src.Delivery == "file" {
-		if err := s.installDependencies(ctx, gameserverID, modID, catalog, version, *src, category, filters, 0); err != nil {
+		if err := s.installDependencies(ctx, gameserverID, modID, catalog, version, *src, category, filters, 0, make(map[string]bool)); err != nil {
 			return nil, fmt.Errorf("installing dependencies: %w", err)
 		}
 	}
