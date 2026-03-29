@@ -26,6 +26,7 @@ type StatusManager struct {
 	restartFunc  func(ctx context.Context, id string) error
 
 	cancel context.CancelFunc
+	wg     sync.WaitGroup
 
 	// Per-worker event watchers for multi-node
 	workerCancels map[string]context.CancelFunc
@@ -63,7 +64,9 @@ func (m *StatusManager) Start(ctx context.Context) {
 
 	// Reset crash counter when a gameserver successfully reaches "running"
 	events, unsub := m.broadcaster.Subscribe()
+	m.wg.Add(1)
 	go func() {
+		defer m.wg.Done()
 		defer unsub()
 		for {
 			select {
@@ -102,6 +105,7 @@ func (m *StatusManager) Stop() {
 	}
 	m.workerMu.Unlock()
 
+	m.wg.Wait()
 	m.log.Info("status manager stopped")
 }
 
