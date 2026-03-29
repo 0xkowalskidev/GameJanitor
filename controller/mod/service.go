@@ -584,12 +584,58 @@ func (s *ModService) CheckForUpdates(ctx context.Context, gameserverID string) (
 	loaderID := s.resolveLoaderID(game, gs.Env)
 	gameVersion := s.resolveGameVersion(game, gs.Env)
 
-	var updates []ModUpdate
-	for _, mod := range installed {
+	// Collect Modrinth mods with hashes for batch update check
+	var modrinthHashes []string
+	modrinthByHash := make(map[string]*model.InstalledMod)
+	var nonBatchMods []model.InstalledMod
+
+	for i, mod := range installed {
 		if mod.Delivery == "manifest" || mod.AutoInstalled || mod.PackID != nil {
 			continue // Workshop auto-updates, deps update with parent, pack mods update via UpdatePack
 		}
+		// Modrinth mods with hashes go through the batch endpoint
+		if mod.Source == "modrinth" && mod.FileHash != "" && mod.Delivery == "file" {
+			modrinthHashes = append(modrinthHashes, mod.FileHash)
+			modrinthByHash[mod.FileHash] = &installed[i]
+		} else {
+			nonBatchMods = append(nonBatchMods, mod)
+		}
+	}
 
+	var updates []ModUpdate
+
+	// Batch check Modrinth mods (one API call for all)
+	if len(modrinthHashes) > 0 {
+		if modrinthCatalog, ok := s.catalogs["modrinth"].(*ModrinthCatalog); ok {
+			latestByHash, err := modrinthCatalog.BatchCheckUpdates(ctx, modrinthHashes, loaderID, gameVersion)
+			if err != nil {
+				s.log.Warn("batch update check failed, falling back to per-mod", "error", err)
+				// Fall back to per-mod check for all modrinth mods
+				for _, mod := range modrinthByHash {
+					nonBatchMods = append(nonBatchMods, *mod)
+				}
+			} else {
+				for hash, latest := range latestByHash {
+					mod := modrinthByHash[hash]
+					if mod == nil {
+						continue
+					}
+					// If the latest version has a different hash, there's an update
+					if latest.FileHash != hash {
+						updates = append(updates, ModUpdate{
+							ModID:          mod.ID,
+							ModName:        mod.Name,
+							CurrentVersion: mod.Version,
+							LatestVersion:  latest,
+						})
+					}
+				}
+			}
+		}
+	}
+
+	// Per-mod check for non-Modrinth sources, packs, and mods without hashes
+	for _, mod := range nonBatchMods {
 		catalog, ok := s.catalogs[mod.Source]
 		if !ok {
 			continue
@@ -1069,6 +1115,7 @@ func (s *ModService) newInstalledMod(gameserverID, source, sourceID, category st
 		Version:       version.Version,
 		VersionID:     version.VersionID,
 		DownloadURL:   version.DownloadURL,
+		FileHash:      version.FileHash,
 		Delivery:      delivery,
 		AutoInstalled: autoInstalled,
 		PackID:        packID,

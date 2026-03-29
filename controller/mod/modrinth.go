@@ -1,6 +1,7 @@
 package mod
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -65,10 +66,11 @@ type modrinthVersion struct {
 }
 
 type modrinthFile struct {
-	URL      string `json:"url"`
-	Filename string `json:"filename"`
-	Primary  bool   `json:"primary"`
-	Size     int    `json:"size"`
+	URL      string            `json:"url"`
+	Filename string            `json:"filename"`
+	Primary  bool              `json:"primary"`
+	Size     int               `json:"size"`
+	Hashes   map[string]string `json:"hashes"`
 }
 
 type modrinthDep struct {
@@ -221,10 +223,11 @@ func (c *ModrinthCatalog) GetVersions(ctx context.Context, modID string, filters
 			Version:       v.VersionNumber,
 			FileName:      file.Filename,
 			DownloadURL:   file.URL,
+			FileHash:      file.Hashes["sha512"],
 			GameVersion:   gv,
 			GameVersions:  v.GameVersions,
 			HasServerFile: hasServer,
-			Loader:       ldr,
+			Loader:        ldr,
 		})
 	}
 
@@ -261,6 +264,75 @@ func (c *ModrinthCatalog) GetDependencies(ctx context.Context, versionID string)
 		deps = append(deps, dep)
 	}
 	return deps, nil
+}
+
+// BatchCheckUpdates sends file hashes to Modrinth's bulk update endpoint.
+// Returns a map of hash → latest ModVersion for mods that have updates.
+func (c *ModrinthCatalog) BatchCheckUpdates(ctx context.Context, hashes []string, loader, gameVersion string) (map[string]ModVersion, error) {
+	if len(hashes) == 0 {
+		return nil, nil
+	}
+
+	body := map[string]any{
+		"hashes":    hashes,
+		"algorithm": "sha512",
+	}
+	if loader != "" {
+		body["loaders"] = []string{loader}
+	}
+	if gameVersion != "" {
+		body["game_versions"] = []string{gameVersion}
+	}
+
+	bodyJSON, _ := json.Marshal(body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, modrinthBaseURL+"/version_files/update", bytes.NewReader(bodyJSON))
+	if err != nil {
+		return nil, fmt.Errorf("creating batch update request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "gamejanitor")
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("batch update request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("batch update returned status %d", resp.StatusCode)
+	}
+
+	// Response is map of hash → modrinth version object
+	var rawResult map[string]modrinthVersion
+	if err := json.NewDecoder(resp.Body).Decode(&rawResult); err != nil {
+		return nil, fmt.Errorf("decoding batch update response: %w", err)
+	}
+
+	result := make(map[string]ModVersion, len(rawResult))
+	for hash, v := range rawResult {
+		file := primaryFile(v.Files)
+		if file == nil {
+			continue
+		}
+		gv := ""
+		if len(v.GameVersions) > 0 {
+			gv = v.GameVersions[0]
+		}
+		ldr := ""
+		if len(v.Loaders) > 0 {
+			ldr = v.Loaders[0]
+		}
+		result[hash] = ModVersion{
+			VersionID:   v.ID,
+			Version:     v.VersionNumber,
+			FileName:    file.Filename,
+			DownloadURL: file.URL,
+			FileHash:    file.Hashes["sha512"],
+			GameVersion: gv,
+			Loader:      ldr,
+		}
+	}
+	return result, nil
 }
 
 func (c *ModrinthCatalog) get(ctx context.Context, path string, out any) error {

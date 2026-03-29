@@ -51,6 +51,7 @@ type ModVersion struct {
 	Version       string   `json:"version"`
 	FileName      string   `json:"file_name"`
 	DownloadURL   string   `json:"download_url"`
+	FileHash      string   `json:"file_hash,omitempty"` // SHA-512 from catalog, used for batch update checks
 	GameVersion   string   `json:"game_version"`
 	GameVersions  []string `json:"game_versions,omitempty"`
 	Loader        string   `json:"loader"`
