@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/warsmite/gamejanitor/model"
@@ -52,10 +53,73 @@ const (
 type AuthService struct {
 	store Store
 	log   *slog.Logger
+
+	// Batched last_used_at updates — avoids a DB write on every request.
+	// The map collects token IDs touched since the last flush. A background
+	// goroutine writes them to the DB every few seconds.
+	pendingMu sync.Mutex
+	pending   map[string]struct{}
+	stop      chan struct{}
+	done      chan struct{}
 }
 
+const lastUsedFlushInterval = 5 * time.Second
+
 func NewAuthService(store Store, log *slog.Logger) *AuthService {
-	return &AuthService{store: store, log: log}
+	s := &AuthService{
+		store:   store,
+		log:     log,
+		pending: make(map[string]struct{}),
+		stop:    make(chan struct{}),
+		done:    make(chan struct{}),
+	}
+	go s.flushLoop()
+	return s
+}
+
+// Stop flushes any pending last_used_at updates and stops the background goroutine.
+func (s *AuthService) Stop() {
+	close(s.stop)
+	<-s.done
+}
+
+func (s *AuthService) flushLoop() {
+	defer close(s.done)
+	ticker := time.NewTicker(lastUsedFlushInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-s.stop:
+			s.flushLastUsed()
+			return
+		case <-ticker.C:
+			s.flushLastUsed()
+		}
+	}
+}
+
+func (s *AuthService) flushLastUsed() {
+	s.pendingMu.Lock()
+	if len(s.pending) == 0 {
+		s.pendingMu.Unlock()
+		return
+	}
+	batch := s.pending
+	s.pending = make(map[string]struct{})
+	s.pendingMu.Unlock()
+
+	for id := range batch {
+		if err := s.store.UpdateTokenLastUsed(id); err != nil {
+			s.log.Warn("failed to flush token last_used_at", "id", id, "error", err)
+		}
+	}
+}
+
+func (s *AuthService) touchLastUsed(tokenID string) {
+	s.pendingMu.Lock()
+	s.pending[tokenID] = struct{}{}
+	s.pendingMu.Unlock()
 }
 
 func (s *AuthService) ValidateToken(rawToken string) *model.Token {
@@ -74,9 +138,7 @@ func (s *AuthService) ValidateToken(rawToken string) *model.Token {
 					s.log.Debug("token expired", "id", t.ID, "expired_at", t.ExpiresAt)
 					return nil
 				}
-				if err := s.store.UpdateTokenLastUsed(t.ID); err != nil {
-					s.log.Warn("failed to update token last_used_at", "id", t.ID, "error", err)
-				}
+				s.touchLastUsed(t.ID)
 				return t
 			}
 		}
@@ -99,10 +161,7 @@ func (s *AuthService) ValidateToken(rawToken string) *model.Token {
 			return nil
 		}
 
-		if err := s.store.UpdateTokenLastUsed(t.ID); err != nil {
-			s.log.Warn("failed to update token last_used_at", "id", t.ID, "error", err)
-		}
-
+		s.touchLastUsed(t.ID)
 		return &t
 	}
 

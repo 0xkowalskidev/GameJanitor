@@ -468,6 +468,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	defer shutdownCancel()
 
 	grpcServer.gracefulStop()
+	svcs.AuthSvc.Stop()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		logger.Error("http server shutdown error", "error", err)
 	}

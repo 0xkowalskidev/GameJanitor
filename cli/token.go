@@ -85,7 +85,7 @@ func openAuthService(cmd *cobra.Command) (*auth.AuthService, func(), error) {
 		*store.GameserverStore
 	}{store.NewTokenStore(database), store.NewGameserverStore(database)}
 	authSvc := auth.NewAuthService(authStore, logger)
-	return authSvc, func() { database.Close() }, nil
+	return authSvc, func() { authSvc.Stop(); database.Close() }, nil
 }
 
 func runTokenOfflineCreate(cmd *cobra.Command, args []string) error {
