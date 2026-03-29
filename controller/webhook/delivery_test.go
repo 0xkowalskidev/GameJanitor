@@ -45,7 +45,7 @@ func TestWebhookDelivery_CreateAndListPending(t *testing.T) {
 
 	delivery := &model.WebhookDelivery{
 		ID: "d-1", WebhookEndpointID: ep.ID,
-		EventType: "gameserver.create", Payload: `{"test": true}`, NextAttemptAt: time.Now(),
+		EventType: "gameserver.create", Payload: `{"test": true}`, NextAttemptAt: time.Now().UTC(),
 	}
 	require.NoError(t, db.CreateWebhookDelivery(delivery))
 
@@ -95,17 +95,21 @@ func TestWebhookDelivery_HMACSignature(t *testing.T) {
 		WebhookEndpointID: ep.ID,
 		EventType:         "gameserver.create",
 		Payload:           string(body),
-		NextAttemptAt:     time.Now(),
+		NextAttemptAt:     time.Now().UTC(),
 	}
 	require.NoError(t, db.CreateWebhookDelivery(delivery))
 
-	// Start webhook worker, let it process
+	// Start webhook worker, poll until the delivery is processed instead of
+	// sleeping a fixed duration (previous 6s sleep was flaky).
 	whStore := store.NewWebhookStore(svc.DB)
 	gsLookup := &testWebhookLookup{gs: store.NewGameserverStore(svc.DB), wn: store.NewWorkerNodeStore(svc.DB)}
 	ww := webhook.NewWebhookWorker(whStore, gsLookup, svc.Broadcaster, testutil.TestLogger())
 	ctx := testutil.TestContext()
 	ww.Start(ctx)
-	time.Sleep(6 * time.Second) // delivery poll interval is 5s
+
+	require.Eventually(t, func() bool {
+		return receivedSig != ""
+	}, 15*time.Second, 100*time.Millisecond, "webhook delivery should be processed")
 	ww.Stop()
 
 	assert.Equal(t, expectedSig, receivedSig, "HMAC signature should match")
@@ -155,7 +159,7 @@ func TestWebhookDelivery_EventFilterNamespace(t *testing.T) {
 	// Enqueue matching event
 	d1 := &model.WebhookDelivery{
 		ID: "d-match", WebhookEndpointID: ep.ID,
-		EventType: "gameserver.create", Payload: `{}`, NextAttemptAt: time.Now(),
+		EventType: "gameserver.create", Payload: `{}`, NextAttemptAt: time.Now().UTC(),
 	}
 	require.NoError(t, db.CreateWebhookDelivery(d1))
 
@@ -175,7 +179,7 @@ func TestWebhookDelivery_DeliveryStateTransitions(t *testing.T) {
 
 	d := &model.WebhookDelivery{
 		ID: "d-state", WebhookEndpointID: ep.ID,
-		EventType: "gameserver.start", Payload: `{}`, NextAttemptAt: time.Now(),
+		EventType: "gameserver.start", Payload: `{}`, NextAttemptAt: time.Now().UTC(),
 	}
 	require.NoError(t, db.CreateWebhookDelivery(d))
 
@@ -211,7 +215,7 @@ func TestWebhookDelivery_FailedAfterMaxAttempts(t *testing.T) {
 
 	d := &model.WebhookDelivery{
 		ID: "d-fail", WebhookEndpointID: ep.ID,
-		EventType: "gameserver.start", Payload: `{}`, NextAttemptAt: time.Now(),
+		EventType: "gameserver.start", Payload: `{}`, NextAttemptAt: time.Now().UTC(),
 	}
 	require.NoError(t, db.CreateWebhookDelivery(d))
 

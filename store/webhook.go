@@ -152,10 +152,10 @@ func (s *WebhookStore) GetPendingDeliveries(limit int) ([]model.WebhookDelivery,
 	rows, err := s.db.Query(
 		`SELECT d.id, d.webhook_endpoint_id, d.event_type, d.payload, d.state, d.attempts, d.last_attempt_at, d.next_attempt_at, d.last_error, d.created_at
 		 FROM webhook_deliveries d
-		 WHERE d.state = ? AND d.next_attempt_at <= datetime('now')
+		 WHERE d.state = ? AND d.next_attempt_at <= ?
 		 ORDER BY d.next_attempt_at
 		 LIMIT ?`,
-		model.WebhookStatePending, limit,
+		model.WebhookStatePending, time.Now().UTC(), limit,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("querying pending webhook deliveries: %w", err)

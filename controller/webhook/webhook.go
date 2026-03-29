@@ -214,7 +214,7 @@ func (w *WebhookWorker) enqueueEvent(event controller.WebhookEvent) {
 			continue
 		}
 
-		now := time.Now()
+		now := time.Now().UTC()
 		delivery := &model.WebhookDelivery{
 			ID:                payload.ID,
 			WebhookEndpointID: ep.ID,
@@ -344,7 +344,7 @@ func (w *WebhookWorker) processPendingDeliveries() {
 		if backoffSec > maxBackoffSeconds {
 			backoffSec = maxBackoffSeconds
 		}
-		nextAttempt := time.Now().Add(time.Duration(backoffSec) * time.Second)
+		nextAttempt := time.Now().UTC().Add(time.Duration(backoffSec) * time.Second)
 
 		if err := w.store.MarkDeliveryRetry(d.ID, nextAttempt, errMsg); err != nil {
 			w.log.Error("webhook: failed to mark delivery for retry", "id", d.ID, "error", err)

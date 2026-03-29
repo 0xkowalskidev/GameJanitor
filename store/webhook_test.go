@@ -281,7 +281,7 @@ func TestWebhookDelivery_GetPending(t *testing.T) {
 	ep := &model.WebhookEndpoint{URL: "https://example.com/hook", Events: model.StringSlice{"*"}, Enabled: true}
 	require.NoError(t, db.CreateWebhookEndpoint(ep))
 
-	now := time.Now()
+	now := time.Now().UTC()
 	// Pending delivery with next_attempt_at in the past (should be returned).
 	d1 := &model.WebhookDelivery{ID: "del-ready", WebhookEndpointID: ep.ID, EventType: "test", Payload: `{}`, NextAttemptAt: now.Add(-time.Minute), CreatedAt: now}
 	require.NoError(t, db.CreateWebhookDelivery(d1))
