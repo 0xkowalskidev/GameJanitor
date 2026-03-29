@@ -103,9 +103,21 @@ func (c *ModrinthCatalog) Search(ctx context.Context, query string, filters Cata
 
 	facetStr := "[" + strings.Join(facets, ",") + "]"
 
+	// Map our sort names to Modrinth's index parameter
+	sortIndex := "relevance"
+	switch filters.Sort {
+	case "downloads":
+		sortIndex = "downloads"
+	case "updated":
+		sortIndex = "updated"
+	case "newest":
+		sortIndex = "newest"
+	}
+
 	params := url.Values{
 		"query":  {query},
 		"facets": {facetStr},
+		"index":  {sortIndex},
 		"offset": {strconv.Itoa(offset)},
 		"limit":  {strconv.Itoa(limit)},
 	}

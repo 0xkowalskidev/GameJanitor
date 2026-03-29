@@ -18,6 +18,7 @@ const DefaultModLimit = 20
 type CatalogFilters struct {
 	GameVersion string
 	Loader      string
+	Sort        string // "relevance", "downloads", "updated", "newest"
 	Extra       map[string]string
 	ServerPack  bool // prefer server-specific pack files over client files
 }

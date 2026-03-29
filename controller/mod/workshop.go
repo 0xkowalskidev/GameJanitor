@@ -34,6 +34,15 @@ func (c *WorkshopCatalog) Search(ctx context.Context, query string, filters Cata
 		return nil, 0, controller.ErrBadRequest("Steam Workshop search requires a Steam API key. Configure it in Settings, or paste a Workshop item ID directly.")
 	}
 
+	// Map our sort names to Workshop query_type
+	queryType := "9" // default: ranked by subscriptions
+	switch filters.Sort {
+	case "relevance":
+		queryType = "1" // ranked by vote
+	case "updated", "newest":
+		queryType = "3" // ranked by date
+	}
+
 	params := url.Values{
 		"key":                      {key},
 		"search_text":              {query},
@@ -41,7 +50,7 @@ func (c *WorkshopCatalog) Search(ctx context.Context, query string, filters Cata
 		"return_previews":          {"true"},
 		"numperpage":               {fmt.Sprintf("%d", limit)},
 		"cursor":                   {"*"},
-		"query_type":               {"9"},
+		"query_type":               {queryType},
 	}
 	if appID := filters.Extra["app_id"]; appID != "" {
 		params.Set("appid", appID)

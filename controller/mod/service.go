@@ -168,8 +168,16 @@ func (s *ModService) ListInstalled(ctx context.Context, gameserverID string) ([]
 	return s.store.ListInstalledMods(gameserverID)
 }
 
+// SearchOptions allows overriding the default version/loader/sort for browsing.
+// Empty strings mean "use server's current value".
+type SearchOptions struct {
+	Version string // override game version filter
+	Loader  string // override loader filter
+	Sort    string // "relevance", "downloads", "updated", "newest"
+}
+
 // Search searches all sources in a category, merges results.
-func (s *ModService) Search(ctx context.Context, gameserverID, category, query string, offset, limit int) ([]ModResult, int, error) {
+func (s *ModService) Search(ctx context.Context, gameserverID, category, query string, opts SearchOptions, offset, limit int) ([]ModResult, int, error) {
 	gs, err := s.getGameserver(gameserverID)
 	if err != nil {
 		return nil, 0, err
@@ -179,13 +187,30 @@ func (s *ModService) Search(ctx context.Context, gameserverID, category, query s
 		return nil, 0, controller.ErrNotFoundf("game %s not found", gs.GameID)
 	}
 
-	cat := s.findCategory(game, gs.Env, category)
-	if cat == nil {
-		return nil, 0, controller.ErrBadRequestf("category %q not available for this gameserver", category)
+	// Use overrides if provided, otherwise fall back to server's current config
+	loaderID := opts.Loader
+	if loaderID == "" {
+		loaderID = s.resolveLoaderID(game, gs.Env)
+	}
+	gameVersion := opts.Version
+	if gameVersion == "" {
+		gameVersion = s.resolveGameVersion(game, gs.Env)
 	}
 
-	loaderID := s.resolveLoaderID(game, gs.Env)
-	gameVersion := s.resolveGameVersion(game, gs.Env)
+	// When browsing with a different loader, find categories available for that loader
+	browseEnv := gs.Env
+	if opts.Loader != "" && game.Mods.Loader != nil {
+		browseEnv = make(model.Env)
+		for k, v := range gs.Env {
+			browseEnv[k] = v
+		}
+		browseEnv[game.Mods.Loader.Env] = opts.Loader
+	}
+
+	cat := s.findCategory(game, browseEnv, category)
+	if cat == nil {
+		return nil, 0, controller.ErrBadRequestf("category %q not available", category)
+	}
 
 	var allResults []ModResult
 	totalHits := 0
@@ -197,6 +222,7 @@ func (s *ModService) Search(ctx context.Context, gameserverID, category, query s
 		}
 
 		filters := s.buildFilters(src, gameVersion, loaderID)
+		filters.Sort = opts.Sort
 		results, total, err := catalog.Search(ctx, query, filters, offset, limit)
 		if err != nil {
 			s.log.Warn("search failed for source", "source", src.Name, "error", err)

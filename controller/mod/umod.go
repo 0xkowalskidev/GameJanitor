@@ -65,11 +65,22 @@ func (c *UmodCatalog) Search(ctx context.Context, query string, filters CatalogF
 	}
 	page := (offset / limit) + 1
 
+	// Map our sort names to uMod's sort parameter
+	umodSort, umodDir := "downloads", "desc"
+	switch filters.Sort {
+	case "updated":
+		umodSort, umodDir = "updated_at", "desc"
+	case "newest":
+		umodSort, umodDir = "created_at", "desc"
+	case "relevance":
+		umodSort, umodDir = "title", "asc"
+	}
+
 	params := url.Values{
 		"query":   {query},
 		"page":    {strconv.Itoa(page)},
-		"sort":    {"downloads"},
-		"sortdir": {"desc"},
+		"sort":    {umodSort},
+		"sortdir": {umodDir},
 	}
 	if cat := filters.Extra["category"]; cat != "" {
 		params.Set("categories", cat)

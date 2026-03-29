@@ -61,7 +61,13 @@ func (h *ModHandlers) Search(w http.ResponseWriter, r *http.Request) {
 		limit = PaginationDefaultModLimit
 	}
 
-	results, total, err := h.svc.Search(r.Context(), gsID, category, query, offset, limit)
+	opts := mod.SearchOptions{
+		Version: q.Get("version"),
+		Loader:  q.Get("loader"),
+		Sort:    q.Get("sort"),
+	}
+
+	results, total, err := h.svc.Search(r.Context(), gsID, category, query, opts, offset, limit)
 	if err != nil {
 		h.log.Error("searching mods", "gameserver_id", gsID, "category", category, "query", query, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))

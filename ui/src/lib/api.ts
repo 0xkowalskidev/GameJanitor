@@ -528,7 +528,7 @@ export const api = {
   mods: {
     config: (gsId: string) => get<ModTabConfig>(`/api/gameservers/${gsId}/mods/config`),
     list: (gsId: string) => get<InstalledMod[]>(`/api/gameservers/${gsId}/mods`),
-    search: (gsId: string, params: { category: string; q?: string; offset?: number; limit?: number }) =>
+    search: (gsId: string, params: { category: string; q?: string; version?: string; loader?: string; sort?: string; offset?: number; limit?: number }) =>
       get<ModSearchResults>(`/api/gameservers/${gsId}/mods/search`, params),
     versions: (gsId: string, params: { category: string; source: string; source_id: string }) =>
       get<ModVersion[]>(`/api/gameservers/${gsId}/mods/versions`, params),

@@ -34,6 +34,11 @@
   let searchGeneration = 0;
   const SEARCH_LIMIT = 20;
 
+  // Browse filters (independent from server config — for browsing only)
+  let browseVersion = $state('');  // empty = use server's current version
+  let browseLoader = $state('');   // empty = use server's current loader
+  let browseSort = $state('downloads');
+
   // In-flight operation tracking
   let installingIds = $state<Set<string>>(new Set());
   let uninstallingIds = $state<Set<string>>(new Set());
@@ -197,6 +202,9 @@
       const result = await api.mods.search(id, {
         category,
         q: query || undefined,
+        version: browseVersion || undefined,
+        loader: browseLoader || undefined,
+        sort: browseSort || undefined,
         offset,
         limit: SEARCH_LIMIT,
       });
@@ -800,6 +808,36 @@
       </div>
     {/if}
 
+    <div class="browse-filters">
+      {#if config.version}
+        <select class="select filter-select" value={browseVersion}
+          onchange={(e) => { browseVersion = (e.target as HTMLSelectElement).value; doSearch(searchQuery, activeCategory, 0, false); }}>
+          <option value="">All versions</option>
+          {#each config.version.options as opt}
+            <option value={opt.value}>{opt.label}</option>
+          {/each}
+        </select>
+      {/if}
+      {#if config.loader}
+        <select class="select filter-select" value={browseLoader}
+          onchange={(e) => { browseLoader = (e.target as HTMLSelectElement).value; doSearch(searchQuery, activeCategory, 0, false); }}>
+          <option value="">All loaders</option>
+          {#each config.loader.options as opt}
+            {#if opt.mod_sources.length > 0}
+              <option value={opt.value}>{opt.value}</option>
+            {/if}
+          {/each}
+        </select>
+      {/if}
+      <select class="select filter-select" value={browseSort}
+        onchange={(e) => { browseSort = (e.target as HTMLSelectElement).value; doSearch(searchQuery, activeCategory, 0, false); }}>
+        <option value="downloads">Most popular</option>
+        <option value="relevance">Relevance</option>
+        <option value="updated">Recently updated</option>
+        <option value="newest">Newest</option>
+      </select>
+    </div>
+
     <div class="search-bar">
       <input class="input" type="text" placeholder="Search mods..."
         value={searchQuery}
@@ -1184,4 +1222,17 @@
     border-radius: var(--radius);
   }
   .url-form .input { flex: 1; }
+
+  /* Browse filters */
+  .browse-filters {
+    display: flex; gap: 8px; align-items: center;
+    margin-bottom: 10px;
+  }
+  .filter-select {
+    padding: 6px 10px;
+    background: var(--bg-inset); border: 1px solid var(--border-dim);
+    border-radius: var(--radius-sm); color: var(--text-secondary);
+    font-family: var(--font-body); font-size: 0.78rem; outline: none;
+  }
+  .filter-select:focus { border-color: var(--accent-border); }
 </style>
