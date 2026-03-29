@@ -141,8 +141,8 @@ func (d *PackDelivery) Install(ctx context.Context, gameserverID, packURL, insta
 	}
 	defer zipReader.Close()
 
-	// Read modrinth.index.json
-	index, err := d.readIndex(&zipReader.Reader)
+	// Parse the modpack index (format-agnostic)
+	packFiles, err := d.parsePackIndex(&zipReader.Reader)
 	if err != nil {
 		return nil, fmt.Errorf("reading modpack index: %w", err)
 	}
@@ -154,32 +154,25 @@ func (d *PackDelivery) Install(ctx context.Context, gameserverID, packURL, insta
 
 	// Download each mod file directly to the worker volume
 	var mods []PackMod
-	for _, f := range index.Files {
+	for _, f := range packFiles {
 		// Filter: skip client-only mods
-		if f.Env != nil && f.Env.Server == "unsupported" {
+		if f.ServerSide == "unsupported" {
 			continue
 		}
 
-		if len(f.Downloads) == 0 {
-			d.log.Warn("modpack file has no download URLs, skipping", "path", f.Path)
-			continue
-		}
-
-		downloadURL := f.Downloads[0]
 		fileName := path.Base(f.Path)
 		fullPath := path.Join(installPath, fileName)
-		expectedHash := f.Hashes["sha512"]
 
-		if err := d.fileSvc.DownloadToVolume(ctx, gameserverID, downloadURL, fullPath, expectedHash, 0); err != nil {
+		if err := d.fileSvc.DownloadToVolume(ctx, gameserverID, f.DownloadURL, fullPath, f.SHA512, 0); err != nil {
 			return nil, fmt.Errorf("downloading pack mod %s: %w", fileName, err)
 		}
 
 		mods = append(mods, PackMod{
-			SourceID:    extractModrinthProjectID(downloadURL, fileName),
+			SourceID:    extractModrinthProjectID(f.DownloadURL, fileName),
 			FileName:    fileName,
 			FilePath:    fullPath,
-			DownloadURL: downloadURL,
-			SHA512:      expectedHash,
+			DownloadURL: f.DownloadURL,
+			SHA512:      f.SHA512,
 		})
 	}
 
@@ -263,14 +256,45 @@ func (d *PackDelivery) Install(ctx context.Context, gameserverID, packURL, insta
 	return &PackContents{Mods: mods, Overrides: overrides}, nil
 }
 
-// mrpack index types
+// --- Pack format abstraction ---
+
+// packFile is a format-agnostic representation of a file in a modpack.
+// Both mrpack (Modrinth) and future formats (CurseForge, Thunderstore) produce these.
+type packFile struct {
+	Path         string // relative path inside the pack (e.g., "mods/lithium.jar")
+	DownloadURL  string
+	SHA512       string
+	ServerSide   string // "required", "optional", "unsupported", or "" (unknown)
+}
+
+// parsePackIndex detects the modpack format from the ZIP contents and parses it.
+// Currently supports Modrinth (.mrpack). Future formats can be added here.
+func (d *PackDelivery) parsePackIndex(zr *zip.Reader) ([]packFile, error) {
+	// Try Modrinth format (modrinth.index.json)
+	for _, f := range zr.File {
+		if f.Name == "modrinth.index.json" {
+			return d.parseMrpackIndex(f)
+		}
+	}
+
+	// Future: try CurseForge format (manifest.json)
+	// for _, f := range zr.File {
+	//     if f.Name == "manifest.json" {
+	//         return d.parseCurseForgeIndex(f)
+	//     }
+	// }
+
+	return nil, fmt.Errorf("unrecognized modpack format: no modrinth.index.json found")
+}
+
+// --- Modrinth .mrpack format ---
 
 type mrpackIndex struct {
-	FormatVersion int          `json:"formatVersion"`
-	Game          string       `json:"game"`
-	VersionID     string       `json:"versionId"`
-	Name          string       `json:"name"`
-	Files         []mrpackFile `json:"files"`
+	FormatVersion int               `json:"formatVersion"`
+	Game          string            `json:"game"`
+	VersionID     string            `json:"versionId"`
+	Name          string            `json:"name"`
+	Files         []mrpackFile      `json:"files"`
 	Dependencies  map[string]string `json:"dependencies"`
 }
 
@@ -287,23 +311,36 @@ type mrpackEnv struct {
 	Server string `json:"server"`
 }
 
-func (d *PackDelivery) readIndex(zr *zip.Reader) (*mrpackIndex, error) {
-	for _, f := range zr.File {
-		if f.Name == "modrinth.index.json" {
-			rc, err := f.Open()
-			if err != nil {
-				return nil, err
-			}
-			defer rc.Close()
-
-			var index mrpackIndex
-			if err := json.NewDecoder(rc).Decode(&index); err != nil {
-				return nil, fmt.Errorf("decoding modrinth.index.json: %w", err)
-			}
-			return &index, nil
-		}
+func (d *PackDelivery) parseMrpackIndex(f *zip.File) ([]packFile, error) {
+	rc, err := f.Open()
+	if err != nil {
+		return nil, err
 	}
-	return nil, fmt.Errorf("modrinth.index.json not found in modpack")
+	defer rc.Close()
+
+	var index mrpackIndex
+	if err := json.NewDecoder(rc).Decode(&index); err != nil {
+		return nil, fmt.Errorf("decoding modrinth.index.json: %w", err)
+	}
+
+	var files []packFile
+	for _, mf := range index.Files {
+		if len(mf.Downloads) == 0 {
+			d.log.Warn("modpack file has no download URLs, skipping", "path", mf.Path)
+			continue
+		}
+		serverSide := ""
+		if mf.Env != nil {
+			serverSide = mf.Env.Server
+		}
+		files = append(files, packFile{
+			Path:        mf.Path,
+			DownloadURL: mf.Downloads[0],
+			SHA512:      mf.Hashes["sha512"],
+			ServerSide:  serverSide,
+		})
+	}
+	return files, nil
 }
 
 // downloadToTemp downloads a URL to a temporary file and returns the file path.
