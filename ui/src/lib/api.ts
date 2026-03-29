@@ -414,6 +414,16 @@ export interface ModIssue {
   reason: string;
 }
 
+export interface PackInstallResult {
+  pack: InstalledMod;
+  mod_count: number;
+  overrides: string[];
+  version_changed?: string;
+  loader_changed?: string;
+  needs_restart: boolean;
+  version_downgrade?: boolean;
+}
+
 export interface ScanResult {
   tracked: InstalledMod[];
   untracked: UntrackedFile[];
@@ -525,7 +535,7 @@ export const api = {
     install: (gsId: string, data: { category: string; source: string; source_id: string; version_id?: string }) =>
       post<InstalledMod>(`/api/gameservers/${gsId}/mods`, data),
     installPack: (gsId: string, data: { source: string; pack_id: string; version_id?: string }) =>
-      post<InstalledMod>(`/api/gameservers/${gsId}/mods/pack`, data),
+      post<PackInstallResult>(`/api/gameservers/${gsId}/mods/pack`, data),
     uninstall: (gsId: string, modId: string) => del(`/api/gameservers/${gsId}/mods/${modId}`),
     update: (gsId: string, modId: string) => post<InstalledMod>(`/api/gameservers/${gsId}/mods/${modId}/update`),
     updatePack: (gsId: string, modId: string) => post<InstalledMod>(`/api/gameservers/${gsId}/mods/${modId}/update-pack`),

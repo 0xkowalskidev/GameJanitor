@@ -24,6 +24,7 @@ type Store interface {
 	CreateInstalledMod(m *model.InstalledMod) error
 	DeleteInstalledMod(id string) error
 	GetGameserver(id string) (*model.Gameserver, error)
+	UpdateGameserver(gs *model.Gameserver) error
 	ListModsByPackID(gameserverID, packID string) ([]model.InstalledMod, error)
 	GetPackExclusions(packModID string) (map[string]bool, error)
 	CreatePackExclusion(e *model.PackExclusion) error

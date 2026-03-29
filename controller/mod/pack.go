@@ -13,9 +13,13 @@ import (
 
 // PackInstallResult is the summary returned after installing a modpack.
 type PackInstallResult struct {
-	Pack      *model.InstalledMod `json:"pack"`
-	ModCount  int                 `json:"mod_count"`
-	Overrides []string            `json:"overrides"`
+	Pack             *model.InstalledMod `json:"pack"`
+	ModCount         int                 `json:"mod_count"`
+	Overrides        []string            `json:"overrides"`
+	VersionChanged   string              `json:"version_changed,omitempty"`   // new version if changed
+	LoaderChanged    string              `json:"loader_changed,omitempty"`    // new loader if changed
+	NeedsRestart     bool                `json:"needs_restart"`               // true if server needs restart/start to apply
+	VersionDowngrade bool                `json:"version_downgrade,omitempty"` // true if version went down (world data risk)
 }
 
 func (s *ModService) InstallPack(ctx context.Context, gameserverID, sourceName, packID, versionID string) (*PackInstallResult, error) {
@@ -28,6 +32,61 @@ func (s *ModService) InstallPack(ctx context.Context, gameserverID, sourceName, 
 		return nil, controller.ErrNotFoundf("game %s not found", gs.GameID)
 	}
 
+	catalog, ok := s.catalogs[sourceName]
+	if !ok {
+		return nil, controller.ErrBadRequestf("unknown source: %s", sourceName)
+	}
+
+	// Resolve the pack version first (with empty filters — we need the version to know
+	// what game_version and loader the pack requires, before we can filter properly).
+	version, err := s.resolveVersion(ctx, catalog, packID, versionID, CatalogFilters{})
+	if err != nil {
+		return nil, err
+	}
+
+	// Auto-configure version and loader from the pack's requirements.
+	result := &PackInstallResult{NeedsRestart: true}
+	envChanged := false
+
+	if version.GameVersion != "" && game.Mods.VersionEnv != "" {
+		currentVersion := string(gs.Env[game.Mods.VersionEnv])
+		if currentVersion != version.GameVersion {
+			// Detect downgrade
+			if currentVersion != "" && gs.Installed {
+				result.VersionDowngrade = true
+			}
+			gs.Env[game.Mods.VersionEnv] = version.GameVersion
+			result.VersionChanged = version.GameVersion
+			envChanged = true
+			s.log.Info("pack install: switching game version", "gameserver", gameserverID, "from", currentVersion, "to", version.GameVersion)
+		}
+	}
+
+	if version.Loader != "" && game.Mods.Loader != nil {
+		currentLoader := string(gs.Env[game.Mods.Loader.Env])
+		// Find the loader option that matches the pack's required loader
+		for optValue := range game.Mods.Loader.Options {
+			opt := game.Mods.Loader.Options[optValue]
+			if opt.LoaderID == version.Loader || optValue == version.Loader {
+				if currentLoader != optValue {
+					gs.Env[game.Mods.Loader.Env] = optValue
+					result.LoaderChanged = optValue
+					envChanged = true
+					s.log.Info("pack install: switching loader", "gameserver", gameserverID, "from", currentLoader, "to", optValue)
+				}
+				break
+			}
+		}
+	}
+
+	// Persist env changes
+	if envChanged {
+		if err := s.store.UpdateGameserver(gs); err != nil {
+			return nil, fmt.Errorf("updating gameserver config for modpack: %w", err)
+		}
+	}
+
+	// Now find the Modpacks category with the updated env
 	cat := s.findCategory(game, gs.Env, "Modpacks")
 	if cat == nil {
 		return nil, controller.ErrBadRequest("modpacks not available for this game")
@@ -40,28 +99,13 @@ func (s *ModService) InstallPack(ctx context.Context, gameserverID, sourceName, 
 		return nil, controller.ErrBadRequest("source does not support pack delivery")
 	}
 
-	catalog, ok := s.catalogs[sourceName]
-	if !ok {
-		return nil, controller.ErrBadRequestf("unknown source: %s", sourceName)
-	}
-
-	loaderID := s.resolveLoaderID(game, gs.Env)
-	gameVersion := s.resolveGameVersion(game, gs.Env)
-	filters := s.buildFilters(*src, gameVersion, loaderID)
-
-	// Resolve pack version
-	version, err := s.resolveVersion(ctx, catalog, packID, versionID, filters)
-	if err != nil {
-		return nil, err
-	}
-
 	// Download and parse the pack
 	contents, err := s.packDel.Install(ctx, gameserverID, version.DownloadURL, src.InstallPath, src.OverridesPath)
 	if err != nil {
 		return nil, fmt.Errorf("installing modpack: %w", err)
 	}
 
-	// Record the modpack itself — store the .mrpack download URL for reconciliation
+	// Record the modpack itself
 	pack := &model.InstalledMod{
 		ID:           uuid.New().String(),
 		GameserverID: gameserverID,
@@ -84,9 +128,8 @@ func (s *ModService) InstallPack(ctx context.Context, gameserverID, sourceName, 
 	for _, pm := range contents.Mods {
 		existing, _ := s.store.GetInstalledModBySource(gameserverID, sourceName, pm.SourceID)
 		if existing != nil {
-			// Mod already installed — link to pack, update version if different
 			s.store.SetModPackID(existing.ID, pack.ID)
-			if existing.VersionID != pm.SHA512 { // use hash as version proxy for pack mods
+			if existing.VersionID != pm.SHA512 {
 				s.store.UpdateModVersion(existing.ID, pm.SHA512, "")
 			}
 			continue
@@ -116,11 +159,10 @@ func (s *ModService) InstallPack(ctx context.Context, gameserverID, sourceName, 
 
 	s.publishEvent(ctx, gameserverID, pack, controller.EventModInstalled)
 
-	return &PackInstallResult{
-		Pack:      pack,
-		ModCount:  len(contents.Mods),
-		Overrides: contents.Overrides,
-	}, nil
+	result.Pack = pack
+	result.ModCount = len(contents.Mods)
+	result.Overrides = contents.Overrides
+	return result, nil
 }
 
 func (s *ModService) UpdatePack(ctx context.Context, gameserverID, packModID string) (*PackInstallResult, error) {
