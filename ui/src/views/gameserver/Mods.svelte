@@ -226,6 +226,7 @@
 
   function handleSearchInput(value: string) {
     searchQuery = value;
+    searchPage = 1;
     if (searchTimer) clearTimeout(searchTimer);
     searchTimer = setTimeout(() => {
       doSearch(value, activeCategory, 0, false);
@@ -235,12 +236,17 @@
   function handleCategoryChange(categoryName: string) {
     activeCategory = categoryName;
     searchQuery = '';
+    searchPage = 1;
     searchResults = [];
     doSearch('', categoryName, 0, false);
   }
 
-  function loadMore() {
-    doSearch(searchQuery, activeCategory, searchResults.length, true);
+  let searchPage = $state(1);
+  const totalPages = $derived(Math.ceil(searchTotal / SEARCH_LIMIT) || 1);
+
+  function goToPage(page: number) {
+    searchPage = page;
+    doSearch(searchQuery, activeCategory, (page - 1) * SEARCH_LIMIT, false);
   }
 
   // Version/loader change with compatibility checking
@@ -945,14 +951,12 @@
           </div>
         {/each}
 
-        {#if searchResults.length < searchTotal}
-          <div class="load-more-row">
-            <button class="btn-accent" onclick={loadMore} disabled={searchLoading}>
-              {searchLoading ? 'Loading...' : 'Load More'}
-            </button>
-            <span class="results-count">
-              Showing {searchResults.length} of {searchTotal}
-            </span>
+        {#if totalPages > 1}
+          <div class="pagination-row">
+            <button class="page-btn" onclick={() => goToPage(searchPage - 1)} disabled={searchPage <= 1 || searchLoading}>←</button>
+            <span class="page-info">Page {searchPage} of {totalPages}</span>
+            <button class="page-btn" onclick={() => goToPage(searchPage + 1)} disabled={searchPage >= totalPages || searchLoading}>→</button>
+            <span class="results-count">{searchTotal} results</span>
           </div>
         {/if}
       {/if}
@@ -1216,15 +1220,28 @@
     border: 1px solid var(--border-dim);
   }
 
-  /* Load More */
-  .load-more-row {
-    display: flex; align-items: center; gap: 12px;
-    padding: 14px 18px;
+  /* Pagination */
+  .pagination-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 18px;
     border-top: 1px solid var(--border-dim);
+  }
+  .page-btn {
+    padding: 5px 12px; border-radius: 4px;
+    font-size: 0.78rem; font-family: var(--font-mono);
+    color: var(--text-secondary); background: var(--bg-elevated);
+    border: 1px solid var(--border-dim);
+    cursor: pointer; transition: color 0.15s, border-color 0.15s;
+  }
+  .page-btn:hover { color: var(--text-primary); border-color: var(--border); }
+  .page-btn:disabled { opacity: 0.3; pointer-events: none; }
+  .page-info {
+    font-size: 0.76rem; font-family: var(--font-mono);
+    color: var(--text-secondary);
   }
   .results-count {
     font-size: 0.72rem; font-family: var(--font-mono);
-    color: var(--text-tertiary);
+    color: var(--text-tertiary); margin-left: auto;
   }
 
   @media (max-width: 700px) {
