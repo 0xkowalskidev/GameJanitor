@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, untrack } from 'svelte';
   import { api, type StatsHistoryPoint } from '$lib/api';
   import { gameserverStore } from '$lib/stores';
 
@@ -50,7 +50,8 @@
       volume_size_bytes: liveStats.volume_size_bytes ?? 0,
     };
 
-    data = [...data, point].slice(-720);
+    const current = untrack(() => data);
+    data = [...current, point].slice(-720);
   });
 
   async function fetchData() {
