@@ -95,7 +95,7 @@ func (s *StatusSubscriber) handleEvent(event controller.WebhookEvent) {
 func (s *StatusSubscriber) setStatus(gameserverID string, newStatus string, errorReason string) {
 	gs, err := s.store.GetGameserver(gameserverID)
 	if err != nil || gs == nil {
-		s.log.Error("status subscriber: failed to get gameserver", "id", gameserverID, "error", err)
+		s.log.Error("status subscriber: failed to get gameserver", "gameserver", gameserverID, "error", err)
 		return
 	}
 
@@ -110,11 +110,11 @@ func (s *StatusSubscriber) setStatus(gameserverID string, newStatus string, erro
 
 	// Record status as a status_changed activity instead of writing to the gameserver table
 	if err := recordStatusActivity(s.store, gameserverID, newStatus, errorReason); err != nil {
-		s.log.Error("status subscriber: failed to record status_changed activity", "id", gameserverID, "from", oldStatus, "to", newStatus, "error", err)
+		s.log.Error("status subscriber: failed to record status_changed activity", "gameserver", gameserverID, "from", oldStatus, "to", newStatus, "error", err)
 		return
 	}
 
-	s.log.Info("gameserver status changed", "id", gameserverID, "from", oldStatus, "to", newStatus)
+	s.log.Info("gameserver status changed", "gameserver", gameserverID, "from", oldStatus, "to", newStatus)
 
 	// Publish derived status_changed event for webhook/SSE consumers
 	s.bus.Publish(controller.StatusEvent{

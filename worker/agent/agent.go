@@ -397,7 +397,7 @@ func (a *Agent) PrepareGameScripts(ctx context.Context, req *pb.PrepareGameScrip
 		resp.DefaultsDir = defaultsDir
 	}
 
-	a.log.Debug("prepared game scripts", "game_id", req.GameId, "gameserver_id", req.GameserverId)
+	a.log.Debug("prepared game scripts", "game_id", req.GameId, "gameserver", req.GameserverId)
 	return resp, nil
 }
 
@@ -420,7 +420,7 @@ func (a *Agent) ListGameserverContainers(ctx context.Context, req *pb.ListGamese
 
 func (a *Agent) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (*pb.HeartbeatResponse, error) {
 	a.log.Debug("heartbeat received",
-		"worker_id", req.WorkerId,
+		"worker", req.WorkerId,
 		"cpu_cores", req.CpuCores,
 		"memory_total_mb", req.MemoryTotalMb,
 		"memory_available_mb", req.MemoryAvailableMb,

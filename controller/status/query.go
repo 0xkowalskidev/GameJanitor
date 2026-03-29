@@ -62,24 +62,24 @@ func (s *QueryService) GetQueryData(gameserverID string) *QueryData {
 func (s *QueryService) StartPolling(gameserverID string) {
 	gs, err := s.store.GetGameserver(gameserverID)
 	if err != nil || gs == nil {
-		s.log.Error("failed to load gameserver for polling", "id", gameserverID, "error", err)
+		s.log.Error("failed to load gameserver for polling", "gameserver", gameserverID, "error", err)
 		return
 	}
 
 	game := s.gameStore.GetGame(gs.GameID)
 	if game == nil {
-		s.log.Error("game not found for polling", "id", gameserverID, "game_id", gs.GameID)
+		s.log.Error("game not found for polling", "gameserver", gameserverID, "game_id", gs.GameID)
 		return
 	}
 
 	if !s.gameSupportsQuery(game) {
-		s.log.Debug("game does not support query, skipping polling", "id", gameserverID)
+		s.log.Debug("game does not support query, skipping polling", "gameserver", gameserverID)
 		return
 	}
 
 	hostPort := s.getHostPort(gs)
 	if hostPort == 0 {
-		s.log.Warn("no host port found for gameserver, skipping polling", "id", gameserverID)
+		s.log.Warn("no host port found for gameserver, skipping polling", "gameserver", gameserverID)
 		return
 	}
 
@@ -122,7 +122,7 @@ func (s *QueryService) StopAll() {
 // pollLoop collects query data at a steady interval.
 // Does not manage gameserver status — that's ReadyWatcher's job.
 func (s *QueryService) pollLoop(ctx context.Context, gameserverID, gameSlug string, port uint16) {
-	s.log.Debug("starting GJQ poll loop", "id", gameserverID, "game", gameSlug, "port", port)
+	s.log.Debug("starting GJQ poll loop", "gameserver", gameserverID, "game", gameSlug, "port", port)
 
 	ticker := time.NewTicker(queryPollInterval)
 	defer ticker.Stop()
@@ -130,11 +130,11 @@ func (s *QueryService) pollLoop(ctx context.Context, gameserverID, gameSlug stri
 	for {
 		gs, err := s.store.GetGameserver(gameserverID)
 		if err != nil || gs == nil {
-			s.log.Debug("gameserver gone, stopping poll", "id", gameserverID)
+			s.log.Debug("gameserver gone, stopping poll", "gameserver", gameserverID)
 			return
 		}
 		if !controller.IsPollableStatus(gs.Status) {
-			s.log.Debug("gameserver not in pollable state, stopping", "id", gameserverID, "status", gs.Status)
+			s.log.Debug("gameserver not in pollable state, stopping", "gameserver", gameserverID, "status", gs.Status)
 			return
 		}
 
@@ -146,7 +146,7 @@ func (s *QueryService) pollLoop(ctx context.Context, gameserverID, gameSlug stri
 		})
 
 		if err != nil {
-			s.log.Debug("GJQ poll failed", "id", gameserverID, "error", err)
+			s.log.Debug("GJQ poll failed", "gameserver", gameserverID, "error", err)
 		} else {
 			data := &QueryData{
 				PlayersOnline: info.Players,
@@ -166,7 +166,7 @@ func (s *QueryService) pollLoop(ctx context.Context, gameserverID, gameSlug stri
 			s.mu.Unlock()
 
 			if changed {
-				s.log.Debug("GJQ data changed", "id", gameserverID, "players", info.Players)
+				s.log.Debug("GJQ data changed", "gameserver", gameserverID, "players", info.Players)
 				playerNames := make([]string, len(data.Players))
 				for i, p := range data.Players {
 					playerNames[i] = p.Name

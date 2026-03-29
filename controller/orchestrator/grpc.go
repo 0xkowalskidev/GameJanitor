@@ -54,7 +54,7 @@ func NewControllerGRPC(registry *Registry, tokenAuth TokenValidator, store GRPCS
 
 func (c *ControllerGRPC) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.RegisterResponse, error) {
 	c.log.Info("worker registration request",
-		"worker_id", req.WorkerId,
+		"worker", req.WorkerId,
 		"grpc_address", req.GrpcAddress,
 		"cpu_cores", req.CpuCores,
 		"memory_total_mb", req.MemoryTotalMb,
@@ -67,7 +67,7 @@ func (c *ControllerGRPC) Register(ctx context.Context, req *pb.RegisterRequest) 
 	rawToken := agent.TokenFromContext(ctx)
 	token := c.tokenAuth.ValidateToken(rawToken)
 	if token == nil || token.Scope != "worker" {
-		c.log.Warn("worker registration rejected: invalid or non-worker token", "worker_id", req.WorkerId)
+		c.log.Warn("worker registration rejected: invalid or non-worker token", "worker", req.WorkerId)
 		return &pb.RegisterResponse{Accepted: false}, nil
 	}
 
@@ -78,23 +78,23 @@ func (c *ControllerGRPC) Register(ctx context.Context, req *pb.RegisterRequest) 
 		var err error
 		caPEM, certPEM, keyPEM, err = tlsutil.GenerateWorkerCertPEM(req.WorkerId, c.caCert, c.caKey, workerIPs)
 		if err != nil {
-			c.log.Error("failed to generate worker cert", "worker_id", req.WorkerId, "error", err)
+			c.log.Error("failed to generate worker cert", "worker", req.WorkerId, "error", err)
 			return &pb.RegisterResponse{Accepted: false}, nil
 		}
-		c.log.Info("issued TLS certificate for worker", "worker_id", req.WorkerId)
+		c.log.Info("issued TLS certificate for worker", "worker", req.WorkerId)
 	}
 
 	// Persist worker node (dial-back happens on first heartbeat after worker has certs)
 	if err := c.store.UpsertWorkerNode(&model.WorkerNode{
 		ID: req.WorkerId, Name: req.Name, GRPCAddress: req.GrpcAddress, LanIP: req.LanIp, ExternalIP: req.ExternalIp,
 	}); err != nil {
-		c.log.Error("failed to persist worker node on register", "worker_id", req.WorkerId, "error", err)
+		c.log.Error("failed to persist worker node on register", "worker", req.WorkerId, "error", err)
 	}
 
 	// Persist worker-reported SFTP port if provided
 	if req.SftpPort > 0 {
 		if err := c.store.SetWorkerNodeSFTPPort(req.WorkerId, int(req.SftpPort)); err != nil {
-			c.log.Error("failed to set worker sftp port on register", "worker_id", req.WorkerId, "error", err)
+			c.log.Error("failed to set worker sftp port on register", "worker", req.WorkerId, "error", err)
 		}
 	}
 
@@ -128,11 +128,11 @@ func (c *ControllerGRPC) Register(ctx context.Context, req *pb.RegisterRequest) 
 			}
 		}
 		if err := c.store.SetWorkerNodeLimits(req.WorkerId, maxMem, maxCPU, maxStorage); err != nil {
-			c.log.Error("failed to set worker resource limits on register", "worker_id", req.WorkerId, "error", err)
+			c.log.Error("failed to set worker resource limits on register", "worker", req.WorkerId, "error", err)
 		}
 	}
 
-	c.log.Info("worker registered successfully", "worker_id", req.WorkerId, "grpc_address", req.GrpcAddress, "token_id", token.ID)
+	c.log.Info("worker registered successfully", "worker", req.WorkerId, "grpc_address", req.GrpcAddress, "token", token.ID)
 	return &pb.RegisterResponse{
 		Accepted:      true,
 		CaCertPem:     caPEM,
@@ -158,18 +158,18 @@ func (c *ControllerGRPC) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest
 		rawToken := agent.TokenFromContext(ctx)
 		token := c.tokenAuth.ValidateToken(rawToken)
 		if token == nil || token.Scope != "worker" {
-			c.log.Warn("heartbeat rejected: invalid or non-worker token", "worker_id", req.WorkerId)
+			c.log.Warn("heartbeat rejected: invalid or non-worker token", "worker", req.WorkerId)
 			return &pb.HeartbeatResponse{Accepted: false}, nil
 		}
 
 		node, err := c.store.GetWorkerNode(req.WorkerId)
 		if err != nil || node == nil {
-			c.log.Warn("heartbeat from unknown worker", "worker_id", req.WorkerId)
+			c.log.Warn("heartbeat from unknown worker", "worker", req.WorkerId)
 			return &pb.HeartbeatResponse{Accepted: false}, nil
 		}
 
 		if node.GRPCAddress == "" {
-			c.log.Error("worker has no grpc_address, cannot dial back", "worker_id", req.WorkerId)
+			c.log.Error("worker has no grpc_address, cannot dial back", "worker", req.WorkerId)
 			return &pb.HeartbeatResponse{Accepted: false}, nil
 		}
 
@@ -182,7 +182,7 @@ func (c *ControllerGRPC) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest
 		}
 		conn, err := grpc.NewClient(node.GRPCAddress, dialOpt)
 		if err != nil {
-			c.log.Error("failed to dial worker on first heartbeat", "worker_id", req.WorkerId, "address", node.GRPCAddress, "error", err)
+			c.log.Error("failed to dial worker on first heartbeat", "worker", req.WorkerId, "address", node.GRPCAddress, "error", err)
 			return &pb.HeartbeatResponse{Accepted: false}, nil
 		}
 
@@ -191,30 +191,30 @@ func (c *ControllerGRPC) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest
 		_, err = hbClient.Heartbeat(ctx, &pb.HeartbeatRequest{WorkerId: req.WorkerId})
 		if err != nil {
 			conn.Close()
-			c.log.Error("worker dial-back health check failed", "worker_id", req.WorkerId, "error", err)
+			c.log.Error("worker dial-back health check failed", "worker", req.WorkerId, "error", err)
 			return &pb.HeartbeatResponse{Accepted: false}, nil
 		}
 
 		info.TokenID = token.ID
 		remote := remote.New(conn, req.WorkerId)
 		c.registry.Register(req.WorkerId, remote, info)
-		c.log.Info("worker activated via first heartbeat", "worker_id", req.WorkerId, "grpc_address", node.GRPCAddress)
+		c.log.Info("worker activated via first heartbeat", "worker", req.WorkerId, "grpc_address", node.GRPCAddress)
 	}
 
 	// Check that the worker's token still exists (lightweight, no bcrypt)
 	storedInfo, ok := c.registry.GetInfo(req.WorkerId)
 	if !ok || !c.tokenAuth.IsWorkerTokenValid(storedInfo.TokenID) {
-		c.log.Warn("worker token revoked, rejecting heartbeat", "worker_id", req.WorkerId, "token_id", storedInfo.TokenID)
+		c.log.Warn("worker token revoked, rejecting heartbeat", "worker", req.WorkerId, "token", storedInfo.TokenID)
 		return &pb.HeartbeatResponse{Accepted: false}, nil
 	}
 
 	if err := c.store.UpsertWorkerNode(&model.WorkerNode{
 		ID: req.WorkerId, LanIP: req.LanIp, ExternalIP: req.ExternalIp,
 	}); err != nil {
-		c.log.Error("failed to persist worker node on heartbeat", "worker_id", req.WorkerId, "error", err)
+		c.log.Error("failed to persist worker node on heartbeat", "worker", req.WorkerId, "error", err)
 	}
 
-	c.log.Debug("heartbeat received", "worker_id", req.WorkerId, "memory_available_mb", req.MemoryAvailableMb)
+	c.log.Debug("heartbeat received", "worker", req.WorkerId, "memory_available_mb", req.MemoryAvailableMb)
 	return &pb.HeartbeatResponse{Accepted: true}, nil
 }
 

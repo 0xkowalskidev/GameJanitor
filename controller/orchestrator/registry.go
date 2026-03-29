@@ -121,13 +121,13 @@ func (r *Registry) Register(nodeID string, w worker.Worker, info WorkerInfo) {
 	info.LastSeen = time.Now()
 	info.Status = model.WorkerStatusOnline
 	r.workers[nodeID] = &registeredWorker{worker: w, info: info}
-	r.log.Info("worker online", "worker_id", nodeID, "lan_ip", info.LanIP)
+	r.log.Info("worker online", "worker", nodeID, "lan_ip", info.LanIP)
 	r.mu.Unlock()
 
 	// Persist status to DB
 	if r.store != nil {
 		if err := r.store.SetWorkerNodeStatus(nodeID, model.WorkerStatusOnline); err != nil {
-			r.log.Warn("failed to persist worker online status", "worker_id", nodeID, "error", err)
+			r.log.Warn("failed to persist worker online status", "worker", nodeID, "error", err)
 		}
 	}
 
@@ -154,13 +154,13 @@ func (r *Registry) SetOffline(nodeID string) {
 	}
 	rw.worker = nil
 	rw.info.Status = model.WorkerStatusOffline
-	r.log.Info("worker offline", "worker_id", nodeID)
+	r.log.Info("worker offline", "worker", nodeID)
 	r.mu.Unlock()
 
 	// Persist status to DB
 	if r.store != nil {
 		if err := r.store.SetWorkerNodeStatus(nodeID, model.WorkerStatusOffline); err != nil {
-			r.log.Warn("failed to persist worker offline status", "worker_id", nodeID, "error", err)
+			r.log.Warn("failed to persist worker offline status", "worker", nodeID, "error", err)
 		}
 	}
 
@@ -186,7 +186,7 @@ func (r *Registry) Unregister(nodeID string) {
 		}
 	}
 	delete(r.workers, nodeID)
-	r.log.Info("worker unregistered", "worker_id", nodeID)
+	r.log.Info("worker unregistered", "worker", nodeID)
 	r.mu.Unlock()
 
 	if r.onOffline != nil {
@@ -298,7 +298,7 @@ func (r *Registry) reapStale(timeout time.Duration, log *slog.Logger) {
 	r.mu.RUnlock()
 
 	for _, id := range stale {
-		log.Warn("worker heartbeat timeout, setting offline", "worker_id", id)
+		log.Warn("worker heartbeat timeout, setting offline", "worker", id)
 		r.SetOffline(id)
 	}
 }

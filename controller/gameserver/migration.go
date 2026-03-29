@@ -75,7 +75,7 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 		return controller.ErrUnavailable("source worker is offline, cannot migrate (both workers must be online)")
 	}
 
-	s.log.Info("migrating gameserver", "id", gameserverID, "from_node", currentNodeID, "to_node", targetNodeID)
+	s.log.Info("migrating gameserver", "gameserver", gameserverID, "from_node", currentNodeID, "to_node", targetNodeID)
 
 	s.store.PopulateNode(gs)
 	s.broadcaster.Publish(controller.GameserverActionEvent{
@@ -94,14 +94,14 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 
 	// Stop if running
 	if gs.Status != controller.StatusStopped {
-		s.log.Info("stopping gameserver for migration", "id", gameserverID)
+		s.log.Info("stopping gameserver for migration", "gameserver", gameserverID)
 		if err := s.Stop(ctx, gameserverID); err != nil {
 			return fmt.Errorf("stopping gameserver for migration: %w", err)
 		}
 	}
 
 	// Transfer volume via backup store (avoids buffering entire volume in controller memory)
-	s.log.Info("transferring volume data via store", "id", gameserverID, "volume", gs.VolumeName)
+	s.log.Info("transferring volume data via store", "gameserver", gameserverID, "volume", gs.VolumeName)
 	migrationID := uuid.New().String()
 
 	// Tar + gzip from source → store
@@ -135,7 +135,7 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 	if compressErr != nil {
 		return fmt.Errorf("compressing volume data: %w", compressErr)
 	}
-	s.log.Info("migration data stored", "id", gameserverID, "migration_id", migrationID)
+	s.log.Info("migration data stored", "gameserver", gameserverID, "migration", migrationID)
 
 	// Store → restore on target
 	if err := targetWorker.CreateVolume(ctx, gs.VolumeName); err != nil {
@@ -159,7 +159,7 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 			s.log.Error("failed to clean up target volume after failed restore", "volume", gs.VolumeName, "error", rmErr)
 		}
 		// Don't delete migration data on failure — operator can retry manually
-		s.log.Error("migration restore failed, data preserved in store", "migration_id", migrationID)
+		s.log.Error("migration restore failed, data preserved in store", "migration", migrationID)
 		return fmt.Errorf("restoring volume on target worker: %w", err)
 	}
 	gzReader.Close()
@@ -167,7 +167,7 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 
 	// Cleanup migration data on success
 	if err := s.backupStore.Delete(ctx, "migrations", migrationID); err != nil {
-		s.log.Warn("failed to clean up migration data from store", "migration_id", migrationID, "error", err)
+		s.log.Warn("failed to clean up migration data from store", "migration", migrationID, "error", err)
 	}
 
 	// Update node assignment (and reallocate ports if using per-node port scope)
@@ -199,6 +199,6 @@ func (s *GameserverService) MigrateGameserver(ctx context.Context, gameserverID 
 	}
 
 	s.broadcaster.Publish(controller.ContainerStoppedEvent{GameserverID: gameserverID, Timestamp: time.Now()})
-	s.log.Info("gameserver migrated", "id", gameserverID, "from_node", currentNodeID, "to_node", targetNodeID)
+	s.log.Info("gameserver migrated", "gameserver", gameserverID, "from_node", currentNodeID, "to_node", targetNodeID)
 	return nil
 }

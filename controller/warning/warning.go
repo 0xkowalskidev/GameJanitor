@@ -116,7 +116,7 @@ func (w *WarningSubscriber) checkStorage(stats controller.GameserverStatsEvent) 
 			},
 			Timestamp: time.Now(),
 		})
-		w.log.Info("storage warning resolved", "gameserver_id", stats.GameserverID, "percentage", pct)
+		w.log.Info("storage warning resolved", "gameserver", stats.GameserverID, "percentage", pct)
 		return
 	}
 
@@ -139,6 +139,6 @@ func (w *WarningSubscriber) checkStorage(stats controller.GameserverStatsEvent) 
 			},
 			Timestamp: time.Now(),
 		})
-		w.log.Warn("storage warning fired", "gameserver_id", stats.GameserverID, "level", newLevel, "percentage", pct)
+		w.log.Warn("storage warning fired", "gameserver", stats.GameserverID, "level", newLevel, "percentage", pct)
 	}
 }

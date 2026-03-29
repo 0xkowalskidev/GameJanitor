@@ -802,7 +802,7 @@ func (s *ModService) UpdateAll(ctx context.Context, gameserverID string) ([]ModU
 	var applied []ModUpdate
 	for _, u := range updates {
 		if _, err := s.Update(ctx, gameserverID, u.ModID); err != nil {
-			s.log.Warn("failed to update mod", "mod_id", u.ModID, "error", err)
+			s.log.Warn("failed to update mod", "mod", u.ModID, "error", err)
 			continue
 		}
 		applied = append(applied, u)

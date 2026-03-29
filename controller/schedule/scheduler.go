@@ -66,7 +66,7 @@ func (s *Scheduler) Start(ctx context.Context) error {
 	for _, gs := range gameservers {
 		schedules, err := s.store.ListSchedules(gs.ID)
 		if err != nil {
-			s.log.Error("listing schedules for gameserver", "gameserver_id", gs.ID, "error", err)
+			s.log.Error("listing schedules for gameserver", "gameserver", gs.ID, "error", err)
 			continue
 		}
 		for _, sched := range schedules {
@@ -74,7 +74,7 @@ func (s *Scheduler) Start(ctx context.Context) error {
 				continue
 			}
 			if err := s.addEntry(sched); err != nil {
-				s.log.Error("failed to register schedule", "schedule_id", sched.ID, "error", err)
+				s.log.Error("failed to register schedule", "schedule", sched.ID, "error", err)
 			}
 		}
 	}
@@ -123,13 +123,13 @@ func (s *Scheduler) catchUpMissed() {
 
 			if shouldCatchUp(sched.Type) {
 				s.log.Warn("catching up missed schedule",
-					"schedule_id", sched.ID, "type", sched.Type,
-					"gameserver_id", sched.GameserverID, "was_due", sched.NextRun)
+					"schedule", sched.ID, "type", sched.Type,
+					"gameserver", sched.GameserverID, "was_due", sched.NextRun)
 				s.executeTask(sched.ID)
 			} else {
 				s.log.Warn("skipping missed schedule (not catch-up eligible)",
-					"schedule_id", sched.ID, "type", sched.Type,
-					"gameserver_id", sched.GameserverID, "was_due", sched.NextRun)
+					"schedule", sched.ID, "type", sched.Type,
+					"gameserver", sched.GameserverID, "was_due", sched.NextRun)
 				s.broadcaster.Publish(controller.ScheduledTaskEvent{
 					Type:         controller.EventScheduleTaskMissed,
 					Timestamp:    now,
@@ -180,7 +180,7 @@ func (s *Scheduler) removeEntryLocked(scheduleID string) {
 	if entryID, ok := s.entries[scheduleID]; ok {
 		s.cron.Remove(entryID)
 		delete(s.entries, scheduleID)
-		s.log.Debug("removed schedule from cron", "schedule_id", scheduleID)
+		s.log.Debug("removed schedule from cron", "schedule", scheduleID)
 	}
 }
 
@@ -202,18 +202,18 @@ func (s *Scheduler) addEntry(schedule model.Schedule) error {
 		nextRun := entry.Next
 		schedule.NextRun = &nextRun
 		if err := s.store.UpdateSchedule(&schedule); err != nil {
-			s.log.Warn("failed to update next_run for schedule", "schedule_id", schedID, "error", err)
+			s.log.Warn("failed to update next_run for schedule", "schedule", schedID, "error", err)
 		}
 	}
 
-	s.log.Debug("registered schedule with cron", "schedule_id", schedID, "cron_expr", schedule.CronExpr)
+	s.log.Debug("registered schedule with cron", "schedule", schedID, "cron_expr", schedule.CronExpr)
 	return nil
 }
 
 func (s *Scheduler) executeTask(scheduleID string) {
 	schedule, err := s.store.GetSchedule(scheduleID)
 	if err != nil || schedule == nil {
-		s.log.Error("failed to load schedule for execution", "schedule_id", scheduleID, "error", err)
+		s.log.Error("failed to load schedule for execution", "schedule", scheduleID, "error", err)
 		return
 	}
 
@@ -221,7 +221,7 @@ func (s *Scheduler) executeTask(scheduleID string) {
 	// and backups (500GB+ volumes) that can legitimately run for hours on slow
 	// networks. The cron library won't fire the next run until this one completes.
 	ctx := controller.SetActorInContext(context.Background(), controller.Actor{Type: "schedule", ScheduleID: scheduleID})
-	s.log.Info("executing scheduled task", "schedule_id", scheduleID, "type", schedule.Type, "gameserver_id", schedule.GameserverID)
+	s.log.Info("executing scheduled task", "schedule", scheduleID, "type", schedule.Type, "gameserver", schedule.GameserverID)
 
 	var taskErr error
 	switch schedule.Type {
@@ -234,19 +234,19 @@ func (s *Scheduler) executeTask(scheduleID string) {
 			Command string `json:"command"`
 		}
 		if err := json.Unmarshal(schedule.Payload, &payload); err != nil {
-			s.log.Error("failed to parse command payload", "schedule_id", scheduleID, "error", err)
+			s.log.Error("failed to parse command payload", "schedule", scheduleID, "error", err)
 			return
 		}
 		_, taskErr = s.consoleSvc.SendCommand(ctx, schedule.GameserverID, payload.Command)
 	case "update":
 		taskErr = s.gameserverSvc.UpdateServerGame(ctx, schedule.GameserverID)
 	default:
-		s.log.Error("unknown schedule type", "schedule_id", scheduleID, "type", schedule.Type)
+		s.log.Error("unknown schedule type", "schedule", scheduleID, "type", schedule.Type)
 		return
 	}
 
 	if taskErr != nil {
-		s.log.Error("scheduled task failed", "schedule_id", scheduleID, "type", schedule.Type, "error", taskErr)
+		s.log.Error("scheduled task failed", "schedule", scheduleID, "type", schedule.Type, "error", taskErr)
 		s.broadcaster.Publish(controller.ScheduledTaskEvent{
 			Type:         controller.EventScheduleTaskFailed,
 			Timestamp:    time.Now(),
@@ -257,7 +257,7 @@ func (s *Scheduler) executeTask(scheduleID string) {
 			Error:        taskErr.Error(),
 		})
 	} else {
-		s.log.Info("scheduled task completed", "schedule_id", scheduleID, "type", schedule.Type)
+		s.log.Info("scheduled task completed", "schedule", scheduleID, "type", schedule.Type)
 		s.broadcaster.Publish(controller.ScheduledTaskEvent{
 			Type:         controller.EventScheduleTaskCompleted,
 			Timestamp:    time.Now(),
@@ -277,7 +277,7 @@ func (s *Scheduler) executeTask(scheduleID string) {
 		schedule.Enabled = false
 		schedule.NextRun = nil
 		s.RemoveSchedule(scheduleID)
-		s.log.Info("one-shot schedule completed, disabling", "schedule_id", scheduleID)
+		s.log.Info("one-shot schedule completed, disabling", "schedule", scheduleID)
 	} else {
 		s.mu.Lock()
 		if entryID, ok := s.entries[scheduleID]; ok {
@@ -291,7 +291,7 @@ func (s *Scheduler) executeTask(scheduleID string) {
 	}
 
 	if err := s.store.UpdateSchedule(schedule); err != nil {
-		s.log.Error("failed to update schedule after execution", "schedule_id", scheduleID, "error", err)
+		s.log.Error("failed to update schedule after execution", "schedule", scheduleID, "error", err)
 	}
 }
 
@@ -299,7 +299,7 @@ func (s *Scheduler) executeTask(scheduleID string) {
 func (s *Scheduler) RemoveSchedulesByGameserver(gameserverID string) {
 	schedules, err := s.store.ListSchedules(gameserverID)
 	if err != nil {
-		s.log.Error("listing schedules for removal", "gameserver_id", gameserverID, "error", err)
+		s.log.Error("listing schedules for removal", "gameserver", gameserverID, "error", err)
 		return
 	}
 	for _, sched := range schedules {

@@ -131,7 +131,7 @@ func (m *StatusManager) RecoverOnStartup(ctx context.Context) error {
 		if w == nil {
 			// Worker is offline — mark gameserver unreachable instead of leaving stale status
 			if gs.NodeID != nil {
-				m.log.Warn("marking gameserver unreachable, worker offline", "id", gs.ID, "node_id", *gs.NodeID)
+				m.log.Warn("marking gameserver unreachable, worker offline", "gameserver", gs.ID, "node_id", *gs.NodeID)
 				m.setRecoveryStatus(gs.ID, controller.StatusUnreachable, "Worker offline at startup.")
 			}
 			continue
@@ -163,28 +163,28 @@ func (m *StatusManager) workerForGameserver(gs *model.Gameserver) worker.Worker 
 // Returns true if the gameserver had a container ID but the container was not found.
 func (m *StatusManager) recoverGameserver(ctx context.Context, gs *model.Gameserver, w worker.Worker) bool {
 	if gs.ContainerID == nil {
-		m.log.Info("gameserver has no container, setting stopped", "id", gs.ID, "was_status", gs.Status)
+		m.log.Info("gameserver has no container, setting stopped", "gameserver", gs.ID, "was_status", gs.Status)
 		m.setRecoveryStatus(gs.ID, controller.StatusStopped, "")
 		return false
 	}
 
 	info, err := w.InspectContainer(ctx, *gs.ContainerID)
 	if err != nil {
-		m.log.Warn("container not found, setting stopped", "id", gs.ID, "container_id", (*gs.ContainerID)[:12], "error", err)
+		m.log.Warn("container not found, setting stopped", "gameserver", gs.ID, "container_id", (*gs.ContainerID)[:12], "error", err)
 		m.clearContainerAndSetStatus(gs, controller.StatusStopped)
 		return true
 	}
 
 	switch info.State {
 	case "running":
-		m.log.Info("container running, re-attaching ready watcher", "id", gs.ID)
+		m.log.Info("container running, re-attaching ready watcher", "gameserver", gs.ID)
 		m.setRecoveryStatus(gs.ID, controller.StatusStarted, "")
 		m.readyWatcher.Watch(gs.ID, w, *gs.ContainerID)
 	case "exited", "dead", "created":
-		m.log.Info("container is not running, setting stopped", "id", gs.ID, "state", info.State)
+		m.log.Info("container is not running, setting stopped", "gameserver", gs.ID, "state", info.State)
 		m.clearContainerAndSetStatus(gs, controller.StatusStopped)
 	default:
-		m.log.Warn("container in unexpected state, setting error", "id", gs.ID, "state", info.State)
+		m.log.Warn("container in unexpected state, setting error", "gameserver", gs.ID, "state", info.State)
 		m.setRecoveryStatus(gs.ID, controller.StatusError, "Container found in unexpected state.")
 	}
 	return false
@@ -195,7 +195,7 @@ func (m *StatusManager) recoverGameserver(ctx context.Context, gs *model.Gameser
 func (m *StatusManager) setRecoveryStatus(id string, newStatus string, errorReason string) {
 	gs, err := m.store.GetGameserver(id)
 	if err != nil || gs == nil {
-		m.log.Error("recovery: failed to get gameserver", "id", id, "error", err)
+		m.log.Error("recovery: failed to get gameserver", "gameserver", id, "error", err)
 		return
 	}
 	oldStatus := gs.Status
@@ -203,10 +203,10 @@ func (m *StatusManager) setRecoveryStatus(id string, newStatus string, errorReas
 		errorReason = ""
 	}
 	if err := recordStatusActivity(m.store, id, newStatus, errorReason); err != nil {
-		m.log.Error("recovery: failed to record status_changed activity", "id", id, "from", oldStatus, "to", newStatus, "error", err)
+		m.log.Error("recovery: failed to record status_changed activity", "gameserver", id, "from", oldStatus, "to", newStatus, "error", err)
 		return
 	}
-	m.log.Info("recovery: status set", "id", id, "from", oldStatus, "to", newStatus)
+	m.log.Info("recovery: status set", "gameserver", id, "from", oldStatus, "to", newStatus)
 }
 
 // clearContainerAndSetStatus clears the container_id and records a status_changed activity.
@@ -215,14 +215,14 @@ func (m *StatusManager) clearContainerAndSetStatus(gs *model.Gameserver, newStat
 	oldStatus := gs.Status
 	gs.ContainerID = nil
 	if err := m.store.UpdateGameserver(gs); err != nil {
-		m.log.Error("recovery: failed to clear container", "id", gs.ID, "error", err)
+		m.log.Error("recovery: failed to clear container", "gameserver", gs.ID, "error", err)
 		return
 	}
 	if err := recordStatusActivity(m.store, gs.ID, newStatus, ""); err != nil {
-		m.log.Error("recovery: failed to record status_changed activity", "id", gs.ID, "from", oldStatus, "to", newStatus, "error", err)
+		m.log.Error("recovery: failed to record status_changed activity", "gameserver", gs.ID, "from", oldStatus, "to", newStatus, "error", err)
 		return
 	}
-	m.log.Info("recovery: status set", "id", gs.ID, "from", oldStatus, "to", newStatus)
+	m.log.Info("recovery: status set", "gameserver", gs.ID, "from", oldStatus, "to", newStatus)
 }
 
 // watchWorkerEvents starts a goroutine that watches container events from a worker.
@@ -265,18 +265,18 @@ func (m *StatusManager) handleEvent(event worker.ContainerEvent) {
 
 	switch event.Action {
 	case "start":
-		m.log.Debug("container event: container started", "id", gsID)
+		m.log.Debug("container event: container started", "gameserver", gsID)
 
 	case "die", "stop":
 		// Ignore stale events from old containers (e.g. previous container's "die"
 		// arriving after a new start has begun)
 		if gs.ContainerID != nil && *gs.ContainerID != event.ContainerID {
-			m.log.Debug("container event: ignoring stale event from old container", "id", gsID, "event_container", event.ContainerID[:12], "current_container", (*gs.ContainerID)[:12])
+			m.log.Debug("container event: ignoring stale event from old container", "gameserver", gsID, "event_container", event.ContainerID[:12], "current_container", (*gs.ContainerID)[:12])
 			return
 		}
 		// If ContainerID was cleared (restart in progress), this is a stale event
 		if gs.ContainerID == nil && gs.Status != controller.StatusStopping {
-			m.log.Debug("container event: ignoring event with no current container", "id", gsID, "status", gs.Status, "action", event.Action)
+			m.log.Debug("container event: ignoring event with no current container", "gameserver", gsID, "status", gs.Status, "action", event.Action)
 			return
 		}
 
@@ -284,15 +284,15 @@ func (m *StatusManager) handleEvent(event worker.ContainerEvent) {
 		m.querySvc.StopPolling(gsID)
 		m.statsPoller.StopPolling(gsID)
 		if gs.Status == controller.StatusStopping {
-			m.log.Debug("container event: expected container stop", "id", gsID, "status", gs.Status)
+			m.log.Debug("container event: expected container stop", "gameserver", gsID, "status", gs.Status)
 		} else if gs.Status == controller.StatusRunning || gs.Status == controller.StatusStarted || gs.Status == controller.StatusInstalling || gs.Status == controller.StatusStarting {
-			m.log.Warn("container event: unexpected container death", "id", gsID, "status", gs.Status, "action", event.Action)
+			m.log.Warn("container event: unexpected container death", "gameserver", gsID, "status", gs.Status, "action", event.Action)
 			m.broadcaster.Publish(controller.ContainerExitedEvent{GameserverID: gsID, Timestamp: time.Now()})
 			m.handleUnexpectedDeath(gs)
 		}
 
 	case "kill":
-		m.log.Debug("container event: container killed", "id", gsID)
+		m.log.Debug("container event: container killed", "gameserver", gsID)
 	}
 }
 
@@ -310,7 +310,7 @@ func (m *StatusManager) onWorkerRegistered(nodeID string, w worker.Worker) {
 	m.workerCancels[nodeID] = cancel
 	m.workerMu.Unlock()
 
-	m.log.Info("starting event watcher for remote worker", "worker_id", nodeID)
+	m.log.Info("starting event watcher for remote worker", "worker", nodeID)
 	m.watchWorkerEvents(ctx, nodeID, w)
 
 	m.broadcaster.Publish(controller.WorkerActionEvent{
@@ -329,12 +329,12 @@ func (m *StatusManager) onWorkerRegistered(nodeID string, w worker.Worker) {
 func (m *StatusManager) onWorkerOffline(nodeID string) {
 	gameservers, err := m.store.ListGameservers(model.GameserverFilter{NodeID: &nodeID})
 	if err != nil {
-		m.log.Error("failed to query gameservers for disconnected worker", "worker_id", nodeID, "error", err)
+		m.log.Error("failed to query gameservers for disconnected worker", "worker", nodeID, "error", err)
 	} else {
 		for _, gs := range gameservers {
 			if controller.NeedsRecovery(gs.Status) {
 				m.log.Warn("marking gameserver unreachable due to worker disconnect",
-					"gameserver_id", gs.ID, "worker_id", nodeID, "was_status", gs.Status)
+					"gameserver", gs.ID, "worker", nodeID, "was_status", gs.Status)
 				m.setRecoveryStatus(gs.ID, controller.StatusUnreachable, "Worker disconnected.")
 			}
 		}
@@ -354,7 +354,7 @@ func (m *StatusManager) onWorkerOffline(nodeID string) {
 		WorkerID:  nodeID,
 	})
 
-	m.log.Info("stopped event watcher for disconnected worker", "worker_id", nodeID)
+	m.log.Info("stopped event watcher for disconnected worker", "worker", nodeID)
 }
 
 // recoverWorkerGameservers recovers gameservers assigned to a specific worker node
@@ -362,7 +362,7 @@ func (m *StatusManager) onWorkerOffline(nodeID string) {
 func (m *StatusManager) recoverWorkerGameservers(ctx context.Context, nodeID string, w worker.Worker) {
 	gameservers, err := m.store.ListGameservers(model.GameserverFilter{})
 	if err != nil {
-		m.log.Error("failed to list gameservers for worker recovery", "worker_id", nodeID, "error", err)
+		m.log.Error("failed to list gameservers for worker recovery", "worker", nodeID, "error", err)
 		return
 	}
 
@@ -376,7 +376,7 @@ func (m *StatusManager) recoverWorkerGameservers(ctx context.Context, nodeID str
 		if !controller.NeedsRecoveryOnReconnect(gs.Status) {
 			continue
 		}
-		m.log.Info("recovering gameserver on reconnected worker", "id", gs.ID, "worker_id", nodeID, "was_status", gs.Status)
+		m.log.Info("recovering gameserver on reconnected worker", "gameserver", gs.ID, "worker", nodeID, "was_status", gs.Status)
 		m.recoverGameserver(ctx, &gs, w)
 	}
 
@@ -390,7 +390,7 @@ func (m *StatusManager) recoverWorkerGameservers(ctx context.Context, nodeID str
 func (m *StatusManager) detectOrphanContainers(ctx context.Context, nodeID string, w worker.Worker, knownIDs map[string]bool) {
 	containers, err := w.ListGameserverContainers(ctx)
 	if err != nil {
-		m.log.Warn("failed to list containers for orphan detection", "worker_id", nodeID, "error", err)
+		m.log.Warn("failed to list containers for orphan detection", "worker", nodeID, "error", err)
 		return
 	}
 
@@ -404,8 +404,8 @@ func (m *StatusManager) detectOrphanContainers(ctx context.Context, nodeID strin
 			continue
 		}
 		m.log.Warn("orphan container detected — container exists on worker but gameserver not found in database",
-			"worker_id", nodeID, "container_id", c.ContainerID[:12], "container_name", c.ContainerName,
-			"gameserver_id", c.GameserverID, "state", c.State)
+			"worker", nodeID, "container_id", c.ContainerID[:12], "container_name", c.ContainerName,
+			"gameserver", c.GameserverID, "state", c.State)
 	}
 }
 
@@ -425,15 +425,15 @@ func (m *StatusManager) handleUnexpectedDeath(gs *model.Gameserver) {
 	m.crashMu.Unlock()
 
 	if count > maxAutoRestartAttempts {
-		m.log.Error("auto-restart limit reached, giving up", "id", gs.ID, "attempts", maxAutoRestartAttempts)
+		m.log.Error("auto-restart limit reached, giving up", "gameserver", gs.ID, "attempts", maxAutoRestartAttempts)
 		m.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gs.ID, Reason: fmt.Sprintf("Crashed %d times, auto-restart disabled. Check logs.", maxAutoRestartAttempts), Timestamp: time.Now()})
 		return
 	}
 
-	m.log.Warn("auto-restarting crashed gameserver", "id", gs.ID, "attempt", count, "max", maxAutoRestartAttempts)
+	m.log.Warn("auto-restarting crashed gameserver", "gameserver", gs.ID, "attempt", count, "max", maxAutoRestartAttempts)
 	go func() {
 		if err := m.restartFunc(context.Background(), gs.ID); err != nil {
-			m.log.Error("auto-restart failed", "id", gs.ID, "attempt", count, "error", err)
+			m.log.Error("auto-restart failed", "gameserver", gs.ID, "attempt", count, "error", err)
 			m.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gs.ID, Reason: fmt.Sprintf("Auto-restart failed (attempt %d/%d): %s", count, maxAutoRestartAttempts, err.Error()), Timestamp: time.Now()})
 		}
 	}()

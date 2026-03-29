@@ -224,7 +224,7 @@ func (w *WebhookWorker) enqueueEvent(event controller.WebhookEvent) {
 			CreatedAt:         now,
 		}
 		if err := w.store.CreateWebhookDelivery(delivery); err != nil {
-			w.log.Error("webhook: failed to enqueue delivery", "endpoint_id", ep.ID, "event_type", eventType, "error", err)
+			w.log.Error("webhook: failed to enqueue delivery", "endpoint", ep.ID, "event_type", eventType, "error", err)
 		}
 	}
 
@@ -299,7 +299,7 @@ func (w *WebhookWorker) processPendingDeliveries() {
 		if !cached {
 			ep, err = w.store.GetWebhookEndpoint(d.WebhookEndpointID)
 			if err != nil {
-				w.log.Error("webhook: failed to fetch endpoint for delivery", "id", d.ID, "endpoint_id", d.WebhookEndpointID, "error", err)
+				w.log.Error("webhook: failed to fetch endpoint for delivery", "id", d.ID, "endpoint", d.WebhookEndpointID, "error", err)
 				continue
 			}
 			endpointCache[d.WebhookEndpointID] = ep
@@ -319,7 +319,7 @@ func (w *WebhookWorker) processPendingDeliveries() {
 			if err := w.store.MarkDeliverySuccess(d.ID); err != nil {
 				w.log.Error("webhook: failed to mark delivery success", "id", d.ID, "error", err)
 			} else {
-				w.log.Info("webhook: delivered", "id", d.ID, "event_type", d.EventType, "endpoint_id", ep.ID, "response_status", statusCode)
+				w.log.Info("webhook: delivered", "id", d.ID, "event_type", d.EventType, "endpoint", ep.ID, "response_status", statusCode)
 			}
 			continue
 		}
@@ -336,7 +336,7 @@ func (w *WebhookWorker) processPendingDeliveries() {
 			if err := w.store.MarkDeliveryFailed(d.ID, errMsg); err != nil {
 				w.log.Error("webhook: failed to mark delivery failed", "id", d.ID, "error", err)
 			}
-			w.log.Error("webhook: delivery permanently failed", "id", d.ID, "event_type", d.EventType, "endpoint_id", ep.ID, "attempts", newAttempts, "last_error", errMsg)
+			w.log.Error("webhook: delivery permanently failed", "id", d.ID, "event_type", d.EventType, "endpoint", ep.ID, "attempts", newAttempts, "last_error", errMsg)
 			continue
 		}
 
@@ -350,7 +350,7 @@ func (w *WebhookWorker) processPendingDeliveries() {
 			w.log.Error("webhook: failed to mark delivery for retry", "id", d.ID, "error", err)
 		}
 		w.log.Warn("webhook: delivery failed, will retry",
-			"id", d.ID, "event_type", d.EventType, "endpoint_id", ep.ID, "attempt", newAttempts,
+			"id", d.ID, "event_type", d.EventType, "endpoint", ep.ID, "attempt", newAttempts,
 			"next_attempt", nextAttempt.Format(time.RFC3339), "error", errMsg)
 	}
 }

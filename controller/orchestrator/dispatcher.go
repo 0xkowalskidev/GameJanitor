@@ -48,18 +48,18 @@ func NewDispatcher(registry *Registry, store DispatcherStore, log *slog.Logger) 
 func (d *Dispatcher) WorkerFor(gameserverID string) worker.Worker {
 	nodeID, err := d.lookupNodeID(gameserverID)
 	if err != nil {
-		d.log.Error("looking up node for gameserver", "gameserver_id", gameserverID, "error", err)
+		d.log.Error("looking up node for gameserver", "gameserver", gameserverID, "error", err)
 		return nil
 	}
 
 	if nodeID == "" {
-		d.log.Error("gameserver has no node_id", "gameserver_id", gameserverID)
+		d.log.Error("gameserver has no node_id", "gameserver", gameserverID)
 		return nil
 	}
 
 	w, ok := d.registry.Get(nodeID)
 	if !ok {
-		d.log.Error("worker not found in registry", "node_id", nodeID, "gameserver_id", gameserverID)
+		d.log.Error("worker not found in registry", "node_id", nodeID, "gameserver", gameserverID)
 		return nil
 	}
 	return w
@@ -86,30 +86,30 @@ func (d *Dispatcher) RankWorkersForPlacement(requiredLabels model.Labels) []Plac
 				continue
 			}
 			if !node.Tags.HasAll(requiredLabels) {
-				d.log.Debug("worker skipped: missing required labels", "worker_id", info.ID, "required", requiredLabels, "has", node.Tags)
+				d.log.Debug("worker skipped: missing required labels", "worker", info.ID, "required", requiredLabels, "has", node.Tags)
 				continue
 			}
 		}
 		allocMem, err := d.store.AllocatedMemoryByNode(info.ID)
 		if err != nil {
-			d.log.Warn("failed to query allocated memory for worker", "worker_id", info.ID, "error", err)
+			d.log.Warn("failed to query allocated memory for worker", "worker", info.ID, "error", err)
 			continue
 		}
 		allocCPU, err := d.store.AllocatedCPUByNode(info.ID)
 		if err != nil {
-			d.log.Warn("failed to query allocated CPU for worker", "worker_id", info.ID, "error", err)
+			d.log.Warn("failed to query allocated CPU for worker", "worker", info.ID, "error", err)
 			continue
 		}
 		allocStorage, err := d.store.AllocatedStorageByNode(info.ID)
 		if err != nil {
-			d.log.Warn("failed to query allocated storage for worker", "worker_id", info.ID, "error", err)
+			d.log.Warn("failed to query allocated storage for worker", "worker", info.ID, "error", err)
 			continue
 		}
 
 		node, _ := d.store.GetWorkerNode(info.ID)
 
 		if node != nil && node.Cordoned {
-			d.log.Debug("skipping cordoned worker for placement", "worker_id", info.ID)
+			d.log.Debug("skipping cordoned worker for placement", "worker", info.ID)
 			continue
 		}
 

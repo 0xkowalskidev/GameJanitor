@@ -40,25 +40,25 @@ func NewReadyWatcher(store Store, broadcaster *controller.EventBus, gameStore *g
 func (w *ReadyWatcher) Watch(gameserverID string, wkr worker.Worker, containerID string) {
 	gs, err := w.store.GetGameserver(gameserverID)
 	if err != nil || gs == nil {
-		w.log.Error("failed to load gameserver for ready watch", "id", gameserverID, "error", err)
+		w.log.Error("failed to load gameserver for ready watch", "gameserver", gameserverID, "error", err)
 		return
 	}
 
 	game := w.gameStore.GetGame(gs.GameID)
 	if game == nil {
-		w.log.Error("game not found for ready watch", "id", gameserverID, "game_id", gs.GameID)
+		w.log.Error("game not found for ready watch", "gameserver", gameserverID, "game_id", gs.GameID)
 		return
 	}
 
 	var pattern *regexp.Regexp
 	if game.ReadyPattern == "" {
-		w.log.Info("no ready pattern, promoting immediately", "id", gameserverID)
+		w.log.Info("no ready pattern, promoting immediately", "gameserver", gameserverID)
 		w.promote(gameserverID)
 	} else {
 		var err error
 		pattern, err = regexp.Compile(game.ReadyPattern)
 		if err != nil {
-			w.log.Error("invalid ready pattern, promoting immediately", "id", gameserverID, "pattern", game.ReadyPattern, "error", err)
+			w.log.Error("invalid ready pattern, promoting immediately", "gameserver", gameserverID, "pattern", game.ReadyPattern, "error", err)
 			w.promote(gameserverID)
 			pattern = nil
 		}
@@ -109,14 +109,14 @@ func (w *ReadyWatcher) watchLogs(ctx context.Context, gameserverID string, wkr w
 	}()
 
 	if pattern != nil {
-		w.log.Info("watching container logs for ready pattern", "id", gameserverID, "pattern", pattern.String())
+		w.log.Info("watching container logs for ready pattern", "gameserver", gameserverID, "pattern", pattern.String())
 	} else {
-		w.log.Info("watching container logs for install marker", "id", gameserverID)
+		w.log.Info("watching container logs for install marker", "gameserver", gameserverID)
 	}
 
 	reader, err := wkr.ContainerLogs(ctx, containerID, 0, true)
 	if err != nil {
-		w.log.Error("failed to follow container logs", "id", gameserverID, "error", err)
+		w.log.Error("failed to follow container logs", "gameserver", gameserverID, "error", err)
 		if pattern != nil {
 			w.promote(gameserverID)
 		}
@@ -135,7 +135,7 @@ func (w *ReadyWatcher) watchLogs(ctx context.Context, gameserverID string, wkr w
 
 		case line, ok := <-lines:
 			if !ok {
-				w.log.Debug("log stream ended", "id", gameserverID)
+				w.log.Debug("log stream ended", "gameserver", gameserverID)
 				return
 			}
 			if !installDetected && line == controller.InstallMarker {
@@ -146,7 +146,7 @@ func (w *ReadyWatcher) watchLogs(ctx context.Context, gameserverID string, wkr w
 				}
 			}
 			if pattern != nil && pattern.MatchString(line) {
-				w.log.Info("ready pattern matched, promoting to running", "id", gameserverID)
+				w.log.Info("ready pattern matched, promoting to running", "gameserver", gameserverID)
 				w.promote(gameserverID)
 				return
 			}
@@ -157,15 +157,15 @@ func (w *ReadyWatcher) watchLogs(ctx context.Context, gameserverID string, wkr w
 func (w *ReadyWatcher) markInstalled(gameserverID string) {
 	gs, err := w.store.GetGameserver(gameserverID)
 	if err != nil || gs == nil {
-		w.log.Error("failed to load gameserver to mark installed", "id", gameserverID, "error", err)
+		w.log.Error("failed to load gameserver to mark installed", "gameserver", gameserverID, "error", err)
 		return
 	}
 	gs.Installed = true
 	if err := w.store.UpdateGameserver(gs); err != nil {
-		w.log.Error("failed to mark gameserver as installed", "id", gameserverID, "error", err)
+		w.log.Error("failed to mark gameserver as installed", "gameserver", gameserverID, "error", err)
 		return
 	}
-	w.log.Info("gameserver marked as installed", "id", gameserverID)
+	w.log.Info("gameserver marked as installed", "gameserver", gameserverID)
 }
 
 func (w *ReadyWatcher) promote(gameserverID string) {

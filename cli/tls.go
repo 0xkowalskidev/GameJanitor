@@ -98,7 +98,7 @@ func enrollWithController(cfg config.Config, grpcPort int, logger *slog.Logger) 
 
 	logger.Info("enrolling with controller for TLS certificates",
 		"controller", cfg.ControllerAddress,
-		"worker_id", workerID,
+		"worker", workerID,
 	)
 
 	backoff := time.Second

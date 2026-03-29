@@ -90,7 +90,7 @@ func (s *ModService) cleanupFailedDep(gameserverID, failedModID string) {
 			s.cleanupFailedDep(gameserverID, mod.ID)
 			s.fileDel.Uninstall(context.Background(), gameserverID, mod.FilePath)
 			s.store.DeleteInstalledMod(mod.ID)
-			s.log.Info("cleaned up orphaned dependency after failed install", "mod_id", mod.ID, "name", mod.Name)
+			s.log.Info("cleaned up orphaned dependency after failed install", "mod", mod.ID, "name", mod.Name)
 		}
 	}
 }
@@ -141,7 +141,7 @@ func (s *ModService) removeOrphanedDepsInner(ctx context.Context, gameserverID, 
 				s.fileDel.Uninstall(ctx, gameserverID, dep.FilePath)
 			}
 			s.store.DeleteInstalledMod(dep.ID)
-			s.log.Info("removed orphaned dependency", "mod_id", dep.ID, "name", dep.Name)
+			s.log.Info("removed orphaned dependency", "mod", dep.ID, "name", dep.Name)
 		}
 	}
 }

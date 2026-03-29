@@ -80,11 +80,11 @@ func (t *ActivityTracker) Start(gameserverID, workerID, activityType string, act
 	}
 
 	if err := t.store.CreateActivity(a); err != nil {
-		t.log.Error("failed to create activity record", "type", activityType, "gameserver_id", gameserverID, "error", err)
+		t.log.Error("failed to create activity record", "type", activityType, "gameserver", gameserverID, "error", err)
 		return "", err
 	}
 
-	t.log.Info("activity started", "activity_id", a.ID, "type", activityType, "gameserver_id", gameserverID, "worker_id", workerID)
+	t.log.Info("activity started", "activity", a.ID, "type", activityType, "gameserver", gameserverID, "worker", workerID)
 	return a.ID, nil
 }
 
@@ -94,7 +94,7 @@ func (t *ActivityTracker) Complete(activityID string) {
 		return
 	}
 	if err := t.store.CompleteActivity(activityID); err != nil {
-		t.log.Error("failed to complete activity", "activity_id", activityID, "error", err)
+		t.log.Error("failed to complete activity", "activity", activityID, "error", err)
 	}
 }
 
@@ -108,7 +108,7 @@ func (t *ActivityTracker) Fail(activityID string, reason error) {
 		errMsg = reason.Error()
 	}
 	if err := t.store.FailActivity(activityID, errMsg); err != nil {
-		t.log.Error("failed to fail activity", "activity_id", activityID, "error", err)
+		t.log.Error("failed to fail activity", "activity", activityID, "error", err)
 	}
 }
 

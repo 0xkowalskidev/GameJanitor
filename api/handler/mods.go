@@ -26,7 +26,7 @@ func (h *ModHandlers) Config(w http.ResponseWriter, r *http.Request) {
 	gsID := chi.URLParam(r, "id")
 	config, err := h.svc.GetConfig(r.Context(), gsID)
 	if err != nil {
-		h.log.Error("getting mod config", "gameserver_id", gsID, "error", err)
+		h.log.Error("getting mod config", "gameserver", gsID, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
@@ -37,7 +37,7 @@ func (h *ModHandlers) List(w http.ResponseWriter, r *http.Request) {
 	gsID := chi.URLParam(r, "id")
 	mods, err := h.svc.ListInstalled(r.Context(), gsID)
 	if err != nil {
-		h.log.Error("listing installed mods", "gameserver_id", gsID, "error", err)
+		h.log.Error("listing installed mods", "gameserver", gsID, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
@@ -69,7 +69,7 @@ func (h *ModHandlers) Search(w http.ResponseWriter, r *http.Request) {
 
 	results, total, err := h.svc.Search(r.Context(), gsID, category, query, opts, offset, limit)
 	if err != nil {
-		h.log.Error("searching mods", "gameserver_id", gsID, "category", category, "query", query, "error", err)
+		h.log.Error("searching mods", "gameserver", gsID, "category", category, "query", query, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
@@ -97,7 +97,7 @@ func (h *ModHandlers) Versions(w http.ResponseWriter, r *http.Request) {
 	unfiltered := q.Get("unfiltered") == "true"
 	versions, err := h.svc.GetVersions(r.Context(), gsID, category, source, sourceID, unfiltered)
 	if err != nil {
-		h.log.Error("getting mod versions", "gameserver_id", gsID, "source", source, "source_id", sourceID, "error", err)
+		h.log.Error("getting mod versions", "gameserver", gsID, "source", source, "source_id", sourceID, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
@@ -125,7 +125,7 @@ func (h *ModHandlers) Install(w http.ResponseWriter, r *http.Request) {
 
 	installed, err := h.svc.Install(r.Context(), gsID, req.Category, req.Source, req.SourceID, req.VersionID)
 	if err != nil {
-		h.log.Error("installing mod", "gameserver_id", gsID, "source", req.Source, "source_id", req.SourceID, "error", err)
+		h.log.Error("installing mod", "gameserver", gsID, "source", req.Source, "source_id", req.SourceID, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
@@ -155,7 +155,7 @@ func (h *ModHandlers) InstallPack(w http.ResponseWriter, r *http.Request) {
 	// downloading hundreds of mods and must not cancel when the request ends.
 	result, err := h.svc.InstallPack(context.Background(), gsID, req.Source, req.PackID, req.VersionID)
 	if err != nil {
-		h.log.Error("installing modpack", "gameserver_id", gsID, "source", req.Source, "pack_id", req.PackID, "error", err)
+		h.log.Error("installing modpack", "gameserver", gsID, "source", req.Source, "pack_id", req.PackID, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
@@ -168,7 +168,7 @@ func (h *ModHandlers) Uninstall(w http.ResponseWriter, r *http.Request) {
 	modID := chi.URLParam(r, "modId")
 
 	if err := h.svc.Uninstall(r.Context(), gsID, modID); err != nil {
-		h.log.Error("uninstalling mod", "gameserver_id", gsID, "mod_id", modID, "error", err)
+		h.log.Error("uninstalling mod", "gameserver", gsID, "mod", modID, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
@@ -181,7 +181,7 @@ func (h *ModHandlers) CheckUpdates(w http.ResponseWriter, r *http.Request) {
 
 	updates, err := h.svc.CheckForUpdates(r.Context(), gsID)
 	if err != nil {
-		h.log.Error("checking mod updates", "gameserver_id", gsID, "error", err)
+		h.log.Error("checking mod updates", "gameserver", gsID, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
@@ -197,7 +197,7 @@ func (h *ModHandlers) Update(w http.ResponseWriter, r *http.Request) {
 
 	updated, err := h.svc.Update(r.Context(), gsID, modID)
 	if err != nil {
-		h.log.Error("updating mod", "gameserver_id", gsID, "mod_id", modID, "error", err)
+		h.log.Error("updating mod", "gameserver", gsID, "mod", modID, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
@@ -209,7 +209,7 @@ func (h *ModHandlers) UpdateAll(w http.ResponseWriter, r *http.Request) {
 
 	updates, err := h.svc.UpdateAll(r.Context(), gsID)
 	if err != nil {
-		h.log.Error("updating all mods", "gameserver_id", gsID, "error", err)
+		h.log.Error("updating all mods", "gameserver", gsID, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
@@ -222,7 +222,7 @@ func (h *ModHandlers) UpdatePack(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.svc.UpdatePack(r.Context(), gsID, modID)
 	if err != nil {
-		h.log.Error("updating modpack", "gameserver_id", gsID, "mod_id", modID, "error", err)
+		h.log.Error("updating modpack", "gameserver", gsID, "mod", modID, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
@@ -247,7 +247,7 @@ func (h *ModHandlers) CheckCompatibility(w http.ResponseWriter, r *http.Request)
 
 	issues, err := h.svc.CheckCompatibility(r.Context(), gsID, env)
 	if err != nil {
-		h.log.Error("checking mod compatibility", "gameserver_id", gsID, "error", err)
+		h.log.Error("checking mod compatibility", "gameserver", gsID, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}

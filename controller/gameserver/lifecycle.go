@@ -48,7 +48,7 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 
 	switch gs.Status {
 	case controller.StatusInstalling, controller.StatusStarting, controller.StatusStarted, controller.StatusRunning:
-		s.log.Info("gameserver already active, skipping start", "id", id, "status", gs.Status)
+		s.log.Info("gameserver already active, skipping start", "gameserver", id, "status", gs.Status)
 		return nil
 	}
 
@@ -77,7 +77,7 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 		limitErr := s.checkWorkerLimitsExcluding(*gs.NodeID, gs.MemoryLimitMB, gs.CPULimit, ptrIntOr0(gs.StorageLimitMB), gs.ID)
 		if limitErr != nil {
 			s.log.Warn("assigned node cannot fit gameserver resources, attempting auto-migration",
-				"id", id, "node_id", *gs.NodeID, "error", limitErr)
+				"gameserver", id, "node_id", *gs.NodeID, "error", limitErr)
 
 			candidates := s.dispatcher.RankWorkersForPlacement(gs.NodeTags)
 			foundNode := ""
@@ -95,7 +95,7 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 				return fmt.Errorf("cannot start: node %s lacks capacity and no other node can fit %d MB / %.1f CPU", *gs.NodeID, gs.MemoryLimitMB, gs.CPULimit)
 			}
 
-			s.log.Info("auto-migrating before start", "id", id, "from_node", *gs.NodeID, "to_node", foundNode)
+			s.log.Info("auto-migrating before start", "gameserver", id, "from_node", *gs.NodeID, "to_node", foundNode)
 			if err := s.MigrateGameserver(ctx, id, foundNode); err != nil {
 				return fmt.Errorf("auto-migration before start failed: %w", err)
 			}
@@ -187,10 +187,10 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 		oldID := *gs.ContainerID
 		gs.ContainerID = nil
 		if err := s.store.UpdateGameserver(gs); err != nil {
-			s.log.Warn("failed to clear old container ID", "id", id, "error", err)
+			s.log.Warn("failed to clear old container ID", "gameserver", id, "error", err)
 		}
 		if err := w.RemoveContainer(ctx, oldID); err != nil {
-			s.log.Warn("failed to remove old container by id", "id", id, "error", err)
+			s.log.Warn("failed to remove old container by id", "gameserver", id, "error", err)
 		}
 	}
 	if err := w.RemoveContainer(ctx, containerName); err != nil {
@@ -235,7 +235,7 @@ func (s *GameserverService) Start(ctx context.Context, id string) (err error) {
 		s.readyWatcher.Watch(id, w, containerID)
 	}
 
-	s.log.Info("gameserver started", "id", id, "container_id", containerID[:12])
+	s.log.Info("gameserver started", "gameserver", id, "container_id", containerID[:12])
 	return nil
 }
 
@@ -253,7 +253,7 @@ func (s *GameserverService) Stop(ctx context.Context, id string) (err error) {
 	}
 
 	if gs.Status == controller.StatusStopped {
-		s.log.Info("gameserver already stopped, skipping", "id", id)
+		s.log.Info("gameserver already stopped, skipping", "gameserver", id)
 		return nil
 	}
 
@@ -287,18 +287,18 @@ func (s *GameserverService) Stop(ctx context.Context, id string) (err error) {
 	if gs.ContainerID != nil {
 		w := s.dispatcher.WorkerFor(id)
 		if w == nil {
-			s.log.Warn("worker unavailable during stop, skipping container cleanup", "id", id)
+			s.log.Warn("worker unavailable during stop, skipping container cleanup", "gameserver", id)
 		} else {
 			// Run stop-server script if it exists — announces shutdown, saves world
 			_, _, _, execErr := w.Exec(ctx, *gs.ContainerID, []string{"/scripts/stop-server"})
 			if execErr != nil {
-				s.log.Debug("stop-server script not available or failed, proceeding with container stop", "id", id, "error", execErr)
+				s.log.Debug("stop-server script not available or failed, proceeding with container stop", "gameserver", id, "error", execErr)
 			}
 			if err := w.StopContainer(ctx, *gs.ContainerID, 10); err != nil {
-				s.log.Warn("failed to stop container gracefully", "id", id, "error", err)
+				s.log.Warn("failed to stop container gracefully", "gameserver", id, "error", err)
 			}
 			if err := w.RemoveContainer(ctx, *gs.ContainerID); err != nil {
-				s.log.Warn("failed to remove container", "id", id, "error", err)
+				s.log.Warn("failed to remove container", "gameserver", id, "error", err)
 			}
 		}
 	}
@@ -317,7 +317,7 @@ func (s *GameserverService) Stop(ctx context.Context, id string) (err error) {
 	}
 
 	s.broadcaster.Publish(controller.ContainerStoppedEvent{GameserverID: id, Timestamp: time.Now()})
-	s.log.Info("gameserver stopped", "id", id)
+	s.log.Info("gameserver stopped", "gameserver", id)
 	return nil
 }
 
@@ -381,7 +381,7 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) (er
 		return controller.ErrNotFoundf("game %s not found", gs.GameID)
 	}
 
-	s.log.Info("updating game for gameserver", "id", id, "game", game.ID)
+	s.log.Info("updating game for gameserver", "gameserver", id, "game", game.ID)
 
 	workerID := ""
 	if gs.NodeID != nil {
@@ -466,15 +466,15 @@ func (s *GameserverService) UpdateServerGame(ctx context.Context, id string) (er
 		return fmt.Errorf("running update-server: %w", err)
 	}
 	if exitCode != 0 {
-		s.log.Error("update-server failed", "id", id, "exit_code", exitCode, "stdout", stdout, "stderr", stderr)
+		s.log.Error("update-server failed", "gameserver", id, "exit_code", exitCode, "stdout", stdout, "stderr", stderr)
 		return fmt.Errorf("update-server exited with code %d", exitCode)
 	}
 
 	if err := w.StopContainer(ctx, tempID, 10); err != nil {
-		s.log.Warn("failed to stop temp update container", "id", id, "error", err)
+		s.log.Warn("failed to stop temp update container", "gameserver", id, "error", err)
 	}
 
-	s.log.Info("game updated, restarting gameserver", "id", id)
+	s.log.Info("game updated, restarting gameserver", "gameserver", id)
 	return s.Start(ctx, id)
 }
 
@@ -487,7 +487,7 @@ func (s *GameserverService) Reinstall(ctx context.Context, id string) (err error
 		return controller.ErrNotFoundf("gameserver %s not found", id)
 	}
 
-	s.log.Info("reinstalling gameserver (full wipe)", "id", id)
+	s.log.Info("reinstalling gameserver (full wipe)", "gameserver", id)
 
 	workerID := ""
 	if gs.NodeID != nil {
@@ -544,7 +544,7 @@ func (s *GameserverService) Reinstall(ctx context.Context, id string) (err error
 		return fmt.Errorf("recreating volume for reinstall: %w", err)
 	}
 
-	s.log.Info("volume wiped, starting fresh install", "id", id)
+	s.log.Info("volume wiped, starting fresh install", "gameserver", id)
 	return s.Start(ctx, id)
 }
 

@@ -81,7 +81,7 @@ func (s *StatsPoller) StopAll() {
 }
 
 func (s *StatsPoller) pollLoop(ctx context.Context, gameserverID string) {
-	s.log.Debug("starting stats poll loop", "id", gameserverID)
+	s.log.Debug("starting stats poll loop", "gameserver", gameserverID)
 
 	// Immediate first poll — no initial delay
 	s.pollOnce(ctx, gameserverID)
@@ -105,17 +105,17 @@ func (s *StatsPoller) pollLoop(ctx context.Context, gameserverID string) {
 func (s *StatsPoller) pollOnce(ctx context.Context, gameserverID string) bool {
 	gs, err := s.store.GetGameserver(gameserverID)
 	if err != nil || gs == nil {
-		s.log.Debug("gameserver gone, stopping stats poll", "id", gameserverID)
+		s.log.Debug("gameserver gone, stopping stats poll", "gameserver", gameserverID)
 		return false
 	}
 	if !controller.IsPollableStatus(gs.Status) {
-		s.log.Debug("gameserver not in pollable state, stopping stats poll", "id", gameserverID, "status", gs.Status)
+		s.log.Debug("gameserver not in pollable state, stopping stats poll", "gameserver", gameserverID, "status", gs.Status)
 		return false
 	}
 
 	w := s.dispatcher.WorkerFor(gameserverID)
 	if w == nil {
-		s.log.Debug("worker unavailable, stopping stats poll", "id", gameserverID)
+		s.log.Debug("worker unavailable, stopping stats poll", "gameserver", gameserverID)
 		return false
 	}
 	event := controller.GameserverStatsEvent{

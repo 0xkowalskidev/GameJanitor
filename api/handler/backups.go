@@ -28,7 +28,7 @@ func (h *BackupHandlers) List(w http.ResponseWriter, r *http.Request) {
 		Pagination:   parsePagination(r),
 	})
 	if err != nil {
-		h.log.Error("listing backups", "gameserver_id", gsID, "error", err)
+		h.log.Error("listing backups", "gameserver", gsID, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
@@ -53,7 +53,7 @@ func (h *BackupHandlers) Create(w http.ResponseWriter, r *http.Request) {
 
 	backup, err := h.svc.CreateBackup(detachedCtx(r), gsID, req.Name)
 	if err != nil {
-		h.log.Error("creating backup", "gameserver_id", gsID, "error", err)
+		h.log.Error("creating backup", "gameserver", gsID, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
@@ -65,7 +65,7 @@ func (h *BackupHandlers) Restore(w http.ResponseWriter, r *http.Request) {
 	gsID := chi.URLParam(r, "id")
 	backupID := chi.URLParam(r, "backupId")
 	if err := h.svc.RestoreBackup(detachedCtx(r), gsID, backupID); err != nil {
-		h.log.Error("restoring backup", "backup_id", backupID, "error", err)
+		h.log.Error("restoring backup", "backup", backupID, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
@@ -79,7 +79,7 @@ func (h *BackupHandlers) Download(w http.ResponseWriter, r *http.Request) {
 
 	reader, backup, err := h.svc.DownloadBackup(r.Context(), gsID, backupID)
 	if err != nil {
-		h.log.Error("downloading backup", "backup_id", backupID, "error", err)
+		h.log.Error("downloading backup", "backup", backupID, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
@@ -93,7 +93,7 @@ func (h *BackupHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, err := io.Copy(w, reader); err != nil {
-		h.log.Error("streaming backup download", "backup_id", backupID, "error", err)
+		h.log.Error("streaming backup download", "backup", backupID, "error", err)
 	}
 }
 
@@ -101,7 +101,7 @@ func (h *BackupHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 	gsID := chi.URLParam(r, "id")
 	backupID := chi.URLParam(r, "backupId")
 	if err := h.svc.DeleteBackup(r.Context(), gsID, backupID); err != nil {
-		h.log.Error("deleting backup", "backup_id", backupID, "error", err)
+		h.log.Error("deleting backup", "backup", backupID, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}

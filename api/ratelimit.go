@@ -120,7 +120,7 @@ func (s *RateLimitStore) PerTokenMiddleware() func(http.Handler) http.Handler {
 			limiter := getOrCreateLimiter(&s.tokenLimiters, token.ID, rps, int(rps*2))
 
 			if !limiter.Allow() {
-				s.log.Warn("per-token rate limit exceeded", "token_id", token.ID, "path", r.URL.Path)
+				s.log.Warn("per-token rate limit exceeded", "token", token.ID, "path", r.URL.Path)
 				handleRateLimited(w, r)
 				return
 			}

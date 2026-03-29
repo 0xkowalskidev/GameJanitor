@@ -132,7 +132,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 	gameserverID := sshConn.Permissions.Extensions["gameserver_id"]
 	volumeName := sshConn.Permissions.Extensions["volume_name"]
-	s.log.Info("sftp session started", "remote", sshConn.RemoteAddr(), "gameserver_id", gameserverID)
+	s.log.Info("sftp session started", "remote", sshConn.RemoteAddr(), "gameserver", gameserverID)
 
 	go ssh.DiscardRequests(reqs)
 
@@ -168,7 +168,7 @@ func (s *Server) handleChannel(channel ssh.Channel, requests <-chan *ssh.Request
 		h := newHandler(fileOp, volumeName, s.log)
 		server := gosftp.NewRequestServer(channel, h.Handlers())
 		if err := server.Serve(); err != nil && err != io.EOF {
-			s.log.Error("sftp session error", "gameserver_id", gameserverID, "error", err)
+			s.log.Error("sftp session error", "gameserver", gameserverID, "error", err)
 		}
 		server.Close()
 		return

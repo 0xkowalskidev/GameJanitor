@@ -50,7 +50,7 @@ func (h *WorkerHandlers) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.log.Info("worker updated via API", "worker_id", workerID)
+	h.log.Info("worker updated via API", "worker", workerID)
 	view, err := h.svc.Get(workerID)
 	if err != nil {
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))

@@ -65,7 +65,7 @@ func (s *ConsoleService) StreamLogs(ctx context.Context, gameserverID string, ta
 	if w == nil {
 		return nil, controller.ErrUnavailablef("worker unavailable for gameserver %s", gameserverID)
 	}
-	s.log.Info("streaming logs", "gameserver_id", gameserverID, "container_id", (*gs.ContainerID)[:12])
+	s.log.Info("streaming logs", "gameserver", gameserverID, "container_id", (*gs.ContainerID)[:12])
 	return w.ContainerLogs(ctx, *gs.ContainerID, tail, true)
 }
 
@@ -100,7 +100,7 @@ func (s *ConsoleService) SendCommand(ctx context.Context, gameserverID string, c
 		return "", controller.ErrUnavailablef("worker unavailable for gameserver %s", gameserverID)
 	}
 
-	s.log.Info("sending command", "gameserver_id", gameserverID, "command", command)
+	s.log.Info("sending command", "gameserver", gameserverID, "command", command)
 
 	exitCode, stdout, stderr, err := w.Exec(ctx, *gs.ContainerID, []string{"/scripts/send-command", command})
 	if err != nil {
@@ -176,7 +176,7 @@ func (s *ConsoleService) ReadHistoricalLogs(ctx context.Context, gameserverID st
 	}
 	content, err := w.ReadFile(ctx, gs.VolumeName, path)
 	if err != nil {
-		s.log.Debug("no historical logs found", "gameserver_id", gameserverID, "session", session, "error", err)
+		s.log.Debug("no historical logs found", "gameserver", gameserverID, "session", session, "error", err)
 		return nil, nil
 	}
 

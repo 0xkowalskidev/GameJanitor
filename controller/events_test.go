@@ -77,12 +77,12 @@ func TestEventBus_SlowSubscriber_EventDropped(t *testing.T) {
 	ch, unsub := bus.Subscribe()
 	defer unsub()
 
-	// Fill the 64-element buffer
-	for i := 0; i < 70; i++ {
+	// Fill the 4096-element buffer and then some
+	for i := 0; i < 4100; i++ {
 		bus.Publish(controller.ImagePullingEvent{GameserverID: "gs-1", Timestamp: time.Now()})
 	}
 
-	// Should have at most 64 events (buffer size)
+	// Should have at most 4096 events (buffer size)
 	count := 0
 	for {
 		select {
@@ -93,7 +93,7 @@ func TestEventBus_SlowSubscriber_EventDropped(t *testing.T) {
 		}
 	}
 done:
-	assert.LessOrEqual(t, count, 64, "buffer should cap at 64 events")
+	assert.LessOrEqual(t, count, 4096, "buffer should cap at 4096 events")
 	assert.Greater(t, count, 0, "should have received some events")
 }
 

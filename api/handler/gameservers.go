@@ -536,7 +536,7 @@ func (h *GameserverHandlers) SendCommand(w http.ResponseWriter, r *http.Request)
 
 	output, err := h.consoleSvc.SendCommand(r.Context(), id, strings.TrimSpace(body.Command))
 	if err != nil {
-		h.log.Error("sending command", "gameserver_id", id, "error", err)
+		h.log.Error("sending command", "gameserver", id, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}

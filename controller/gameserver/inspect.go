@@ -52,14 +52,14 @@ func (s *GameserverService) GetGameserverStats(ctx context.Context, gameserverID
 			stats.MemoryLimitMB = cs.MemoryLimitMB
 			stats.CPUPercent = cs.CPUPercent
 		} else {
-			s.log.Debug("container stats unavailable", "gameserver_id", gameserverID, "error", err)
+			s.log.Debug("container stats unavailable", "gameserver", gameserverID, "error", err)
 		}
 	}
 
 	// Volume size always available (only needs volume name)
 	volSize, err := w.VolumeSize(ctx, gs.VolumeName)
 	if err != nil {
-		s.log.Debug("volume size unavailable", "gameserver_id", gameserverID, "error", err)
+		s.log.Debug("volume size unavailable", "gameserver", gameserverID, "error", err)
 	} else {
 		stats.VolumeSizeBytes = volSize
 	}

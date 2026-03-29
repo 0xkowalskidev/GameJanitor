@@ -64,7 +64,7 @@ func (s *ScheduleService) CreateSchedule(ctx context.Context, schedule *model.Sc
 
 	schedule.ID = uuid.New().String()
 
-	s.log.Info("creating schedule", "id", schedule.ID, "name", schedule.Name, "type", schedule.Type, "gameserver_id", schedule.GameserverID)
+	s.log.Info("creating schedule", "id", schedule.ID, "name", schedule.Name, "type", schedule.Type, "gameserver", schedule.GameserverID)
 
 	if err := s.store.CreateSchedule(schedule); err != nil {
 		return err

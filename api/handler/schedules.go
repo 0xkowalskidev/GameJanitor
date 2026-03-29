@@ -23,7 +23,7 @@ func (h *ScheduleHandlers) List(w http.ResponseWriter, r *http.Request) {
 	gsID := chi.URLParam(r, "id")
 	schedules, err := h.svc.ListSchedules(gsID)
 	if err != nil {
-		h.log.Error("listing schedules", "gameserver_id", gsID, "error", err)
+		h.log.Error("listing schedules", "gameserver", gsID, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}

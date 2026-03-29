@@ -120,7 +120,7 @@ func runWorkerAgent(ctx context.Context, cfg config.Config, logger *slog.Logger)
 
 		logger.Info("connecting to controller",
 			"controller", cfg.ControllerAddress,
-			"worker_id", workerID,
+			"worker", workerID,
 			"has_token", cfg.WorkerToken != "",
 		)
 

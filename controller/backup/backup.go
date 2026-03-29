@@ -167,7 +167,7 @@ func (s *BackupService) CreateBackup(ctx context.Context, gameserverID string, n
 
 	// Enforce retention before creating new backup
 	if err := s.enforceRetention(ctx, gameserverID); err != nil {
-		s.log.Warn("retention enforcement failed, proceeding with backup", "gameserver_id", gameserverID, "error", err)
+		s.log.Warn("retention enforcement failed, proceeding with backup", "gameserver", gameserverID, "error", err)
 	}
 
 	backupID := uuid.New().String()
@@ -196,7 +196,7 @@ func (s *BackupService) CreateBackup(ctx context.Context, gameserverID string, n
 		Backup:       backup,
 	})
 
-	s.log.Info("backup initiated", "gameserver_id", gameserverID, "backup_id", backupID)
+	s.log.Info("backup initiated", "gameserver", gameserverID, "backup", backupID)
 
 	// Run the actual backup work in the background
 	go s.runBackup(gameserverID, backupID, name, gs, actor)
@@ -242,7 +242,7 @@ func (s *BackupService) runBackup(gameserverID, backupID, name string, gs *model
 
 	// Run save-server if game is running and supports it
 	if controller.IsRunningStatus(gs.Status) && gs.ContainerID != nil && game != nil && game.HasCapability("save") {
-		s.log.Info("running save-server before backup", "gameserver_id", gameserverID)
+		s.log.Info("running save-server before backup", "gameserver", gameserverID)
 		exitCode, _, stderr, execErr := w.Exec(ctx, *gs.ContainerID, []string{"/scripts/save-server"})
 		if execErr != nil {
 			s.log.Warn("save-server exec failed, proceeding with backup", "error", execErr)
@@ -294,15 +294,15 @@ func (s *BackupService) runBackup(gameserverID, backupID, name string, gs *model
 
 	sizeBytes, err := s.storage.Size(ctx, gameserverID, backupID)
 	if err != nil {
-		s.log.Warn("failed to get backup size", "backup_id", backupID, "error", err)
+		s.log.Warn("failed to get backup size", "backup", backupID, "error", err)
 	}
 
 	if err := s.store.UpdateBackupSize(backupID, sizeBytes); err != nil {
-		s.log.Error("failed to update backup size", "backup_id", backupID, "error", err)
+		s.log.Error("failed to update backup size", "backup", backupID, "error", err)
 	}
 
 	s.completeActivity(opID)
-	s.log.Info("backup completed", "gameserver_id", gameserverID, "backup_id", backupID, "size_bytes", sizeBytes)
+	s.log.Info("backup completed", "gameserver", gameserverID, "backup", backupID, "size_bytes", sizeBytes)
 
 	completedBackup, _ := s.store.GetBackup(backupID)
 	s.broadcaster.Publish(controller.BackupActionEvent{
@@ -315,11 +315,11 @@ func (s *BackupService) runBackup(gameserverID, backupID, name string, gs *model
 }
 
 func (s *BackupService) failBackup(ctx context.Context, gameserverID, backupID, name string, actor controller.Actor, reason string) {
-	s.log.Error("backup failed", "gameserver_id", gameserverID, "backup_id", backupID, "error", reason)
+	s.log.Error("backup failed", "gameserver", gameserverID, "backup", backupID, "error", reason)
 
 	// Clean up partial data
 	if err := s.storage.Delete(ctx, gameserverID, backupID); err != nil {
-		s.log.Warn("failed to clean up partial backup data", "backup_id", backupID, "error", err)
+		s.log.Warn("failed to clean up partial backup data", "backup", backupID, "error", err)
 	}
 
 	// Status is derived from the activity table — no DB update needed here
@@ -351,7 +351,7 @@ func (s *BackupService) RestoreBackup(ctx context.Context, gameserverID, backupI
 	actor := controller.ActorFromContext(ctx)
 	wasRunning := controller.IsRunningStatus(gs.Status)
 
-	s.log.Info("restore initiated", "backup_id", backupID, "gameserver_id", gs.ID, "was_running", wasRunning)
+	s.log.Info("restore initiated", "backup", backupID, "gameserver", gs.ID, "was_running", wasRunning)
 
 	s.broadcaster.Publish(controller.BackupActionEvent{
 		Type:         controller.EventBackupRestore,
@@ -440,7 +440,7 @@ func (s *BackupService) runRestore(gameserverID, backupID, backupName, volumeNam
 	reader.Close()
 
 	opSucceeded = true
-	s.log.Info("backup restored", "backup_id", backupID, "gameserver_id", gameserverID)
+	s.log.Info("backup restored", "backup", backupID, "gameserver", gameserverID)
 
 	restoredBackup, _ := s.store.GetBackup(backupID)
 	s.broadcaster.Publish(controller.BackupActionEvent{
@@ -452,9 +452,9 @@ func (s *BackupService) runRestore(gameserverID, backupID, backupName, volumeNam
 	})
 
 	if wasRunning {
-		s.log.Info("restarting gameserver after restore", "gameserver_id", gameserverID)
+		s.log.Info("restarting gameserver after restore", "gameserver", gameserverID)
 		if err := s.gameserverSvc.Start(ctx, gameserverID); err != nil {
-			s.log.Error("failed to restart after restore", "gameserver_id", gameserverID, "error", err)
+			s.log.Error("failed to restart after restore", "gameserver", gameserverID, "error", err)
 			s.broadcaster.Publish(controller.GameserverErrorEvent{GameserverID: gameserverID, Reason: fmt.Sprintf("Restart after restore failed: %v", err), Timestamp: time.Now()})
 		}
 	} else {
@@ -463,7 +463,7 @@ func (s *BackupService) runRestore(gameserverID, backupID, backupName, volumeNam
 }
 
 func (s *BackupService) failRestore(gameserverID, backupID, backupName string, actor controller.Actor, reason string) {
-	s.log.Error("backup restore failed", "gameserver_id", gameserverID, "backup_id", backupID, "error", reason)
+	s.log.Error("backup restore failed", "gameserver", gameserverID, "backup", backupID, "error", reason)
 	failedRestoreBackup, _ := s.store.GetBackup(backupID)
 	s.broadcaster.Publish(controller.BackupActionEvent{
 		Type:         controller.EventBackupRestoreFailed,
@@ -482,14 +482,14 @@ func (s *BackupService) DeleteBackup(ctx context.Context, gameserverID, backupID
 		return err
 	}
 
-	s.log.Info("deleting backup", "backup_id", backupID, "gameserver_id", backup.GameserverID)
+	s.log.Info("deleting backup", "backup", backupID, "gameserver", backup.GameserverID)
 
 	if err := s.store.DeleteBackup(backupID); err != nil {
 		return fmt.Errorf("deleting backup record: %w", err)
 	}
 
 	if err := s.storage.Delete(ctx, backup.GameserverID, backup.ID); err != nil {
-		s.log.Warn("backup record deleted but store file removal failed", "backup_id", backupID, "error", err)
+		s.log.Warn("backup record deleted but store file removal failed", "backup", backupID, "error", err)
 	}
 
 	s.broadcaster.Publish(controller.BackupActionEvent{
@@ -516,7 +516,7 @@ func (s *BackupService) DeleteBackupsByGameserver(ctx context.Context, gameserve
 
 	for _, b := range backups {
 		if err := s.storage.Delete(ctx, gameserverID, b.ID); err != nil {
-			s.log.Warn("backup record deleted but store file removal failed", "backup_id", b.ID, "error", err)
+			s.log.Warn("backup record deleted but store file removal failed", "backup", b.ID, "error", err)
 		}
 	}
 
@@ -545,10 +545,10 @@ func (s *BackupService) enforceRetention(ctx context.Context, gameserverID strin
 	// We need to be at maxBackups-1 after this to make room for the new backup
 	for len(backups) >= maxBackups {
 		oldest := backups[len(backups)-1]
-		s.log.Info("retention: deleting oldest backup", "backup_id", oldest.ID, "gameserver_id", gameserverID, "count", len(backups), "max", maxBackups)
+		s.log.Info("retention: deleting oldest backup", "backup", oldest.ID, "gameserver", gameserverID, "count", len(backups), "max", maxBackups)
 
 		if err := s.storage.Delete(ctx, gameserverID, oldest.ID); err != nil {
-			s.log.Warn("retention: failed to delete backup file", "backup_id", oldest.ID, "error", err)
+			s.log.Warn("retention: failed to delete backup file", "backup", oldest.ID, "error", err)
 		}
 		if err := s.store.DeleteBackup(oldest.ID); err != nil {
 			return fmt.Errorf("retention: deleting backup record: %w", err)

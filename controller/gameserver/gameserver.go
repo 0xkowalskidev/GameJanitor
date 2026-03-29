@@ -253,7 +253,7 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *model.Game
 		for _, c := range candidates {
 			if c.NodeID != "" {
 				if err := s.checkWorkerLimits(c.NodeID, gs.MemoryLimitMB, gs.CPULimit, ptrIntOr0(gs.StorageLimitMB)); err != nil {
-					s.log.Debug("worker skipped during placement", "worker_id", c.NodeID, "reason", err)
+					s.log.Debug("worker skipped during placement", "worker", c.NodeID, "reason", err)
 					lastErr = err
 					continue
 				}
@@ -261,7 +261,7 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *model.Game
 			if gs.PortMode == "auto" {
 				allocatedPorts, err := s.AllocatePorts(game, c.NodeID, "")
 				if err != nil {
-					s.log.Debug("worker skipped during placement", "worker_id", c.NodeID, "reason", err)
+					s.log.Debug("worker skipped during placement", "worker", c.NodeID, "reason", err)
 					lastErr = err
 					continue
 				}
@@ -297,17 +297,17 @@ func (s *GameserverService) CreateGameserver(ctx context.Context, gs *model.Game
 	// Warn about unlimited resources in multi-node mode
 	if nodeID != "" {
 		if gs.MemoryLimitMB == 0 {
-			s.log.Warn("gameserver has no memory_limit_mb set, cannot account for memory in node placement", "id", gs.ID)
+			s.log.Warn("gameserver has no memory_limit_mb set, cannot account for memory in node placement", "gameserver", gs.ID)
 		}
 		if gs.CPULimit == 0 {
-			s.log.Warn("gameserver has no cpu_limit set, cannot account for CPU in node placement", "id", gs.ID)
+			s.log.Warn("gameserver has no cpu_limit set, cannot account for CPU in node placement", "gameserver", gs.ID)
 		}
 		if gs.StorageLimitMB == nil || *gs.StorageLimitMB == 0 {
-			s.log.Warn("gameserver has no storage_limit_mb set, cannot account for storage in node placement", "id", gs.ID)
+			s.log.Warn("gameserver has no storage_limit_mb set, cannot account for storage in node placement", "gameserver", gs.ID)
 		}
 	}
 
-	s.log.Info("creating gameserver", "id", gs.ID, "name", gs.Name, "game_id", gs.GameID, "port_mode", gs.PortMode, "node_id", nodeID)
+	s.log.Info("creating gameserver", "gameserver", gs.ID, "name", gs.Name, "game_id", gs.GameID, "port_mode", gs.PortMode, "node_id", nodeID)
 
 	if err := targetWorker.CreateVolume(ctx, gs.VolumeName); err != nil {
 		return "", fmt.Errorf("creating volume for gameserver %s: %w", gs.ID, err)
@@ -358,7 +358,7 @@ func (s *GameserverService) RegenerateSFTPPassword(ctx context.Context, gameserv
 		return "", err
 	}
 
-	s.log.Info("sftp password regenerated", "gameserver_id", gameserverID)
+	s.log.Info("sftp password regenerated", "gameserver", gameserverID)
 	return rawPassword, nil
 }
 
@@ -580,7 +580,7 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *model.Game
 	}
 
 	if !needsMigration {
-		s.log.Info("updating gameserver", "id", gs.ID)
+		s.log.Info("updating gameserver", "gameserver", gs.ID)
 		if err := s.store.UpdateGameserver(existing); err != nil {
 			return false, err
 		}
@@ -589,9 +589,9 @@ func (s *GameserverService) UpdateGameserver(ctx context.Context, gs *model.Game
 	if installTriggered {
 		existing.Installed = false
 		if err := s.store.UpdateGameserver(existing); err != nil {
-			s.log.Error("failed to clear installed flag after env change", "id", gs.ID, "error", err)
+			s.log.Error("failed to clear installed flag after env change", "gameserver", gs.ID, "error", err)
 		} else {
-			s.log.Info("install-triggering env var changed, cleared installed flag", "id", gs.ID)
+			s.log.Info("install-triggering env var changed, cleared installed flag", "gameserver", gs.ID)
 		}
 	}
 
@@ -716,7 +716,7 @@ func (s *GameserverService) DeleteGameserver(ctx context.Context, id string) err
 	// Clean up backup store files (DB records already cascaded)
 	for _, b := range backups {
 		if err := s.backupStore.Delete(ctx, id, b.ID); err != nil {
-			s.log.Warn("failed to remove backup store file", "backup_id", b.ID, "error", err)
+			s.log.Warn("failed to remove backup store file", "backup", b.ID, "error", err)
 		}
 	}
 

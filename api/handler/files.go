@@ -31,7 +31,7 @@ func (h *FileHandlers) List(w http.ResponseWriter, r *http.Request) {
 
 	entries, err := h.svc.ListDirectory(r.Context(), id, dirPath)
 	if err != nil {
-		h.log.Error("listing directory", "gameserver_id", id, "path", dirPath, "error", err)
+		h.log.Error("listing directory", "gameserver", id, "path", dirPath, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
@@ -49,7 +49,7 @@ func (h *FileHandlers) Read(w http.ResponseWriter, r *http.Request) {
 
 	content, err := h.svc.ReadFile(r.Context(), id, filePath)
 	if err != nil {
-		h.log.Error("reading file", "gameserver_id", id, "path", filePath, "error", err)
+		h.log.Error("reading file", "gameserver", id, "path", filePath, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
@@ -76,7 +76,7 @@ func (h *FileHandlers) Write(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.svc.WriteFile(r.Context(), id, filePath, content); err != nil {
-		h.log.Error("writing file", "gameserver_id", id, "path", filePath, "error", err)
+		h.log.Error("writing file", "gameserver", id, "path", filePath, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
@@ -93,7 +93,7 @@ func (h *FileHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.svc.DeletePath(r.Context(), id, targetPath); err != nil {
-		h.log.Error("deleting path", "gameserver_id", id, "path", targetPath, "error", err)
+		h.log.Error("deleting path", "gameserver", id, "path", targetPath, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
@@ -111,7 +111,7 @@ func (h *FileHandlers) Download(w http.ResponseWriter, r *http.Request) {
 
 	reader, size, err := h.svc.OpenFile(r.Context(), id, filePath)
 	if err != nil {
-		h.log.Error("downloading file", "gameserver_id", id, "path", filePath, "error", err)
+		h.log.Error("downloading file", "gameserver", id, "path", filePath, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
@@ -170,12 +170,12 @@ func (h *FileHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 
 		destPath := dirPath + "/" + fh.Filename
 		if err := h.svc.WriteFile(r.Context(), id, destPath, content); err != nil {
-			h.log.Error("writing uploaded file", "gameserver_id", id, "path", destPath, "error", err)
+			h.log.Error("writing uploaded file", "gameserver", id, "path", destPath, "error", err)
 			respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 			return
 		}
 
-		h.log.Info("file uploaded via API", "gameserver_id", id, "path", destPath, "size", len(content))
+		h.log.Info("file uploaded via API", "gameserver", id, "path", destPath, "size", len(content))
 		uploaded = append(uploaded, uploadedFile{Path: destPath, Size: len(content)})
 	}
 
@@ -199,7 +199,7 @@ func (h *FileHandlers) Rename(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.svc.RenamePath(r.Context(), id, req.From, req.To); err != nil {
-		h.log.Error("renaming path", "gameserver_id", id, "from", req.From, "to", req.To, "error", err)
+		h.log.Error("renaming path", "gameserver", id, "from", req.From, "to", req.To, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
@@ -223,7 +223,7 @@ func (h *FileHandlers) CreateDirectory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.svc.CreateDirectory(r.Context(), id, req.Path); err != nil {
-		h.log.Error("creating directory", "gameserver_id", id, "path", req.Path, "error", err)
+		h.log.Error("creating directory", "gameserver", id, "path", req.Path, "error", err)
 		respondError(w, serviceErrorStatus(err), serviceErrorMessage(err))
 		return
 	}
