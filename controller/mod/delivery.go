@@ -177,6 +177,7 @@ func (d *PackDelivery) Install(ctx context.Context, gameserverID, packURL, insta
 		}
 
 		mods = append(mods, PackMod{
+			SourceID:    extractModrinthProjectID(downloadURL, fileName),
 			FileName:    fileName,
 			FilePath:    fullPath,
 			DownloadURL: downloadURL,
@@ -317,5 +318,21 @@ func (d *PackDelivery) download(ctx context.Context, downloadURL string) ([]byte
 	}
 
 	return io.ReadAll(io.LimitReader(resp.Body, maxPackManifestBytes))
+}
+
+// extractModrinthProjectID pulls the project ID from a Modrinth CDN URL.
+// URL format: https://cdn.modrinth.com/data/{projectID}/versions/{versionID}/{filename}
+// Falls back to the filename as a unique identifier if the URL doesn't match.
+func extractModrinthProjectID(downloadURL, fallback string) string {
+	const prefix = "/data/"
+	idx := strings.Index(downloadURL, prefix)
+	if idx == -1 {
+		return fallback
+	}
+	rest := downloadURL[idx+len(prefix):]
+	if slash := strings.Index(rest, "/"); slash > 0 {
+		return rest[:slash]
+	}
+	return fallback
 }
 
