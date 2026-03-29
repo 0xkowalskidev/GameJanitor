@@ -80,9 +80,11 @@ func WriteFileDirect(resolve VolumeResolver, ctx context.Context, volumeName str
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(hostPath), 0755); err != nil {
+	parentDir := filepath.Dir(hostPath)
+	if err := os.MkdirAll(parentDir, 0755); err != nil {
 		return fmt.Errorf("creating parent directory: %w", err)
 	}
+	chownToGameserver(parentDir)
 	if err := os.WriteFile(hostPath, content, perm); err != nil {
 		return err
 	}
@@ -279,9 +281,12 @@ func DownloadFileDirect(resolve VolumeResolver, ctx context.Context, volumeName 
 		return err
 	}
 
-	if err := os.MkdirAll(filepath.Dir(hostPath), 0755); err != nil {
+	parentDir := filepath.Dir(hostPath)
+	if err := os.MkdirAll(parentDir, 0755); err != nil {
 		return fmt.Errorf("creating parent directory: %w", err)
 	}
+	// Chown created directories so the gameserver user (1001) can manage them inside the container
+	chownToGameserver(parentDir)
 
 	// Try up to 2 attempts — first failure on hash mismatch could be a transient
 	// network issue (truncated response). Second failure is likely a genuine CDN
@@ -393,6 +398,25 @@ func DownloadToMemory(ctx context.Context, url string, expectedHash string) ([]b
 	}
 
 	return data, nil
+}
+
+// chownToGameserver walks the directory path and chowns any directories
+// that aren't already owned by the gameserver user. Stops at the first
+// directory that's already correctly owned.
+func chownToGameserver(dir string) {
+	info, err := os.Stat(dir)
+	if err != nil || !info.IsDir() {
+		return
+	}
+	filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			os.Chown(p, model.GameserverUID, model.GameserverGID)
+		}
+		return nil
+	})
 }
 
 func SortFileEntries(entries []FileEntry) {
