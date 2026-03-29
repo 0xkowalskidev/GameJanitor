@@ -2,24 +2,20 @@ package mod
 
 import (
 	"archive/zip"
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
 	"path"
 	"strings"
 	"time"
 )
 
-// Size limits for in-memory reads (ZIP entry extraction, .mrpack manifests).
-// File downloads to disk have no artificial limit — storage quota is the real constraint.
-const (
-	maxOverrideBytes     = 50 * 1024 * 1024  // 50 MB per override file
-	maxPackManifestBytes = 500 * 1024 * 1024  // 500 MB for .mrpack ZIP (manifest + overrides, not mod files)
-)
+// Size limit for in-memory reads of individual override files from ZIP entries.
+const maxOverrideBytes = 50 * 1024 * 1024 // 50 MB per override file
 
 // --- FileDelivery ---
 
@@ -131,20 +127,22 @@ type PackMod struct {
 }
 
 func (d *PackDelivery) Install(ctx context.Context, gameserverID, packURL, installPath, overridesPath string) (*PackContents, error) {
-	// Download the .mrpack file
-	packData, err := d.download(ctx, packURL)
+	// Download .mrpack to a temp file to avoid buffering large ZIPs in memory
+	tmpFile, err := d.downloadToTemp(ctx, packURL)
 	if err != nil {
 		return nil, fmt.Errorf("downloading modpack: %w", err)
 	}
+	defer os.Remove(tmpFile)
 
-	// Parse the ZIP
-	zipReader, err := zip.NewReader(bytes.NewReader(packData), int64(len(packData)))
+	// Parse the ZIP from disk
+	zipReader, err := zip.OpenReader(tmpFile)
 	if err != nil {
 		return nil, fmt.Errorf("opening modpack ZIP: %w", err)
 	}
+	defer zipReader.Close()
 
 	// Read modrinth.index.json
-	index, err := d.readIndex(zipReader)
+	index, err := d.readIndex(&zipReader.Reader)
 	if err != nil {
 		return nil, fmt.Errorf("reading modpack index: %w", err)
 	}
@@ -308,24 +306,37 @@ func (d *PackDelivery) readIndex(zr *zip.Reader) (*mrpackIndex, error) {
 	return nil, fmt.Errorf("modrinth.index.json not found in modpack")
 }
 
-func (d *PackDelivery) download(ctx context.Context, downloadURL string) ([]byte, error) {
+// downloadToTemp downloads a URL to a temporary file and returns the file path.
+// Caller is responsible for removing the file when done.
+func (d *PackDelivery) downloadToTemp(ctx context.Context, downloadURL string) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, downloadURL, nil)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	req.Header.Set("User-Agent", "gamejanitor")
 
 	resp, err := d.client.Do(req)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("download returned status %d", resp.StatusCode)
+		return "", fmt.Errorf("download returned status %d", resp.StatusCode)
 	}
 
-	return io.ReadAll(io.LimitReader(resp.Body, maxPackManifestBytes))
+	tmpFile, err := os.CreateTemp("", "gamejanitor-mrpack-*.zip")
+	if err != nil {
+		return "", fmt.Errorf("creating temp file: %w", err)
+	}
+
+	if _, err := io.Copy(tmpFile, resp.Body); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpFile.Name())
+		return "", fmt.Errorf("writing temp file: %w", err)
+	}
+	tmpFile.Close()
+	return tmpFile.Name(), nil
 }
 
 // extractModrinthProjectID pulls the project ID from a Modrinth CDN URL.

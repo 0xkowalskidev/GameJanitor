@@ -58,6 +58,8 @@ func (s *ModService) installDependencies(ctx context.Context, gameserverID, pare
 		// Install the dependency file
 		if src.Delivery == "file" {
 			if err := s.fileDel.Install(ctx, gameserverID, src.InstallPath, depVersion.DownloadURL, sanitizeFileName(depVersion.FileName)); err != nil {
+				// Clean up grandchild records that reference this failed dependency
+				s.cleanupFailedDep(gameserverID, depMod.ID)
 				return fmt.Errorf("installing dependency %s: %w", dep.ModID, err)
 			}
 		}
@@ -67,6 +69,24 @@ func (s *ModService) installDependencies(ctx context.Context, gameserverID, pare
 		}
 	}
 	return nil
+}
+
+// cleanupFailedDep removes any DB records that were created for grandchild
+// dependencies of a dependency whose file download failed.
+func (s *ModService) cleanupFailedDep(gameserverID, failedModID string) {
+	installed, err := s.store.ListInstalledMods(gameserverID)
+	if err != nil {
+		return
+	}
+	for _, mod := range installed {
+		if mod.DependsOn != nil && *mod.DependsOn == failedModID {
+			// Recursively clean up this mod's children too
+			s.cleanupFailedDep(gameserverID, mod.ID)
+			s.fileDel.Uninstall(context.Background(), gameserverID, mod.FilePath)
+			s.store.DeleteInstalledMod(mod.ID)
+			s.log.Info("cleaned up orphaned dependency after failed install", "mod_id", mod.ID, "name", mod.Name)
+		}
+	}
 }
 
 // removeOrphanedDependencies removes auto-installed mods that were dependencies
