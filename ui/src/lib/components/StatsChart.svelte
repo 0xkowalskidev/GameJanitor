@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { api, type StatsHistoryPoint } from '$lib/api';
+  import { gameserverStore } from '$lib/stores';
 
   let { id }: { id: string } = $props();
 
@@ -9,6 +10,48 @@
   let loading = $state(true);
   let hoverIndex = $state<number | null>(null);
   let refreshInterval: ReturnType<typeof setInterval> | null = null;
+
+  // Live stats from the store (updated by SSE every 5s)
+  const gsState = $derived(gameserverStore.getState(id));
+  const liveStats = $derived(gsState?.stats ?? null);
+
+  // Track previous cumulative net bytes for rate computation
+  let prevNetRx = 0;
+  let prevNetTx = 0;
+  let prevNetTs = 0;
+
+  // Append live stats to the chart on the 1h view
+  $effect(() => {
+    if (!liveStats || period !== '1h') return;
+
+    const now = Date.now();
+    let rxRate = 0;
+    let txRate = 0;
+
+    // Compute net rate from consecutive cumulative byte counters
+    if (prevNetTs > 0 && liveStats.net_rx_bytes >= prevNetRx) {
+      const dt = (now - prevNetTs) / 1000;
+      if (dt > 0) {
+        rxRate = (liveStats.net_rx_bytes - prevNetRx) / dt;
+        txRate = (liveStats.net_tx_bytes - prevNetTx) / dt;
+      }
+    }
+    prevNetRx = liveStats.net_rx_bytes;
+    prevNetTx = liveStats.net_tx_bytes;
+    prevNetTs = now;
+
+    const point: StatsHistoryPoint = {
+      timestamp: new Date().toISOString(),
+      cpu_percent: liveStats.cpu_percent ?? 0,
+      memory_usage_mb: liveStats.memory_usage_mb ?? 0,
+      memory_limit_mb: liveStats.memory_limit_mb ?? 0,
+      net_rx_bytes_per_sec: rxRate,
+      net_tx_bytes_per_sec: txRate,
+      volume_size_bytes: liveStats.volume_size_bytes ?? 0,
+    };
+
+    data = [...data, point].slice(-720);
+  });
 
   async function fetchData() {
     try {
@@ -22,7 +65,7 @@
 
   function setupRefresh() {
     if (refreshInterval) clearInterval(refreshInterval);
-    // Auto-refresh every 30s for 1h view (live-ish), 60s for 24h, none for 7d
+    // Full refetch periodically to pick up downsampled data and real net rates
     if (period === '1h') refreshInterval = setInterval(fetchData, 30_000);
     else if (period === '24h') refreshInterval = setInterval(fetchData, 60_000);
   }

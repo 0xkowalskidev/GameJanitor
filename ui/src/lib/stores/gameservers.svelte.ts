@@ -194,6 +194,8 @@ class GameserverStore {
         cpu_percent: data.cpu_percent,
         memory_usage_mb: data.memory_usage_mb,
         memory_limit_mb: data.memory_limit_mb,
+        net_rx_bytes: data.net_rx_bytes ?? 0,
+        net_tx_bytes: data.net_tx_bytes ?? 0,
         volume_size_bytes: data.volume_size_bytes,
         storage_limit_mb: data.storage_limit_mb,
       });

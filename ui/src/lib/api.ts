@@ -157,6 +157,8 @@ export interface GameserverStats {
   cpu_percent: number;
   memory_usage_mb: number;
   memory_limit_mb: number;
+  net_rx_bytes: number;
+  net_tx_bytes: number;
   volume_size_bytes: number;
   storage_limit_mb?: number;
 }

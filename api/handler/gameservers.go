@@ -389,6 +389,8 @@ func (h *GameserverHandlers) Stats(w http.ResponseWriter, r *http.Request) {
 			"cpu_percent":       cached.CPUPercent,
 			"memory_usage_mb":   cached.MemoryUsageMB,
 			"memory_limit_mb":   cached.MemoryLimitMB,
+			"net_rx_bytes":      cached.NetRxBytes,
+			"net_tx_bytes":      cached.NetTxBytes,
 			"volume_size_bytes": cached.VolumeSizeBytes,
 		}
 		if cached.StorageLimitMB != nil {
