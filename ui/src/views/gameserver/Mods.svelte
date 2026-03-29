@@ -602,18 +602,6 @@
       </div>
     {/if}
 
-    <!-- Category Tabs -->
-    {#if config.categories.length > 1}
-      <div class="category-tabs">
-        {#each config.categories as cat}
-          <button class="cat-tab" class:active={activeCategory === cat.name}
-            onclick={() => handleCategoryChange(cat.name)}>
-            {cat.name}
-          </button>
-        {/each}
-      </div>
-    {/if}
-
     <!-- Installed Section -->
     <div class="section-header">
       <span class="section-label">Installed ({categoryMods.length})</span>
@@ -809,6 +797,16 @@
     {/if}
 
     <div class="browse-filters">
+      {#if config.categories.length > 1}
+        <div class="category-tabs">
+          {#each config.categories as cat}
+            <button class="cat-tab" class:active={activeCategory === cat.name}
+              onclick={() => handleCategoryChange(cat.name)}>
+              {cat.name}
+            </button>
+          {/each}
+        </div>
+      {/if}
       {#if config.version}
         <select class="select filter-select" value={browseVersion}
           onchange={(e) => { browseVersion = (e.target as HTMLSelectElement).value; doSearch(searchQuery, activeCategory, 0, false); }}>
@@ -959,18 +957,17 @@
   }
   .toggle-label { text-transform: capitalize; }
 
-  /* Category Tabs */
+  /* Category Tabs — inline with browse filters */
   .category-tabs {
     display: flex; gap: 2px;
-    margin-bottom: 18px;
     background: var(--bg-inset);
     border-radius: var(--radius-sm);
     padding: 3px;
     border: 1px solid var(--border-dim);
   }
   .cat-tab {
-    padding: 7px 16px;
-    font-size: 0.8rem; font-weight: 450;
+    padding: 5px 12px;
+    font-size: 0.78rem; font-weight: 450;
     color: var(--text-tertiary);
     background: none; border: none; border-radius: 4px;
     cursor: pointer; transition: color 0.15s, background 0.15s;
