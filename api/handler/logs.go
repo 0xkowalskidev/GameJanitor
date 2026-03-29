@@ -1,12 +1,11 @@
 package handler
 
 import (
-	"bufio"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
 	"strconv"
-
 )
 
 type LogHandlers struct {
@@ -40,6 +39,9 @@ func (h *LogHandlers) Get(w http.ResponseWriter, r *http.Request) {
 	respondOK(w, map[string]any{"lines": lines})
 }
 
+// tailFile reads the last n lines from a file by seeking backward from the end.
+// Only reads enough bytes to find the requested lines, avoiding loading the
+// entire file into memory.
 func tailFile(path string, n int) ([]string, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -47,17 +49,63 @@ func tailFile(path string, n int) ([]string, error) {
 	}
 	defer f.Close()
 
-	var all []string
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		all = append(all, scanner.Text())
+	stat, err := f.Stat()
+	if err != nil {
+		return nil, err
 	}
-	if err := scanner.Err(); err != nil {
+	size := stat.Size()
+	if size == 0 {
+		return []string{}, nil
+	}
+
+	// Read backward in 8KB blocks, counting newlines until we have enough
+	const blockSize = 8192
+	linesFound := 0
+	offset := size
+
+	for offset > 0 && linesFound <= n {
+		readSize := int64(blockSize)
+		if readSize > offset {
+			readSize = offset
+		}
+		offset -= readSize
+
+		buf := make([]byte, readSize)
+		if _, err := f.ReadAt(buf, offset); err != nil && err != io.EOF {
+			return nil, err
+		}
+
+		for i := len(buf) - 1; i >= 0; i-- {
+			if buf[i] == '\n' {
+				linesFound++
+				if linesFound > n {
+					// Found enough — read from this position forward
+					offset += int64(i) + 1
+					break
+				}
+			}
+		}
+	}
+
+	// Read from the computed offset to end of file
+	remaining := size - offset
+	buf := make([]byte, remaining)
+	if _, err := f.ReadAt(buf, offset); err != nil && err != io.EOF {
 		return nil, err
 	}
 
-	if len(all) > n {
-		all = all[len(all)-n:]
+	// Split into lines, trimming trailing empty line from final newline
+	var lines []string
+	start := 0
+	for i := 0; i < len(buf); i++ {
+		if buf[i] == '\n' {
+			lines = append(lines, string(buf[start:i]))
+			start = i + 1
+		}
 	}
-	return all, nil
+	if start < len(buf) {
+		lines = append(lines, string(buf[start:]))
+	}
+
+	return lines, nil
 }
