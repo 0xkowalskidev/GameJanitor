@@ -32,6 +32,18 @@ func (s *ModService) InstallPack(ctx context.Context, gameserverID, sourceName, 
 		return nil, controller.ErrNotFoundf("game %s not found", gs.GameID)
 	}
 
+	// Check if a modpack is already installed — only one pack allowed at a time.
+	// Users should uninstall the existing pack first.
+	installed, err := s.store.ListInstalledMods(gameserverID)
+	if err != nil {
+		return nil, fmt.Errorf("checking existing mods: %w", err)
+	}
+	for _, m := range installed {
+		if m.Delivery == "pack" && m.PackID == nil {
+			return nil, controller.ErrConflictf("modpack %q is already installed — uninstall it before installing a new one", m.Name)
+		}
+	}
+
 	catalog, ok := s.catalogs[sourceName]
 	if !ok {
 		return nil, controller.ErrBadRequestf("unknown source: %s", sourceName)
