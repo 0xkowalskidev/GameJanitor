@@ -110,7 +110,9 @@ func WriteFileDirect(resolve VolumeResolver, ctx context.Context, volumeName str
 	if err := os.MkdirAll(parentDir, 0755); err != nil {
 		return fmt.Errorf("creating parent directory: %w", err)
 	}
-	chownToGameserver(parentDir, mountpoint)
+	if err := chownToGameserver(parentDir, mountpoint); err != nil {
+		return fmt.Errorf("setting directory ownership: %w", err)
+	}
 	if err := os.WriteFile(hostPath, content, perm); err != nil {
 		return err
 	}
@@ -319,7 +321,9 @@ func DownloadFileDirect(resolve VolumeResolver, ctx context.Context, volumeName 
 	if err := os.MkdirAll(parentDir, 0755); err != nil {
 		return fmt.Errorf("creating parent directory: %w", err)
 	}
-	chownToGameserver(parentDir, mountpoint)
+	if err := chownToGameserver(parentDir, mountpoint); err != nil {
+		return fmt.Errorf("setting directory ownership: %w", err)
+	}
 
 	// Try up to 2 attempts — first failure on hash mismatch could be a transient
 	// network issue (truncated response). Second failure is likely a genuine CDN
@@ -340,7 +344,9 @@ func DownloadFileDirect(resolve VolumeResolver, ctx context.Context, volumeName 
 		slog.Warn("download hash mismatch after retry, keeping file", "path", destPath)
 	}
 
-	os.Chown(hostPath, model.GameserverUID, model.GameserverGID)
+	if err := os.Chown(hostPath, model.GameserverUID, model.GameserverGID); err != nil {
+		return fmt.Errorf("setting ownership on downloaded file %s: %w", destPath, err)
+	}
 	return nil
 }
 
@@ -440,19 +446,22 @@ func DownloadToMemory(ctx context.Context, url string, expectedHash string) ([]b
 // chownToGameserver chowns the given directory and all parent directories up to
 // (and including) the volume mountpoint. Ensures directories created by MkdirAll
 // are accessible by the gameserver user inside the container.
-func chownToGameserver(dir string, volumeRoot string) {
+func chownToGameserver(dir string, volumeRoot string) error {
 	for p := dir; len(p) >= len(volumeRoot); p = filepath.Dir(p) {
 		info, err := os.Stat(p)
 		if err != nil {
-			break
+			return fmt.Errorf("stat %s: %w", p, err)
 		}
 		if info.IsDir() {
-			os.Chown(p, model.GameserverUID, model.GameserverGID)
+			if err := os.Chown(p, model.GameserverUID, model.GameserverGID); err != nil {
+				return fmt.Errorf("chown %s: %w", p, err)
+			}
 		}
 		if p == volumeRoot {
 			break
 		}
 	}
+	return nil
 }
 
 func SortFileEntries(entries []FileEntry) {

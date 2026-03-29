@@ -119,8 +119,11 @@ func (w *LocalWorker) CreateVolume(ctx context.Context, name string) error {
 	// Set ownership so the gameserver user (1001) can write before the container starts.
 	// Docker creates volumes as root, but mods may be installed before first start.
 	mountpoint, err := w.Resolve(ctx, name)
-	if err == nil {
-		os.Chown(mountpoint, model.GameserverUID, model.GameserverGID)
+	if err != nil {
+		return fmt.Errorf("resolving volume mountpoint for chown: %w", err)
+	}
+	if err := os.Chown(mountpoint, model.GameserverUID, model.GameserverGID); err != nil {
+		return fmt.Errorf("setting volume ownership: %w", err)
 	}
 	return nil
 }
