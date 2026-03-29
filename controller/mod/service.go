@@ -927,7 +927,14 @@ func (s *ModService) resolveVersion(ctx context.Context, catalog ModCatalog, mod
 
 	if versionID == "" {
 		if len(versions) == 0 {
-			return nil, controller.ErrBadRequest("no compatible versions found")
+			msg := "no compatible version found"
+			if filters.GameVersion != "" {
+				msg += fmt.Sprintf(" for game version %s", filters.GameVersion)
+			}
+			if filters.Loader != "" {
+				msg += fmt.Sprintf(" with loader %s", filters.Loader)
+			}
+			return nil, controller.ErrBadRequest(msg)
 		}
 		return &versions[0], nil
 	}

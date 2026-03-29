@@ -154,6 +154,10 @@ func (c *ModrinthCatalog) GetVersions(ctx context.Context, modID string, filters
 		loadersJSON, _ := json.Marshal([]string{filters.Loader})
 		params.Set("loaders", string(loadersJSON))
 	}
+	if filters.GameVersion != "" {
+		gvJSON, _ := json.Marshal([]string{filters.GameVersion})
+		params.Set("game_versions", string(gvJSON))
+	}
 
 	path := fmt.Sprintf("/project/%s/version", url.PathEscape(modID))
 	if len(params) > 0 {
