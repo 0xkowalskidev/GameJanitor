@@ -294,14 +294,45 @@
   async function installMod(result: ModSearchResult) {
     const isPack = activeCategoryIsPack();
 
-    // Modpack confirmation
+    // Modpack install flow
     if (isPack) {
-      const accepted = await confirm({
-        title: 'Install Modpack',
-        message: `Install "${result.name}"? This will download all mods in the pack, configure the game version and loader if needed, and may overwrite config files.`,
-        confirmLabel: 'Install',
-      });
-      if (!accepted) return;
+      // Pre-check: fetch pack version to detect version/loader changes before installing
+      let packVersion: { game_version: string; loader: string } | null = null;
+      try {
+        const versions = await api.mods.versions(id, { category: activeCategory, source: result.source, source_id: result.source_id });
+        if (versions?.length > 0) packVersion = versions[0];
+      } catch { /* non-critical — proceed with generic confirmation */ }
+
+      const currentVersion = config?.version?.current || '';
+      const currentLoader = config?.loader?.current || '';
+      const willChangeVersion = packVersion?.game_version && packVersion.game_version !== currentVersion;
+      const willChangeLoader = packVersion?.loader && packVersion.loader !== currentLoader;
+      const isDowngrade = willChangeVersion && currentVersion && gameserver?.installed;
+
+      // Build confirmation message
+      const actions: string[] = [];
+      actions.push('Download and install all mods in the pack');
+      if (willChangeVersion) actions.push(`Switch game version from ${currentVersion || 'current'} to ${packVersion!.game_version}`);
+      if (willChangeLoader) actions.push(`Switch loader to ${packVersion!.loader}`);
+      actions.push('May overwrite config files with pack defaults');
+
+      if (isDowngrade) {
+        // Version downgrade — show warning with reinstall option
+        const choice = await confirm({
+          title: 'Version Change Warning',
+          message: `Install "${result.name}"?\n\nThis will:\n${actions.map(a => `  - ${a}`).join('\n')}\n\nYour server has existing world data from ${currentVersion}. Changing to ${packVersion!.game_version} may make it incompatible. You should reinstall the server after installing this pack for a clean start.`,
+          confirmLabel: 'Install Anyway',
+          danger: true,
+        });
+        if (!choice) return;
+      } else {
+        const accepted = await confirm({
+          title: 'Install Modpack',
+          message: `Install "${result.name}"?\n\nThis will:\n${actions.map(a => `  - ${a}`).join('\n')}`,
+          confirmLabel: 'Install',
+        });
+        if (!accepted) return;
+      }
 
       const key = `${result.source}:${result.source_id}`;
       installingIds = new Set([...installingIds, key]);
@@ -316,7 +347,21 @@
         if (changes.length > 0) toast(changes.join('. '), 'info');
 
         if (packResult.version_downgrade) {
-          toast('Version was downgraded — existing world data may be incompatible. Consider reinstalling for a clean start.', 'error');
+          // Offer reinstall via modal
+          const doReinstall = await confirm({
+            title: 'Reinstall Recommended',
+            message: `The game version was changed from ${currentVersion} to ${packResult.version_changed}. Existing world data may be incompatible.\n\nReinstall the server for a clean start? This will wipe all server data (mods will be re-downloaded automatically).`,
+            confirmLabel: 'Reinstall',
+            danger: true,
+          });
+          if (doReinstall) {
+            try {
+              await api.gameservers.reinstall(id);
+              toast('Reinstall started — mods will be restored on next start', 'info');
+            } catch (e: any) {
+              toast(`Reinstall failed: ${e.message}`, 'error');
+            }
+          }
         } else if (packResult.needs_restart) {
           toast('Start or restart the server to apply changes', 'info');
         }
