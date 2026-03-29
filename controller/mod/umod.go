@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"path"
 	"strconv"
 	"time"
 
@@ -134,12 +135,18 @@ func (c *UmodCatalog) GetVersions(ctx context.Context, modID string, filters Cat
 		return nil, err
 	}
 
-	// uMod plugins have a single current version
+	// uMod plugins have a single current version.
+	// Derive filename from download URL (e.g., https://umod.org/plugins/Kits.cs → Kits.cs)
+	fileName := path.Base(detail.DownloadURL)
+	if fileName == "" || fileName == "." || fileName == "/" {
+		fileName = detail.Name + ".cs"
+	}
+
 	return []ModVersion{
 		{
 			VersionID:   detail.LatestReleaseVer,
 			Version:     detail.LatestReleaseVer,
-			FileName:    detail.Filename,
+			FileName:    fileName,
 			DownloadURL: detail.DownloadURL,
 		},
 	}, nil
