@@ -572,12 +572,17 @@ func (s *ModService) CheckForUpdates(ctx context.Context, gameserverID string) (
 			continue
 		}
 
-		// For packs, only offer updates to versions with server files
+		// For packs, only offer updates to versions with server files that are
+		// newer than the current version (appear before it in the list, which is
+		// sorted newest first by Modrinth).
 		latest := versions[0]
 		if mod.Delivery == "pack" {
 			found := false
 			for i := range versions {
-				if versions[i].HasServerFile && versions[i].VersionID != mod.VersionID {
+				if versions[i].VersionID == mod.VersionID {
+					break // reached current version — everything after is older
+				}
+				if versions[i].HasServerFile {
 					latest = versions[i]
 					found = true
 					break
